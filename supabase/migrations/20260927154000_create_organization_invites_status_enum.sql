@@ -1,0 +1,1 @@
+CREATE TYPE org_invite_status AS ENUM ('pending', 'accepted', 'expired');

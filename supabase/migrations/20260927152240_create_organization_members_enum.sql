@@ -1,0 +1,1 @@
+CREATE TYPE org_role AS ENUM ('founder', 'member');
