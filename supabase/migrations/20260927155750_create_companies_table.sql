@@ -1,7 +1,6 @@
 CREATE TABLE companies (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-    matched_skill_id UUID REFERENCES skills(id) ON DELETE SET NULL,
     name TEXT NOT NULL,
     domain TEXT,
     website TEXT,
