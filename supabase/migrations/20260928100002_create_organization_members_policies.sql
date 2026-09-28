@@ -3,6 +3,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_members TO authentic
 
 CREATE POLICY "members can view organization membership" ON public.organization_members FOR SELECT TO authenticated
 USING ((SELECT private.is_org_member(org_id)));
+
 CREATE POLICY "founders can add members" ON public.organization_members FOR INSERT TO authenticated
 WITH CHECK (
     (SELECT private.is_org_founder(org_id))

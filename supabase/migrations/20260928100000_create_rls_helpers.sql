@@ -95,10 +95,10 @@ AS $$
         SELECT 1
         FROM public.emails email
         WHERE email.id = check_email_id
-          AND (
-              email.sent_by_user_id = (SELECT auth.uid())
-              OR private.can_access_company(email.company_id)
-          )
+        AND (
+            email.sent_by_user_id = (SELECT auth.uid())
+            OR private.is_org_founder(email.company_id)
+        )
     );
 $$;
 
