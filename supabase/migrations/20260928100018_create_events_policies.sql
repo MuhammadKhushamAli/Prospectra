@@ -1,0 +1,1 @@
+REVOKE ALL ON public.events FROM anon, authenticated;
