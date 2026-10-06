@@ -43,6 +43,14 @@ class ApolloPrompt(BaseModel):
         default=None,
         description="Company headquarters locations to exclude.",
     )
+    target_organizations_cataories: list[str] | None = Field(
+        default=None,
+        description="Target organization categories.",
+    )
+    target_organizations_required_skills: list[str] | None = Field(
+        default=None,
+        description="Skills required by target organizations.",
+    )
     revenue_range: IntegerRange | None = Field(
         default=None,
         description="Organization revenue range, expressed as whole currency units.",
