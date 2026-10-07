@@ -4,11 +4,14 @@ Takes a natural-language prospect description from the user and produces
 structured Apollo + Tavily search parameters via the OpenAI Responses API.
 """
 
+import json
 import os
+from dataclasses import asdict
 
 from openai import OpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
+from app.models.user_context import UserContext
 from .pydantic_model import PromptGenerationResponse
 
 SYSTEM_PROMPT = """
@@ -26,13 +29,13 @@ CRITICAL RULES
 """
 
 
-def generate_params(user_input: str) -> PromptGenerationResponse:
+def generate_params(user_context: UserContext) -> PromptGenerationResponse:
     """Convert a natural-language prospect description into search parameters.
 
     Parameters
     ----------
-    user_input:
-        The user's free-text description of the prospects they want to find.
+    user_context:
+        The context and skills of the user seeking prospects.
 
     Returns
     -------
@@ -45,10 +48,12 @@ def generate_params(user_input: str) -> PromptGenerationResponse:
     )
     model_name = os.getenv("PARAM_GEN_MODEL", "gpt-4o")
 
+    input_str = f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}"
+
     return parse_structured_response(
         client=client,
         model_name=model_name,
-        input=user_input,
+        input=input_str,
         system_prompt=SYSTEM_PROMPT,
         pydantic_model=PromptGenerationResponse,
     )
