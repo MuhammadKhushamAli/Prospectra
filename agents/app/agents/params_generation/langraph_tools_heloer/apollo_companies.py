@@ -5,9 +5,8 @@ import requests
 
 from ..pydantic_model import ApolloPrompt
 
-from langgraph.graph import StateGraph
 
-def find_apollo_companies(state: StateGraph) -> dict[str, Any]:
+def find_apollo_companies(apollo_model: ApolloPrompt) -> dict[str, Any]:
     """Find organizations in Apollo using the supplied search filters."""
     api_key = os.getenv("APOLLO_API_KEY")
     api_url = os.getenv("APOLLO_COMPANIES_SEARCH_URL")
@@ -16,8 +15,7 @@ def find_apollo_companies(state: StateGraph) -> dict[str, Any]:
     if not api_url:
         raise ValueError("APOLLO_COMPANIES_SEARCH_URL is required to search Apollo companies")
 
-    appolio_model: ApolloPrompt = state.get("apollo_prompt_model")
-    payload = appolio_model.model_dump(
+    payload = apollo_model.model_dump(
         exclude_none=True,
     )
     response = requests.post(
@@ -32,6 +30,4 @@ def find_apollo_companies(state: StateGraph) -> dict[str, Any]:
         timeout=30,
     )
     response.raise_for_status()
-    return {
-        "companies data": response.json()
-    }
+    return response.json()
