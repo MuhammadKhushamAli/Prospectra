@@ -57,15 +57,11 @@ class ApolloPrompt(BaseModel):
     )
     currently_using_any_of_technology_uids: list[str] | None = Field(
         default=None,
-        description="Technology identifiers, using underscores in place of spaces and periods.",
+        description="DO NOT FILL THIS FIELD. The system will auto-populate it. Leave as null.",
     )
     q_organization_keyword_tags: list[str] | None = Field(
         default=None,
         description="Keywords associated with organizations to include.",
-    )
-    q_organization_name: str | None = Field(
-        default=None,
-        description="Company-name search term; Apollo supports partial matches.",
     )
     page: int | None = Field(default=None, ge=1, description="Results page number.")
     per_page: int | None = Field(
