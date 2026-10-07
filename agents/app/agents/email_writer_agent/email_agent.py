@@ -7,20 +7,21 @@ are chosen by the user and populated separately.
 
 import json
 import os
+from dataclasses import asdict
 
 from openai import OpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
+from app.models.company import Company
+from app.models.user_context import UserContext
 from .pydantic_model.email_model import EmailContent
 
 SYSTEM_PROMPT = """
 You are Prospectra's email-writer agent.
 
 You receive:
-1. The user's name - who is sending the email.
-2. The user's email address - for context and sign-off.
-3. The user's skills - to highlight relevant expertise in the email.
-4. The target company - the company the user is reaching out to.
+1. The user's context - the profile and skills of the user sending the email.
+2. The target company - the company the user is reaching out to.
 
 Your job is to write a professional, compelling outreach email that:
 - Has a clear, attention-grabbing subject line.
@@ -37,23 +38,17 @@ CRITICAL RULES
 
 
 def write_email(
-    user_skills: list[str],
-    user_name: str,
-    user_email: str,
-    target_company: str,
+    user_context: UserContext,
+    target_company: Company,
 ) -> EmailContent:
-    """Generate an outreach email body from the user's profile.
+    """Generate an outreach email body from the user's profile and target company.
 
     Parameters
     ----------
-    user_skills:
-        The user's skills to highlight in the email.
-    user_name:
-        The user's full name for the email sign-off.
-    user_email:
-        The user's email address for context.
+    user_context:
+        The context and skills of the user sending the email.
     target_company:
-        The company the user is reaching out to.
+        The target company the user is reaching out to.
 
     Returns
     -------
@@ -61,10 +56,8 @@ def write_email(
         Generated subject and body for the email.
     """
     user_input = (
-        f"USER NAME:\n{user_name}\n\n"
-        f"USER EMAIL:\n{user_email}\n\n"
-        f"USER SKILLS:\n{json.dumps(user_skills, indent=2)}\n\n"
-        f"TARGET COMPANY:\n{target_company}"
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
+        f"TARGET COMPANY:\n{json.dumps(asdict(target_company), indent=2)}"
     )
 
     client = OpenAI(
