@@ -6,23 +6,24 @@ returned by Apollo/Tavily and scores each searched company for authenticity.
 
 import json
 import os
-from typing import Any
+from dataclasses import asdict
 
 from openai import OpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
+from app.models.company import Company
+from app.models.user_context import UserContext
 from .pydantic_model.company_auth import CompanyAuth
 
 SYSTEM_PROMPT = """
 You are Prospectra's company-authentication agent.
 
 You receive:
-1. The user's target skills - the skills the user is looking for.
-2. The user's target companies - the kind of companies the user wants to find.
-3. A searched company - a single company record returned from a search.
+1. The user's context - the profile and skills of the user.
+2. A searched company - a single company record returned from a search.
 
 Your job is to evaluate how well the searched company matches the user's
-target skills and target companies and return:
+profile and return:
 - A score from 0 to 100 indicating how authentic and relevant the match is.
 - If the score is below 70, you MUST provide feedback explaining why the
 - company scored low.
@@ -36,18 +37,15 @@ CRITICAL RULES
 
 
 def authenticate_company(
-    user_target_skills: list[str],
-    user_target_companies: list[str],
-    searched_company: dict[str, Any],
+    user_context: UserContext,
+    searched_company: Company,
 ) -> CompanyAuth:
-    """Score a searched company against the user's targets.
+    """Score a searched company against the user's profile.
 
     Parameters
     ----------
-    user_target_skills:
-        Skills the user is looking for in prospect companies.
-    user_target_companies:
-        Descriptions or names of the kind of companies the user targets.
+    user_context:
+        The context and skills of the user seeking prospects.
     searched_company:
         A single company record returned from Apollo / Tavily search.
 
@@ -57,9 +55,8 @@ def authenticate_company(
         Authenticity score (0-100) and feedback if score < 70.
     """
     user_input = (
-        f"USER TARGET SKILLS:\n{json.dumps(user_target_skills, indent=2)}\n\n"
-        f"USER TARGET COMPANIES:\n{json.dumps(user_target_companies, indent=2)}\n\n"
-        f"SEARCHED COMPANY:\n{json.dumps(searched_company, indent=2)}"
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
+        f"SEARCHED COMPANY:\n{json.dumps(asdict(searched_company), indent=2)}"
     )
 
     client = OpenAI(
