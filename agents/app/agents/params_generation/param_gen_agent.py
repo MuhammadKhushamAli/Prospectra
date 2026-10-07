@@ -11,6 +11,7 @@ from dataclasses import asdict
 from openai import OpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
+from app.models.company import Company
 from app.models.user_context import UserContext
 from .pydantic_model import PromptGenerationResponse
 
@@ -29,13 +30,18 @@ CRITICAL RULES
 """
 
 
-def generate_params(user_context: UserContext) -> PromptGenerationResponse:
+def generate_params(
+    user_context: UserContext,
+    target_companies: list[Company]
+) -> PromptGenerationResponse:
     """Convert a natural-language prospect description into search parameters.
 
     Parameters
     ----------
     user_context:
         The context and skills of the user seeking prospects.
+    target_companies:
+        The list of target companies the user is interested in.
 
     Returns
     -------
@@ -48,7 +54,10 @@ def generate_params(user_context: UserContext) -> PromptGenerationResponse:
     )
     model_name = os.getenv("PARAM_GEN_MODEL", "gpt-4o")
 
-    input_str = f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}"
+    input_str = (
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
+        f"TARGET COMPANIES:\n{json.dumps([asdict(c) for c in target_companies], indent=2)}"
+    )
 
     return parse_structured_response(
         client=client,

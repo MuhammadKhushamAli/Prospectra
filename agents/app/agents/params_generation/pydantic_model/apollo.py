@@ -43,7 +43,7 @@ class ApolloPrompt(BaseModel):
         default=None,
         description="Company headquarters locations to exclude.",
     )
-    target_organizations_cataories: list[str] | None = Field(
+    target_organizations_catagories: list[str] | None = Field(
         default=None,
         description="Target organization categories.",
     )
