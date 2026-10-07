@@ -16,4 +16,7 @@ class GraphState(TypedDict, total=False):
     search_prompt: PromptGenerationResponse
     searched_companies: List[Company]
     company_auth_scores: Dict[str, CompanyAuth]
+    accepted_companies: List[Company]
+    rejected_companies: List[Company]
+    search_feedback: str
     errors: List[str]

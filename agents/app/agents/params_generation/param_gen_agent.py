@@ -33,7 +33,9 @@ CRITICAL RULES
 
 async def generate_params(
     user_context: UserContext,
-    target_companies: list[Company]
+    target_companies: list[Company],
+    search_feedback: str | None = None,
+    previous_prompt: PromptGenerationResponse | None = None,
 ) -> PromptGenerationResponse:
     """Convert a natural-language prospect description into search parameters.
 
@@ -59,6 +61,13 @@ async def generate_params(
         f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
         f"TARGET COMPANIES:\n{json.dumps([asdict(c) for c in target_companies], indent=2)}"
     )
+    
+    if search_feedback and previous_prompt:
+        input_str += (
+            f"\n\nPREVIOUS PROMPT GENERATED:\n{previous_prompt.model_dump_json(indent=2)}\n\n"
+            f"FEEDBACK ON PREVIOUS PROMPT:\n{search_feedback}\n\n"
+            f"Please adjust the search parameters based on the feedback above."
+        )
 
     response = await parse_structured_response(
         client=client,
@@ -68,7 +77,6 @@ async def generate_params(
         pydantic_model=PromptGenerationResponse,
     )
     
-    # Auto-populate the technology uids using the CSV matching
     if response.apollo:
         matched_uids = get_apollo_tech_uids_for_user(user_context)
         response.apollo.currently_using_any_of_technology_uids = matched_uids

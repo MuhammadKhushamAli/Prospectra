@@ -15,6 +15,8 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     """
     user_context = state.get("user_context")
     target_companies = state.get("target_companies", [])
+    search_feedback = state.get("search_feedback", None)
+    previous_prompt = state.get("search_prompt", None)
     
     if not user_context:
         raise ValueError("user_context is missing from the state.")
@@ -22,6 +24,8 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     result = await generate_params(
         user_context=user_context,
         target_companies=target_companies,
+        search_feedback=search_feedback,
+        previous_prompt=previous_prompt,
     )
     
     return {"search_prompt": result}
