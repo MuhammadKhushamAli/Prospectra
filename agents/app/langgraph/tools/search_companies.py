@@ -8,7 +8,7 @@ from app.services.apollo_companies import find_apollo_companies
 from app.services.tavily import search_tavily
 
 
-def search_companies_node(state: GraphState) -> Dict[str, Any]:
+async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that executes Apollo and Tavily searches and parses results into Company objects."""
     search_prompt = state.get("search_prompt")
     if not search_prompt:
@@ -23,7 +23,7 @@ def search_companies_node(state: GraphState) -> Dict[str, Any]:
     # 1. Call Apollo API
     if apollo_prompt:
         try:
-            data = find_apollo_companies(apollo_prompt)
+            data = await find_apollo_companies(apollo_prompt)
             organizations = data.get("organizations", [])
             
             for org in organizations:
@@ -40,7 +40,7 @@ def search_companies_node(state: GraphState) -> Dict[str, Any]:
     # 2. Call Tavily API
     if tavily_prompt:
         try:
-            data = search_tavily(tavily_prompt)
+            data = await search_tavily(tavily_prompt)
             results = data.get("results", [])
             
             for res in results:

@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import asdict
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
 from app.core.skill_match import get_apollo_tech_uids_for_user
@@ -31,7 +31,7 @@ CRITICAL RULES
 """
 
 
-def generate_params(
+async def generate_params(
     user_context: UserContext,
     target_companies: list[Company]
 ) -> PromptGenerationResponse:
@@ -49,7 +49,7 @@ def generate_params(
     PromptGenerationResponse
         Structured Apollo and Tavily search parameters.
     """
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=os.getenv("PARAM_GEN_API_KEY"),
         base_url=os.getenv("PARAM_GEN_BASE_URL"),
     )
@@ -60,7 +60,7 @@ def generate_params(
         f"TARGET COMPANIES:\n{json.dumps([asdict(c) for c in target_companies], indent=2)}"
     )
 
-    response = parse_structured_response(
+    response = await parse_structured_response(
         client=client,
         model_name=model_name,
         input=input_str,

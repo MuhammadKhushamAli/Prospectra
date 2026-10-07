@@ -6,7 +6,7 @@ from app.agents.company_authenticator.company_auth_agent import authenticate_com
 from app.langgraph.state.state import GraphState
 
 
-def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
+async def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that scores searched companies against the user's profile."""
     user_context = state.get("user_context")
     searched_companies = state.get("searched_companies", [])
@@ -22,7 +22,7 @@ def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
             continue
             
         try:
-            score_result = authenticate_company(
+            score_result = await authenticate_company(
                 user_context=user_context,
                 searched_company=company,
             )

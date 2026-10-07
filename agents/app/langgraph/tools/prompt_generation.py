@@ -6,7 +6,7 @@ from app.agents.params_generation.param_gen_agent import generate_params
 from app.langgraph.state.state import GraphState
 
 
-def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
+async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     """Node that generates Apollo and Tavily search parameters.
     
     Extracts the user's context and target companies from the current
@@ -19,7 +19,7 @@ def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     if not user_context:
         raise ValueError("user_context is missing from the state.")
         
-    result = generate_params(
+    result = await generate_params(
         user_context=user_context,
         target_companies=target_companies,
     )

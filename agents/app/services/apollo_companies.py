@@ -1,12 +1,12 @@
 import os
 from typing import Any
 
-import requests
+import httpx
 
 from ..agents.params_generation.pydantic_model import ApolloPrompt
 
 
-def find_apollo_companies(apollo_model: ApolloPrompt) -> dict[str, Any]:
+async def find_apollo_companies(apollo_model: ApolloPrompt) -> dict[str, Any]:
     """Find organizations in Apollo using the supplied search filters."""
     api_key = os.getenv("APOLLO_API_KEY")
     api_url = os.getenv("APOLLO_COMPANIES_SEARCH_URL")
@@ -18,16 +18,16 @@ def find_apollo_companies(apollo_model: ApolloPrompt) -> dict[str, Any]:
     payload = apollo_model.model_dump(
         exclude_none=True,
     )
-    response = requests.post(
-        api_url,
-        headers={
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/json",
-            "accept": "application/json",
-            "x-api-key": api_key,
-        },
-        json=payload,
-        timeout=30,
-    )
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(
+            api_url,
+            headers={
+                "Cache-Control": "no-cache",
+                "Content-Type": "application/json",
+                "accept": "application/json",
+                "x-api-key": api_key,
+            },
+            json=payload,
+        )
     response.raise_for_status()
     return response.json()

@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import asdict
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
 from app.models.company import Company
@@ -36,7 +36,7 @@ CRITICAL RULES
 """
 
 
-def authenticate_company(
+async def authenticate_company(
     user_context: UserContext,
     searched_company: Company,
 ) -> CompanyAuth:
@@ -59,13 +59,13 @@ def authenticate_company(
         f"SEARCHED COMPANY:\n{json.dumps(asdict(searched_company), indent=2)}"
     )
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=os.getenv("COMPANY_AUTH_API_KEY"),
         base_url=os.getenv("COMPANY_AUTH_BASE_URL"),
     )
     model_name = os.getenv("COMPANY_AUTH_MODEL", "gpt-4o")
 
-    return parse_structured_response(
+    return await parse_structured_response(
         client=client,
         model_name=model_name,
         input=user_input,
