@@ -3,7 +3,7 @@ from typing import Any
 
 import requests
 
-from ..pydantic_model import ApolloPrompt
+from ..agents.params_generation.pydantic_model import ApolloPrompt
 
 
 def find_apollo_companies(apollo_model: ApolloPrompt) -> dict[str, Any]:

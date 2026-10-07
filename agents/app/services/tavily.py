@@ -3,7 +3,7 @@ from typing import Any
 
 from tavily import TavilyClient
 
-from ..pydantic_model import TavilyPrompt
+from ..agents.params_generation.pydantic_model import TavilyPrompt
 
 
 def search_tavily(tavily_prompt_model: TavilyPrompt) -> dict[str, Any]:
