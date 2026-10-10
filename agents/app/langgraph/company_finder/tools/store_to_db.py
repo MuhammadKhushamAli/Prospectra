@@ -50,7 +50,8 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
             records.append(company_data)
             
         if records:
-            supabase.table("user_companies").upsert(records).execute()
+            table_name = os.environ.get("SUPABASE_COMPANY_TABLE_NAME", "user_companies")
+            supabase.table(table_name).upsert(records).execute()
             
     except Exception as e:
         errors = state.get("errors", [])
