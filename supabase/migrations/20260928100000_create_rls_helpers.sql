@@ -39,8 +39,8 @@ SET search_path = ''
 STABLE
 AS $$
     SELECT EXISTS (
-        SELECT 1 FROM public.skills skill
-        WHERE skill.id = check_skill_id
+        SELECT 1 FROM public.user_skills skill
+        WHERE skill.skill_id = check_skill_id
           AND skill.user_id = (SELECT auth.uid())
     );
 $$;
@@ -72,14 +72,6 @@ AS $$
         WHERE company.id = check_company_id
           AND (
               private.is_org_founder(company.org_id)
-              OR EXISTS (
-                  SELECT 1
-                  FROM public.company_skills company_skill
-                  JOIN public.skills skill ON skill.id = company_skill.skill_id
-                  WHERE company_skill.company_id = company.id
-                    AND skill.org_id = company.org_id
-                    AND skill.user_id = (SELECT auth.uid())
-              )
           )
     );
 $$;
