@@ -1,5 +1,6 @@
 """LangGraph node for searching companies via Apollo and Tavily."""
 
+import uuid
 from typing import Any, Dict, List
 
 from app.langgraph.state.state import GraphState
@@ -56,6 +57,8 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     # 1. Call Apollo API
     if apollo_prompt:
         try:
+            company_id = uuid.uuid4()
+
             current_apollo_page = last_page_apollo + 1
             apollo_prompt.page = current_apollo_page
             
@@ -64,6 +67,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             
             for org in organizations:
                 company = Company(
+                    id=company_id,
                     org_id=org_id,
                     name=org.get("name", "Unknown"),
                     domain=org.get("primary_domain", ""),
@@ -91,6 +95,8 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     # 2. Call Tavily API
     if tavily_prompt:
         try:
+            company_id = uuid.uuid4()
+
             current_tavily_page = last_page_tavily + 1
             
             data = await search_tavily(tavily_prompt)
@@ -98,6 +104,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             
             for res in results:
                 company = Company(
+                    id=company_id,
                     org_id=org_id,
                     name=res.get("title", "Unknown"),
                     domain=res.get("url", ""),
