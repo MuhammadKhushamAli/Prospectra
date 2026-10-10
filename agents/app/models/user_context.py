@@ -16,6 +16,7 @@ class UserSkills:
 @dataclass
 class UserContext:
     """Profile context for the user."""
+    user_id: str
     name: str
     email: str
     skills: UserSkills
