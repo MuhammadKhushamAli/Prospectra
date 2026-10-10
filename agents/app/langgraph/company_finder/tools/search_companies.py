@@ -3,7 +3,7 @@
 import uuid
 from typing import Any, Dict, List
 
-from app.langgraph.state.state import GraphState
+from ..state.state import GraphState
 from app.models.company import Company
 from app.models.search_progress import SearchProgress
 from datetime import datetime
