@@ -3,7 +3,7 @@
 from typing import Any, Dict
 
 from app.agents.company_authenticator.company_auth_agent import authenticate_company
-from app.langgraph.state.state import GraphState
+from ..state.state import GraphState
 
 
 async def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:

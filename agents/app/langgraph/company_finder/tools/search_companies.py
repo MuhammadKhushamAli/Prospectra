@@ -12,14 +12,8 @@ from app.services.tavily import search_tavily
 
 
 import asyncio
-import os
-from supabase import create_client
 from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
-
-def get_supabase_client():
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+from app.services.supabase import get_supabase_client
 
 async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that executes Apollo and Tavily searches and parses results into Company objects."""

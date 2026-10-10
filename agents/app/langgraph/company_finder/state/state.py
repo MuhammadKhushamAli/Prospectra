@@ -11,9 +11,9 @@ from app.models.user_context import UserContext
 
 class GraphState(TypedDict, total=False):
     """The state of the Prospectra LangGraph workflow."""
+    user_id: str
+    org_id: str
     user_context: UserContext
-    skill_target_id: str
-    target_companies: List[Company]
     search_prompt: PromptGenerationResponse
     searched_companies: List[Company]
     company_auth_scores: Dict[str, CompanyAuth]

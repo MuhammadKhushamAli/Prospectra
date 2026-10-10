@@ -33,7 +33,6 @@ CRITICAL RULES
 
 async def generate_params(
     user_context: UserContext,
-    target_companies: list[Company],
     search_feedback: str | None = None,
     previous_prompt: PromptGenerationResponse | None = None,
 ) -> PromptGenerationResponse:
@@ -43,8 +42,6 @@ async def generate_params(
     ----------
     user_context:
         The context and skills of the user seeking prospects.
-    target_companies:
-        The list of target companies the user is interested in.
 
     Returns
     -------
@@ -59,7 +56,6 @@ async def generate_params(
 
     input_str = (
         f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
-        f"TARGET COMPANIES:\n{json.dumps([asdict(c) for c in target_companies], indent=2)}"
     )
     
     if search_feedback and previous_prompt:

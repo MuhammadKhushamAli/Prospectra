@@ -1,19 +1,11 @@
 """Helper function for storing search progress to Supabase in the background."""
 
-import os
 from dataclasses import asdict
 from typing import List
-from supabase import create_client, Client
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.models.search_progress import SearchProgress
-
-
-def get_supabase_client() -> Client:
-    """Initialize and return Supabase client."""
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
+from app.services.supabase import get_supabase_client
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))

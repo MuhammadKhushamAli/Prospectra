@@ -3,16 +3,9 @@
 import os
 from dataclasses import asdict
 from typing import Any, Dict
-from supabase import create_client, Client
 
+from app.services.supabase import get_supabase_client
 from ..state.state import GraphState
-
-
-def get_supabase_client() -> Client:
-    """Initialize and return Supabase client."""
-    url = os.environ.get("SUPABASE_URL", "")
-    key = os.environ.get("SUPABASE_KEY", "")
-    return create_client(url, key)
 
 
 async def store_to_db_node(state: GraphState) -> Dict[str, Any]:

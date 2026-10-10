@@ -2,10 +2,10 @@
 
 import os
 from typing import Dict, Any
-from supabase import create_client
 
 from app.langgraph.email_writer.state.state import EmailGraphState
 from app.models.company import Company
+from app.services.supabase import get_supabase_client
 
 async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
     """Node that fetches a company from Supabase using target_company_id."""
@@ -15,13 +15,7 @@ async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
         return {"errors": state.get("errors", []) + ["Missing target_company_id"]}
         
     try:
-        supabase_url = os.environ.get("SUPABASE_URL", "")
-        supabase_key = os.environ.get("SUPABASE_KEY", "")
-        
-        if not supabase_url or not supabase_key:
-            return {"errors": state.get("errors", []) + ["Missing Supabase credentials"]}
-            
-        supabase = create_client(supabase_url, supabase_key)
+        supabase = get_supabase_client()
         table_name = os.environ.get("SUPABASE_COMPANY_TABLE_NAME", "user_companies")
         
         response = supabase.table(table_name).select("*").eq("id", target_company_id).single().execute()

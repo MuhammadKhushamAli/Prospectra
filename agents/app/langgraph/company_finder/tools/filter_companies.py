@@ -2,7 +2,7 @@
 
 from typing import Any, Dict
 
-from app.langgraph.state.state import GraphState
+from ..state.state import GraphState
 
 
 async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
