@@ -1,11 +1,11 @@
 """LangGraph definition for the Prospectra workflow."""
 
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from langgraph.graph import StateGraph, START, END
 
 from app.langgraph.company_finder.state.state import GraphState
-from app.langgraph.company_finder.tools.load_user_context import load_user_context_node
+from agents.app.langgraph.tools.load_user_context import load_user_context_node
 from app.langgraph.company_finder.tools.prompt_generation import generate_search_prompt_node
 from app.langgraph.company_finder.tools.search_companies import search_companies_node
 from app.langgraph.company_finder.tools.company_auth import authenticate_companies_node

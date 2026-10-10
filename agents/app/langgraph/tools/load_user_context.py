@@ -5,7 +5,7 @@ from typing import Any, Dict
 from app.models.skills import Skill
 from app.models.user_context import UserContext
 from app.services.supabase import get_supabase_client
-from ..state.state import GraphState
+from ..company_finder.state.state import GraphState
 
 async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
     """Load the user's profile and skills into a UserContext in graph state."""
