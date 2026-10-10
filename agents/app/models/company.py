@@ -1,7 +1,7 @@
 """Company models."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 
 @dataclass
@@ -17,12 +17,14 @@ class CompanyEmail:
 @dataclass
 class Company:
     """Information about a target company."""
+    id: str
+    org_id: str
     name: str
-    web: Optional[str] = None
-    emails: List[CompanyEmail] = field(default_factory=list)
-    target_industry: Optional[str] = None
-    target_skills: List[str] = field(default_factory=list)
-    description: Optional[str] = None
-    location: Optional[str] = None
-    employee_count: Optional[str] = None
+    domain: str
+    website: Optional[str] = None
     linkedin_url: Optional[str] = None
+    industry: str
+    size: str
+    source: str
+    raw_signals: Optional[dict] = None
+    status: Literal["active", "inactive"]

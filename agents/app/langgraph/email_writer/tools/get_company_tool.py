@@ -5,7 +5,7 @@ from typing import Dict, Any
 from supabase import create_client
 
 from app.langgraph.email_writer.state.state import EmailGraphState
-from app.models.company import Company, CompanyEmail
+from app.models.company import Company
 
 async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
     """Node that fetches a company from Supabase using target_company_id."""
@@ -31,23 +31,18 @@ async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
             
         data = response.data
         
-        # Convert raw emails back to CompanyEmail dataclass if they exist
-        raw_emails = data.get("emails", [])
-        company_emails = []
-        for e in raw_emails:
-            if isinstance(e, dict):
-                company_emails.append(CompanyEmail(**e))
-            
         company = Company(
-            name=data.get("name", ""),
-            web=data.get("web"),
-            emails=company_emails,
-            target_industry=data.get("target_industry"),
-            target_skills=data.get("target_skills", []),
-            description=data.get("description"),
-            location=data.get("location"),
-            employee_count=data.get("employee_count"),
+            id=data.get("id"),
+            org_id=data.get("org_id"),
+            name=data.get("name"),
+            domain=data.get("domain"),
+            website=data.get("website"),
             linkedin_url=data.get("linkedin_url"),
+            industry=data.get("industry"),
+            size=data.get("size"),
+            source=data.get("source"),
+            raw_signals=data.get("raw_signals"),
+            status=data.get("status", "active"),
         )
         
         return {"target_company": company}

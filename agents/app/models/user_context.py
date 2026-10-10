@@ -17,6 +17,7 @@ class UserSkills:
 class UserContext:
     """Profile context for the user."""
     user_id: str
+    org_id: str
     name: str
     email: str
     skills: UserSkills
