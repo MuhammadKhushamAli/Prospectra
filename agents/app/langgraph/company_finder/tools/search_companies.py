@@ -11,8 +11,11 @@ from app.services.tavily import search_tavily
 async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that executes Apollo and Tavily searches and parses results into Company objects."""
     search_prompt = state.get("search_prompt")
+    user_context = state.get("user_context")
     if not search_prompt:
         raise ValueError("search_prompt is missing from the state.")
+
+    org_id = getattr(user_context, "org_id", "") if user_context and not isinstance(user_context, dict) else (user_context or {}).get("org_id", "")
 
     apollo_prompt = search_prompt.apollo
     tavily_prompt = search_prompt.tavily
@@ -28,10 +31,16 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             
             for org in organizations:
                 company = Company(
+                    id=org.get("id", ""),
+                    org_id=org_id,
                     name=org.get("name", "Unknown"),
-                    web=org.get("website_url"),
+                    domain=org.get("primary_domain", ""),
+                    website=org.get("website_url"),
                     linkedin_url=org.get("linkedin_url"),
-                    location=org.get("primary_phone", {}).get("sanitized_number") if org.get("primary_phone") else None,
+                    industry=org.get("industry", ""),
+                    size=str(org.get("estimated_num_employees", "")) if org.get("estimated_num_employees") else "",
+                    source="apollo",
+                    raw_signals=org,
                 )
                 searched_companies.append(company)
         except Exception as e:
@@ -45,9 +54,15 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             
             for res in results:
                 company = Company(
+                    id="",
+                    org_id=org_id,
                     name=res.get("title", "Unknown"),
-                    web=res.get("url"),
-                    description=res.get("content")
+                    domain=res.get("url", ""),
+                    website=res.get("url"),
+                    industry="",
+                    size="",
+                    source="tavily",
+                    raw_signals=res,
                 )
                 searched_companies.append(company)
         except Exception as e:
