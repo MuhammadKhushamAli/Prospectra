@@ -49,11 +49,13 @@ app_graph = workflow.compile()
 
 async def run_prospect_workflow(
     user_context: UserContext, 
+    skill_target_id: str,
     target_companies: List[Company]
 ) -> Dict[str, Any]:
     """Execute the full Prospectra pipeline async."""
     initial_state = {
         "user_context": user_context,
+        "skill_target_id": skill_target_id,
         "target_companies": target_companies,
         "errors": []
     }
