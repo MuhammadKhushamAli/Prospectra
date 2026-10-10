@@ -3,7 +3,7 @@ CREATE TABLE user_profiles (
     user_id UUID NOT NULL,
     full_name TEXT,
     headline TEXT,
-    calendly_url TEXT,
+    email TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (org_id, user_id),
     FOREIGN KEY (org_id, user_id)
