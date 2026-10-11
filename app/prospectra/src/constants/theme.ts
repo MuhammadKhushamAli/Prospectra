@@ -24,7 +24,7 @@ export const theme = {
         tabActive: "#1F4D3A",
         tabInactive: "#8F8B7C",
         statusBar: "dark-content",
-        icon: require("../assets/app_icons/prospectra-dark.png"),
+        icon: require("../../assets/app_icons/prospectra-dark.png"),
     },
     dark: {
         background: "#12130F",
@@ -51,7 +51,7 @@ export const theme = {
         tabActive: "#7FB89A",
         tabInactive: "#7A7767",
         statusBar: "light-content",
-        icon: require("../assets/app_icons/prospectra-light.png"),
+        icon: require("../../assets/app_icons/prospectra-light.png"),
     },
 };
 
