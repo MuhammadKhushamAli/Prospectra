@@ -1,11 +1,12 @@
 """Domain ownership verification API."""
 
-from .models import DomainVerificationInstructions
-from .service import start_domain_verification, verify_domain
+from .service import (
+    complete_domain_verification,
+    verify_domain,
+)
 
 __all__ = [
-    "DomainVerificationInstructions",
-    "start_domain_verification",
+    "complete_domain_verification",
     "verify_domain",
 ]
 
