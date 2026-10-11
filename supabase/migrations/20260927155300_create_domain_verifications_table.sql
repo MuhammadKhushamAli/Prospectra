@@ -1,6 +1,5 @@
 CREATE TABLE domain_verifications (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    org_id UUID PRIMARY KEY NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     domain TEXT NOT NULL,
     dns_records JSONB NOT NULL DEFAULT '{}'::jsonb,
     verification_status domain_verification_status NOT NULL DEFAULT 'pending',
