@@ -2,7 +2,7 @@ import { StyleSheet, Text } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { authMode, type AuthMode } from "../../constants/constants";
+import { authCopy, authMode, type AuthMode } from "../../constants/constants";
 
 interface AuthFooterLinkProps {
   mode: AuthMode;
@@ -16,11 +16,9 @@ export default function AuthFooterLink({ mode, onPress }: AuthFooterLinkProps) {
       onPress={onPress}
       style={[styles.text, { color: colors.textSecondary }]}
     >
-      {mode === authMode.login
-        ? "Don't have an account? "
-        : "Already have an account? "}
+      {mode === authMode.login ? authCopy.login.footerPrompt : authCopy.signup.footerPrompt}
       <Text style={{ color: colors.primary, fontFamily: "DMSansSemiBold" }}>
-        {mode === authMode.login ? "Sign up" : "Log in"}
+        {mode === authMode.login ? authCopy.login.footerAction : authCopy.signup.footerAction}
       </Text>
     </Text>
   );

@@ -1,21 +1,22 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { tokens } from "../../constants/theme";
+import { buttonVariant, type ButtonVariant } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
 
 interface ButtonProps {
   label: string;
-  variant?: "primary" | "ghost";
+  variant?: ButtonVariant;
   onPress?: () => void;
 }
 
 export default function Button({
   label,
-  variant = "primary",
+  variant = buttonVariant.primary,
   onPress,
 }: ButtonProps) {
   const colors = useTheme();
-  const primary = variant === "primary";
+  const primary = variant === buttonVariant.primary;
   return (
     <Pressable
       onPress={onPress}

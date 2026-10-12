@@ -1,12 +1,13 @@
 import { useState } from "react";
-import { Pressable, StyleSheet } from "react-native";
+import { Pressable, StyleSheet, TextInputProps } from "react-native";
 import { Eye, EyeOff } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
+import { authCopy } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
 import TextField from "./TextField";
 
-interface PasswordFieldProps {
+interface PasswordFieldProps extends TextInputProps {
   label: string;
   placeholder?: string;
 }
@@ -14,18 +15,20 @@ interface PasswordFieldProps {
 export default function PasswordField({
   label,
   placeholder,
+  ...props
 }: PasswordFieldProps) {
   const colors = useTheme();
   const [visible, setVisible] = useState(false);
   const Icon = visible ? EyeOff : Eye;
   return (
     <TextField
+      {...props}
       label={label}
       placeholder={placeholder}
       secureTextEntry={!visible}
       rightSlot={
         <Pressable
-          accessibilityLabel={visible ? "Hide password" : "Show password"}
+          accessibilityLabel={visible ? authCopy.passwordVisibility.hide : authCopy.passwordVisibility.show}
           hitSlop={tokens.spacing.sm}
           onPress={() => setVisible((value) => !value)}
           style={styles.toggle}

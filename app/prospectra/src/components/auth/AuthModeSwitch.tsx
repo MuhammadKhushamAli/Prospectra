@@ -15,7 +15,7 @@ import Animated, {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { authMode, type AuthMode } from "../../constants/constants";
+import { authCopy, authMode, type AuthMode } from "../../constants/constants";
 
 interface AuthModeSwitchProps {
   mode: AuthMode;
@@ -77,7 +77,7 @@ export default function AuthModeSwitch({
             },
           ]}
         >
-          Log in
+          {authCopy.tabs.login}
         </Text>
       </Pressable>
       <Pressable
@@ -93,7 +93,7 @@ export default function AuthModeSwitch({
             },
           ]}
         >
-          Sign up
+          {authCopy.tabs.signup}
         </Text>
       </Pressable>
     </View>

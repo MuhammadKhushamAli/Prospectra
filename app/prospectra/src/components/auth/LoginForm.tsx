@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
@@ -5,9 +6,11 @@ import { useTheme } from "../../hooks/useTheme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
+import type { LoginCredentials } from "../../services/authService";
+import { authCopy } from "../../constants/constants";
 
 interface LoginFormProps {
-  onSubmit?: () => void;
+  onSubmit?: (credentials: LoginCredentials) => void;
   onForgotPassword?: () => void;
 }
 
@@ -16,22 +19,27 @@ export default function LoginForm({
   onForgotPassword,
 }: LoginFormProps) {
   const colors = useTheme();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   return (
     <View style={styles.form}>
       <TextField
-        label="Email"
-        placeholder="you@company.com"
+        label={authCopy.fields.email}
+        placeholder={authCopy.placeholders.email}
         keyboardType="email-address"
         autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
       />
-      <PasswordField label="Password" placeholder="Enter your password" />
+      <PasswordField label={authCopy.fields.password} placeholder={authCopy.placeholders.loginPassword} value={password} onChangeText={setPassword} />
       <Text
         onPress={onForgotPassword}
         style={[styles.forgot, { color: colors.primary }]}
       >
-        Forgot password?
+        {authCopy.actions.forgotPassword}
       </Text>
-      <Button label="Log in" onPress={onSubmit} />
+      <Button label={authCopy.actions.login} onPress={() => onSubmit?.({ email, password })} />
     </View>
   );
 }

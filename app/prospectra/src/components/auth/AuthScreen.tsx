@@ -16,19 +16,41 @@ import Animated, {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
+import { useLogin } from "../../hooks/useLogin";
+import { useSignup } from "../../hooks/useSignup";
+import type {
+  LoginCredentials,
+  SignupCredentials,
+} from "../../services/authService";
+import { validateLogin, validateSignup } from "../../validation/authValidation";
+import { getErrorMessage } from "../../utils/getErrorMessage";
+import NotificationBanner from "../ui/NotificationBanner";
 import AuthFooterLink from "./AuthFooterLink";
 import AuthHeader from "./AuthHeader";
 import AuthModeSwitch from "./AuthModeSwitch";
 import LoginForm from "./LoginForm";
 import SignupForm from "./SignupForm";
-import { authMode, type AuthMode } from "../../constants/constants";
+import {
+  authCopy,
+  authMode,
+  notificationVariant,
+  type AuthMode,
+  type NotificationVariant,
+} from "../../constants/constants";
 
 export default function AuthScreen() {
   const colors = useTheme();
+  const { login } = useLogin();
+  const { signup } = useSignup();
   const [mode, setMode] = useState<AuthMode>(authMode.login);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [notification, setNotification] = useState<{
+    variant: NotificationVariant;
+    message: string;
+  } | null>(null);
   const opacity = useSharedValue(1);
   const translateX = useSharedValue(0);
+
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
     const sub = AccessibilityInfo.addEventListener(
@@ -37,8 +59,10 @@ export default function AuthScreen() {
     );
     return () => sub.remove();
   }, []);
+
   const changeMode = (next: AuthMode) => {
     setMode(next);
+    setNotification(null);
     opacity.value = reducedMotion ? 1 : 0;
     translateX.value = reducedMotion ? 0 : next === authMode.login ? -6 : 6;
     opacity.value = reducedMotion
@@ -48,12 +72,69 @@ export default function AuthScreen() {
       ? 0
       : withTiming(0, { duration: 150, easing: Easing.out(Easing.cubic) });
   };
+
+  const handleLogin = async (credentials: LoginCredentials) => {
+    const validationError = validateLogin(credentials);
+    if (validationError) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: validationError,
+      });
+      return;
+    }
+    try {
+      await login(credentials);
+      setNotification({
+        variant: notificationVariant.success,
+        message: authCopy.login.success,
+      });
+    } catch (error) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: getErrorMessage(error),
+      });
+    }
+  };
+
+  const handleSignup = async (
+    credentials: SignupCredentials,
+    confirmPassword: string,
+  ) => {
+    const validationError = validateSignup(credentials, confirmPassword);
+    if (validationError) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: validationError,
+      });
+      return;
+    }
+    try {
+      await signup(credentials);
+      setNotification({
+        variant: notificationVariant.success,
+        message: authCopy.signup.success,
+      });
+    } catch (error) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: getErrorMessage(error),
+      });
+    }
+  };
+
   const animatedForm = useAnimatedStyle(() => ({
     opacity: opacity.value,
     transform: [{ translateX: translateX.value }],
   }));
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      {notification ? (
+        <NotificationBanner
+          variant={notification.variant}
+          message={notification.message}
+          onDismiss={() => setNotification(null)}
+        />
+      ) : null}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
@@ -69,7 +150,11 @@ export default function AuthScreen() {
             reducedMotion={reducedMotion}
           />
           <Animated.View style={animatedForm}>
-            {mode === authMode.login ? <LoginForm /> : <SignupForm />}
+            {mode === authMode.login ? (
+              <LoginForm onSubmit={handleLogin} />
+            ) : (
+              <SignupForm onSubmit={handleSignup} />
+            )}
           </Animated.View>
           <AuthFooterLink
             mode={mode}

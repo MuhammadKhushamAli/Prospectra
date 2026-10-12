@@ -2,7 +2,7 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { appName, authMode, type AuthMode } from "../../constants/constants";
+import { appName, authCopy, authMode, type AuthMode } from "../../constants/constants";
 
 interface AuthHeaderProps {
   mode: AuthMode;
@@ -20,12 +20,10 @@ export default function AuthHeader({ mode }: AuthHeaderProps) {
       </View>
       <View style={styles.titleBlock}>
         <Text style={[styles.title, { color: colors.text }]}>
-          {mode === authMode.login ? "Welcome back" : "Create your account"}
+          {mode === authMode.login ? authCopy.login.title : authCopy.signup.title}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {mode === authMode.login
-            ? "Log in to continue to Prospectra."
-            : "Start finding and contacting clients."}
+          {mode === authMode.login ? authCopy.login.subtitle : authCopy.signup.subtitle}
         </Text>
       </View>
     </View>

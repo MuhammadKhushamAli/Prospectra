@@ -1,34 +1,57 @@
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
+import type { SignupCredentials } from "../../services/authService";
+import { authCopy } from "../../constants/constants";
 
 interface SignupFormProps {
-  onSubmit?: () => void;
+  onSubmit?: (credentials: SignupCredentials, confirmPassword: string) => void;
 }
 
 export default function SignupForm({ onSubmit }: SignupFormProps) {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   return (
     <View style={styles.form}>
       <TextField
-        label="Full name"
-        placeholder="Your name"
+        label={authCopy.fields.fullName}
+        placeholder={authCopy.placeholders.fullName}
         autoCapitalize="words"
+        value={fullName}
+        onChangeText={setFullName}
       />
       <TextField
-        label="Email"
-        placeholder="you@company.com"
+        label={authCopy.fields.email}
+        placeholder={authCopy.placeholders.email}
         keyboardType="email-address"
         autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
       />
-      <PasswordField label="Password" placeholder="Create a password" />
       <PasswordField
-        label="Confirm password"
-        placeholder="Repeat your password"
+        label={authCopy.fields.password}
+        placeholder={authCopy.placeholders.signupPassword}
+        value={password}
+        onChangeText={setPassword}
       />
-      <Button label="Create account" onPress={onSubmit} />
+      <PasswordField
+        label={authCopy.fields.confirmPassword}
+        placeholder={authCopy.placeholders.confirmPassword}
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
+      />
+      <Button
+        label={authCopy.actions.signup}
+        onPress={() =>
+          onSubmit?.({ fullName, email, password }, confirmPassword)
+        }
+      />
     </View>
   );
 }

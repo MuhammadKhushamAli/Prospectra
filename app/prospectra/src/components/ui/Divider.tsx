@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
+import { authCopy } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
 
 export default function Divider() {
@@ -14,7 +15,7 @@ export default function Divider() {
           { color: colors.textSecondary, backgroundColor: colors.background },
         ]}
       >
-        or
+        {authCopy.divider}
       </Text>
       <View style={[styles.line, { backgroundColor: colors.border }]} />
     </View>
