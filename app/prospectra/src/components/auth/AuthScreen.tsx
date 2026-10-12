@@ -19,10 +19,8 @@ import { useTheme } from "../../hooks/useTheme";
 import AuthFooterLink from "./AuthFooterLink";
 import AuthHeader from "./AuthHeader";
 import AuthModeSwitch from "./AuthModeSwitch";
-import Divider from "../ui/Divider";
 import LoginForm from "./LoginForm";
 import SignupForm from "./SignupForm";
-import SocialAuthButton from "./SocialAuthButton";
 import { authMode, type AuthMode } from "../../constants/constants";
 
 export default function AuthScreen() {
@@ -73,8 +71,6 @@ export default function AuthScreen() {
           <Animated.View style={animatedForm}>
             {mode === authMode.login ? <LoginForm /> : <SignupForm />}
           </Animated.View>
-          <Divider />
-          <SocialAuthButton />
           <AuthFooterLink
             mode={mode}
             onPress={() =>
