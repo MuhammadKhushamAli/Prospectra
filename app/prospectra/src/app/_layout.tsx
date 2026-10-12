@@ -1,4 +1,6 @@
 import { useFonts } from "expo-font";
+import { Fraunces_600SemiBold } from "@expo-google-fonts/fraunces";
+import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold } from "@expo-google-fonts/dm-sans";
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
 import { useCallback, useState } from "react";
@@ -10,7 +12,12 @@ NativeSplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [fontsLoaded] = useFonts({});
+  const [fontsLoaded] = useFonts({
+    Fraunces: Fraunces_600SemiBold,
+    DMSans: DMSans_400Regular,
+    DMSansMedium: DMSans_500Medium,
+    DMSansSemiBold: DMSans_600SemiBold,
+  });
   const [showSplash, setShowSplash] = useState(true);
 
   const hideNativeSplash = useCallback(() => {

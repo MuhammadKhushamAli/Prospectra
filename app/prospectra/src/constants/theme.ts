@@ -56,7 +56,7 @@ export const theme = {
 };
 
 export const tokens = {
-    spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 40 },
+    spacing: { xs: 4, sm: 8, md: 16, lg: 24, auth: 32, xl: 40 },
     radius: { sm: 4, md: 8, lg: 14, full: 999 }, // mixed radii, not 16 everywhere
-    fontSize: { xs: 12, sm: 14, md: 16, lg: 20, xl: 30 },
+    fontSize: { xs: 12, sm: 14, md: 16, lg: 20, xl: 30, xxl: 36, authTitle: 28, authSubtitle: 15 },
 };
