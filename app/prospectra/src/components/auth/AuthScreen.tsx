@@ -22,6 +22,7 @@ import type {
   LoginCredentials,
   SignupCredentials,
 } from "../../services/authService";
+import { router } from "expo-router";
 import { validateLogin, validateSignup } from "../../validation/authValidation";
 import { getErrorMessage } from "../../utils/getErrorMessage";
 import NotificationBanner from "../ui/NotificationBanner";
@@ -114,6 +115,7 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.signup.success,
       });
+      router.push("/domain-verification");
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,

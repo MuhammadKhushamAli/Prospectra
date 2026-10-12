@@ -50,6 +50,28 @@ const authValidationMessages = {
   passwordMismatch: "Passwords do not match.",
 } as const;
 
+const domainVerificationCopy = {
+  title: "Verify your domain",
+  subtitle: "Connect and authenticate your business domain.",
+  fields: {
+    domain: "Domain name",
+  },
+  placeholders: {
+    domain: "e.g. yourcompany.com",
+  },
+  actions: {
+    verify: "Verify domain",
+    verifying: "Verifying domain...",
+    backToLogin: "Back to login",
+  },
+  success: "Domain verified successfully.",
+} as const;
+
+const domainValidationMessages = {
+  missingDomain: "Enter your domain name.",
+  invalidDomain: "Enter a valid domain name (e.g. yourcompany.com).",
+} as const;
+
 type AuthMode = (typeof authMode)[keyof typeof authMode];
 type ButtonVariant = (typeof buttonVariant)[keyof typeof buttonVariant];
 type NotificationVariant =
@@ -61,6 +83,8 @@ export {
   authMode,
   authValidationMessages,
   buttonVariant,
+  domainValidationMessages,
+  domainVerificationCopy,
   notificationVariant,
 };
 export type { AuthMode, ButtonVariant, NotificationVariant };
