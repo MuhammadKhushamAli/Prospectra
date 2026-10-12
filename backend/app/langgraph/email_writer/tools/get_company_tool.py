@@ -15,10 +15,10 @@ async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
         return {"errors": state.get("errors", []) + ["Missing target_company_id"]}
         
     try:
-        supabase = get_supabase_client()
+        supabase = await get_supabase_client()
         table_name = os.environ.get("SUPABASE_COMPANY_TABLE_NAME", "user_companies")
         
-        response = supabase.table(table_name).select("*").eq("id", target_company_id).single().execute()
+        response = await supabase.table(table_name).select("*").eq("id", target_company_id).single().execute()
         
         if not response.data:
             return {"errors": state.get("errors", []) + [f"Company with ID {target_company_id} not found"]}

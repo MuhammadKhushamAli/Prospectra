@@ -12,8 +12,11 @@ from app.services.tavily import search_tavily
 
 
 import asyncio
+import os
 from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
 from app.services.supabase import get_supabase_client
+
+SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
 
 async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that executes Apollo and Tavily searches and parses results into Company objects."""
@@ -38,8 +41,8 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     
     if org_id and skill_target_id:
         try:
-            supabase = get_supabase_client()
-            response = supabase.table("search_progress").select("source, last_page_fetched").eq("org_id", org_id).eq("skill_target_id", skill_target_id).execute()
+            supabase = await get_supabase_client()
+            response = await supabase.table(SEARCH_PROGRESS_TABLE).select("source, last_page_fetched").eq("org_id", org_id).eq("skill_target_id", skill_target_id).execute()
             for record in response.data:
                 if record.get("source") == "apollo":
                     last_page_apollo = record.get("last_page_fetched", 0)

@@ -19,7 +19,7 @@ if not DOMAIN_VERIFICATION_TABLE:
 
 
 
-def add_domain_to_verify(org_id: str, domain: str) -> dict[str, str]:
+async def add_domain_to_verify(org_id: str, domain: str) -> dict[str, str]:
     """Store a pending domain verification and return its DNS token."""
     normalized_domain = normalize_domain(domain)
     token = new_token()
@@ -40,7 +40,8 @@ def add_domain_to_verify(org_id: str, domain: str) -> dict[str, str]:
 
     row = asdict(verification)
     row.pop("created_at")
-    get_supabase_client().table(DOMAIN_VERIFICATION_TABLE).upsert(
+    supabase_client = await get_supabase_client()
+    await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
         row,
         on_conflict="org_id,domain",
     ).execute()
@@ -50,8 +51,8 @@ def add_domain_to_verify(org_id: str, domain: str) -> dict[str, str]:
 
 async def domain_verification(org_id: str) -> bool:
     """Verify the organization's stored domain token through DNS."""
-    supabase_client = get_supabase_client()
-    response = (
+    supabase_client = await get_supabase_client()
+    response = await (
         supabase_client
         .table(DOMAIN_VERIFICATION_TABLE)
         .select("domain, dns_records")
@@ -63,11 +64,11 @@ async def domain_verification(org_id: str) -> bool:
     verification_status = await is_verified(record["domain"], record["dns_records"]["value"])
 
     if verification_status:
-        supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
+        await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
             {"verification_status": "verified"}
         ).eq("org_id", org_id).eq("domain", record["domain"]).execute()
     else:
-        supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
+        await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
             {"verification_status": "failed"}
         ).eq("org_id", org_id).eq("domain", record["domain"]).execute()
 

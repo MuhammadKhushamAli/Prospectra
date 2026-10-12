@@ -14,7 +14,7 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
         return {}
         
     try:
-        supabase = get_supabase_client()
+        supabase = await get_supabase_client()
         table_name = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "user_emails")
 
         user_id = getattr(user_context, "user_id", None) if not isinstance(user_context, dict) else user_context.get("user_id")
@@ -27,7 +27,7 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
                 "subject": generated_email.subject,
                 "body": generated_email.body
             }
-            supabase.table(table_name).insert(record).execute()
+            await supabase.table(table_name).insert(record).execute()
     except Exception as e:
         return {"errors": state.get("errors", []) + [f"Failed to store email to Supabase: {str(e)}"]}
 

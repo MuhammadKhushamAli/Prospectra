@@ -1,11 +1,14 @@
 """Helper function for storing search progress to Supabase in the background."""
 
+import os
 from dataclasses import asdict
 from typing import List
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.models.search_progress import SearchProgress
 from app.services.supabase import get_supabase_client
+
+SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
@@ -15,7 +18,7 @@ async def store_search_progress(search_progress: List[SearchProgress]) -> None:
         return
     
     try:
-        supabase = get_supabase_client()
+        supabase = await get_supabase_client()
         
         records = [asdict(progress) for progress in search_progress]
         
@@ -25,7 +28,7 @@ async def store_search_progress(search_progress: List[SearchProgress]) -> None:
                 record["last_fetched_at"] = record["last_fetched_at"].isoformat()
             
         if records:
-            supabase.table("search_progress").upsert(records).execute()
+            await supabase.table(SEARCH_PROGRESS_TABLE).upsert(records).execute()
             
     except Exception as e:
         print(f"Failed to store search progress to Supabase: {str(e)}")

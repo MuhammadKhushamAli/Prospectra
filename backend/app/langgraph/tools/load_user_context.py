@@ -2,10 +2,16 @@
 
 from typing import Any, Dict
 
+import os
+
 from app.models.skills import Skill
 from app.models.user_context import UserContext
 from app.services.supabase import get_supabase_client
 from ..company_finder.state.state import GraphState
+
+USER_PROFILES_TABLE = os.environ.get("SUPABASE_USER_PROFILES_TABLE_NAME", "user_profiles")
+USER_SKILLS_TABLE = os.environ.get("SUPABASE_USER_SKILLS_TABLE_NAME", "user_skills")
+SKILLS_TABLE = os.environ.get("SUPABASE_SKILLS_TABLE_NAME", "skills")
 
 async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
     """Load the user's profile and skills into a UserContext in graph state."""
@@ -15,10 +21,10 @@ async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
     if not user_id or not org_id:
         raise ValueError("user_id and org_id are required to load user context.")
 
-    supabase = get_supabase_client()
+    supabase = await get_supabase_client()
 
-    profile_response = (
-        supabase.table("user_profiles")
+    profile_response = await (
+        supabase.table(USER_PROFILES_TABLE)
         .select("full_name, email")
         .eq("user_id", user_id)
         .eq("org_id", org_id)
@@ -27,8 +33,8 @@ async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
     )
     profile = profile_response.data
 
-    user_skills_response = (
-        supabase.table("user_skills")
+    user_skills_response = await (
+        supabase.table(USER_SKILLS_TABLE)
         .select("skill_id")
         .eq("user_id", user_id)
         .execute()
@@ -37,8 +43,8 @@ async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
 
     skills = []
     if skill_ids:
-        skills_response = (
-            supabase.table("skills")
+        skills_response = await (
+            supabase.table(SKILLS_TABLE)
             .select("*")
             .in_("id", skill_ids)
             .eq("org_id", org_id)

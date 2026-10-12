@@ -16,13 +16,13 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
         return {}
     
     try:
-        supabase = get_supabase_client()
+        supabase = await get_supabase_client()
         
         records = [asdict(company) for company in accepted_companies]
             
         if records:
             table_name = os.environ.get("SUPABASE_COMPANY_TABLE_NAME", "user_companies")
-            supabase.table(table_name).upsert(records).execute()
+            await supabase.table(table_name).upsert(records).execute()
             
     except Exception as e:
         errors = state.get("errors", [])
