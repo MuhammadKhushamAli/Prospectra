@@ -6,9 +6,9 @@ load_dotenv()
 
 from fastapi import FastAPI  # noqa: E402
 
-from app.api.routes.company_search import router as company_search_router  # noqa: E402
-from app.api.routes.domain import router as domain_router  # noqa: E402
-from app.api.routes.write_email import router as write_email_router  # noqa: E402
+from app.api.routes.company_search import router as company_search_router
+from app.api.routes.domain import router as domain_router
+from app.api.routes.write_email import router as write_email_router
 
 app = FastAPI(title="Prospectra")
 
