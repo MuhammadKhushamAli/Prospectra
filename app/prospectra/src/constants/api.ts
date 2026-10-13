@@ -1,6 +1,5 @@
-const authApiPath = {
-  login: "/auth/v1/token?grant_type=password",
-  signup: "/auth/v1/signup",
+const backendApiPath = {
+  verifyDomain: "/verify-domain",
 } as const;
 
-export { authApiPath };
+export { backendApiPath };
