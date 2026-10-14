@@ -62,6 +62,8 @@ const domainVerificationCopy = {
   actions: {
     verify: "Verify domain",
     verifying: "Verifying domain...",
+    checkStatus: "Verify status",
+    checkingStatus: "Checking status...",
     backToLogin: "Back to login",
   },
   success: "Domain verified successfully.",
@@ -70,6 +72,7 @@ const domainVerificationCopy = {
 const domainValidationMessages = {
   missingDomain: "Enter your domain name.",
   invalidDomain: "Enter a valid domain name (e.g. yourcompany.com).",
+  freeEmailProvider: "Free email providers (e.g. Gmail, Yahoo, Outlook) are not allowed. Please enter your business domain.",
 } as const;
 
 type AuthMode = (typeof authMode)[keyof typeof authMode];

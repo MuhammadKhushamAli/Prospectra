@@ -13,11 +13,13 @@ import { useTheme } from "../../hooks/useTheme";
 interface TextFieldProps extends TextInputProps {
   label: string;
   rightSlot?: React.ReactNode;
+  error?: string | null;
 }
 
 export default function TextField({
   label,
   rightSlot,
+  error,
   ...props
 }: TextFieldProps) {
   const colors = useTheme();
@@ -30,7 +32,11 @@ export default function TextField({
           styles.inputWrap,
           {
             backgroundColor: colors.surface,
-            borderColor: focused ? colors.primary : colors.border,
+            borderColor: error
+              ? colors.error
+              : focused
+                ? colors.primary
+                : colors.border,
           },
         ]}
       >
@@ -49,6 +55,9 @@ export default function TextField({
         />
         {rightSlot}
       </View>
+      {error ? (
+        <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+      ) : null}
     </View>
   );
 }
@@ -69,5 +78,10 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.sm,
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.md,
+  },
+  error: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    marginTop: 2,
   },
 });

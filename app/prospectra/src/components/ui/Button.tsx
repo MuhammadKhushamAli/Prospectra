@@ -8,24 +8,27 @@ interface ButtonProps {
   label: string;
   variant?: ButtonVariant;
   onPress?: () => void;
+  disabled?: boolean;
 }
 
 export default function Button({
   label,
   variant = buttonVariant.primary,
   onPress,
+  disabled = false,
 }: ButtonProps) {
   const colors = useTheme();
   const primary = variant === buttonVariant.primary;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={disabled ? undefined : onPress}
+      disabled={disabled}
       style={({ pressed }) => [
         styles.button,
         primary
           ? { backgroundColor: colors.primary, borderColor: colors.primary }
           : { borderColor: colors.border },
-        { opacity: pressed ? 0.85 : 1 },
+        { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
       ]}
     >
       <Text

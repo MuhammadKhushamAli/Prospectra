@@ -46,7 +46,16 @@ async def add_domain_to_verify(org_id: str, domain: str) -> dict[str, str]:
         on_conflict="org_id,domain",
     ).execute()
 
-    return {"domain": normalized_domain, "token": token}
+    return {
+        "domain": normalized_domain,
+        "token": token,
+        "dns_instructions": {
+            "title": "Add this DNS record to your domain provider:",
+            "type": "TXT",
+            "host": _VERIFICATION_HOST,
+            "value": token,
+        },
+    }
 
 
 async def domain_verification(org_id: str) -> bool:
@@ -61,7 +70,12 @@ async def domain_verification(org_id: str) -> bool:
         .execute()
     )
     record = response.data
-    verification_status = await is_verified(record["domain"], record["dns_records"]["value"])
+    if not record or not record.get("domain") or not record.get("dns_records"):
+        return False
+    dns_val = record["dns_records"].get("value") if isinstance(record["dns_records"], dict) else None
+    if not dns_val:
+        return False
+    verification_status = await is_verified(record["domain"], dns_val)
 
     if verification_status:
         await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(

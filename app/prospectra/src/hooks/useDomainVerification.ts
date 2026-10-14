@@ -1,22 +1,57 @@
 import { useCallback, useState } from "react";
 
 import {
+  getDomainStatusFromBackend,
   verifyDomainWithBackend,
+  type DomainStatusResponse,
   type VerifyDomainResponse,
 } from "../services/domainService";
 
 export function useDomainVerification() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
+  const [verificationData, setVerificationData] =
+    useState<VerifyDomainResponse | null>(null);
+  const [statusData, setStatusData] = useState<DomainStatusResponse | null>(
+    null,
+  );
+
   const verifyDomain = useCallback(
-    async (orgId: string): Promise<VerifyDomainResponse> => {
+    async (
+      domain?: string,
+    ): Promise<VerifyDomainResponse> => {
       setIsLoading(true);
       try {
-        return await verifyDomainWithBackend(orgId);
+        const result = await verifyDomainWithBackend(domain);
+        setVerificationData(result);
+        return result;
       } finally {
         setIsLoading(false);
       }
     },
     [],
   );
-  return { verifyDomain, isLoading };
+
+  const checkDomainStatus = useCallback(
+    async (): Promise<DomainStatusResponse> => {
+      setIsCheckingStatus(true);
+      try {
+        const result = await getDomainStatusFromBackend();
+        setStatusData(result);
+        return result;
+      } finally {
+        setIsCheckingStatus(false);
+      }
+    },
+    [],
+  );
+
+  return {
+    verifyDomain,
+    checkDomainStatus,
+    isLoading,
+    isCheckingStatus,
+    verificationData,
+    statusData,
+  };
 }

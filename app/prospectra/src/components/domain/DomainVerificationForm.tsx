@@ -4,7 +4,14 @@ import { StyleSheet, View } from "react-native";
 import { tokens } from "../../constants/theme";
 import Button from "../ui/Button";
 import TextField from "../ui/TextField";
-import { domainVerificationCopy } from "../../constants/constants";
+import {
+  domainValidationMessages,
+  domainVerificationCopy,
+} from "../../constants/constants";
+import {
+  isFreeEmailProvider,
+  validateDomain,
+} from "../../validation/domainValidation";
 
 interface DomainVerificationFormProps {
   onSubmit?: (domain: string) => void;
@@ -16,6 +23,26 @@ export default function DomainVerificationForm({
   isLoading,
 }: DomainVerificationFormProps) {
   const [domain, setDomain] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDomainChange = (text: string) => {
+    setDomain(text);
+    if (text.trim() && isFreeEmailProvider(text)) {
+      setError(domainValidationMessages.freeEmailProvider);
+    } else {
+      setError(null);
+    }
+  };
+
+  const handleSubmit = () => {
+    const validationError = validateDomain(domain);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    onSubmit?.(domain);
+  };
 
   return (
     <View style={styles.form}>
@@ -26,8 +53,9 @@ export default function DomainVerificationForm({
         autoCapitalize="none"
         autoCorrect={false}
         value={domain}
-        onChangeText={setDomain}
+        onChangeText={handleDomainChange}
         editable={!isLoading}
+        error={error}
       />
       <Button
         label={
@@ -35,7 +63,8 @@ export default function DomainVerificationForm({
             ? domainVerificationCopy.actions.verifying
             : domainVerificationCopy.actions.verify
         }
-        onPress={() => onSubmit?.(domain)}
+        onPress={handleSubmit}
+        disabled={isLoading || Boolean(error)}
       />
     </View>
   );
