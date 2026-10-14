@@ -75,6 +75,29 @@ const domainValidationMessages = {
   freeEmailProvider: "Free email providers (e.g. Gmail, Yahoo, Outlook) are not allowed. Please enter your business domain.",
 } as const;
 
+const organizationRegistrationCopy = {
+  title: "Register organization",
+  subtitle: "Set up your workspace to manage clients and team.",
+  fields: {
+    name: "Organization name",
+  },
+  placeholders: {
+    name: "e.g. Acme Technologies",
+  },
+  actions: {
+    submit: "Continue to domain setup",
+    submitting: "Registering organization...",
+    backToLogin: "Back to login",
+  },
+  success: "Organization registered successfully.",
+} as const;
+
+const organizationValidationMessages = {
+  missingName: "Enter your organization name.",
+  nameTooShort: "Organization name must be at least 2 characters.",
+  nameTooLong: "Organization name must be less than 100 characters.",
+} as const;
+
 type AuthMode = (typeof authMode)[keyof typeof authMode];
 type ButtonVariant = (typeof buttonVariant)[keyof typeof buttonVariant];
 type NotificationVariant =
@@ -89,5 +112,7 @@ export {
   domainValidationMessages,
   domainVerificationCopy,
   notificationVariant,
+  organizationRegistrationCopy,
+  organizationValidationMessages,
 };
 export type { AuthMode, ButtonVariant, NotificationVariant };

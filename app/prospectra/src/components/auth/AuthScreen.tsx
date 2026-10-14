@@ -115,7 +115,7 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.signup.success,
       });
-      router.push("/domain-verification");
+      router.push("/organization-registration");
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,
