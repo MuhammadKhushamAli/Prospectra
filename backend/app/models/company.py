@@ -21,10 +21,10 @@ class Company:
     org_id: str
     name: str
     domain: str
+    industry: str = ""
+    size: str = ""
+    source: str = ""
     website: Optional[str] = None
     linkedin_url: Optional[str] = None
-    industry: str
-    size: str
-    source: str
     raw_signals: Optional[dict] = None
-    status: Literal["active", "inactive"]
+    status: Literal["active", "inactive"] = "active"

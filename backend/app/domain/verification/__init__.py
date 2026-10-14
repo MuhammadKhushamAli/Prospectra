@@ -1,12 +1,12 @@
 """Domain ownership verification API."""
 
 from .service import (
-    complete_domain_verification,
-    verify_domain,
+    add_domain_to_verify,
+    domain_verification,
 )
 
 __all__ = [
-    "complete_domain_verification",
-    "verify_domain",
+    "add_domain_to_verify",
+    "domain_verification",
 ]
 
