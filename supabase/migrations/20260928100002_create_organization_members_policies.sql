@@ -2,7 +2,13 @@ REVOKE ALL ON public.organization_members FROM anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.organization_members TO authenticated;
 
 CREATE POLICY "members can view organization membership" ON public.organization_members FOR SELECT TO authenticated
-USING ((SELECT private.is_org_member(org_id)));
+USING (
+    (SELECT private.is_org_member(org_id))
+    OR EXISTS (
+        SELECT 1 FROM public.organizations organization
+        WHERE organization.id = org_id AND organization.owner_id = (SELECT auth.uid())
+    )
+);
 
 CREATE POLICY "founders can add members" ON public.organization_members FOR INSERT TO authenticated
 WITH CHECK (
