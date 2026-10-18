@@ -48,7 +48,7 @@ async def domain_status(body: OrgAuthRequest):
     response = await (
         supabase
         .table(DOMAIN_VERIFICATION_TABLE)
-        .select("domain, verification_status, dns_records, verified_at, esp_provider")
+        .select("domain, verification_status, dns_records, verified_at")
         .eq("org_id", body.org_id)
         .execute()
     )
