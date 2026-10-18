@@ -12,11 +12,13 @@ import { authCopy } from "../../constants/constants";
 interface LoginFormProps {
   onSubmit?: (credentials: LoginCredentials) => void;
   onForgotPassword?: () => void;
+  isLoading?: boolean;
 }
 
 export default function LoginForm({
   onSubmit,
   onForgotPassword,
+  isLoading = false,
 }: LoginFormProps) {
   const colors = useTheme();
   const [email, setEmail] = useState("");
@@ -39,7 +41,11 @@ export default function LoginForm({
       >
         {authCopy.actions.forgotPassword}
       </Text>
-      <Button label={authCopy.actions.login} onPress={() => onSubmit?.({ email, password })} />
+      <Button
+        label={isLoading ? "Logging in..." : authCopy.actions.login}
+        disabled={isLoading}
+        onPress={() => onSubmit?.({ email, password })}
+      />
     </View>
   );
 }

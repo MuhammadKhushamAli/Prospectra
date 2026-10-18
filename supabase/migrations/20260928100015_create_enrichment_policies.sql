@@ -1,1 +1,0 @@
-REVOKE ALL ON public.enrichment FROM anon, authenticated;

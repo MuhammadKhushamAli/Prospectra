@@ -49,5 +49,18 @@ export async function registerOrganizationWithSupabase(
 
   if (memberErr) throw memberErr;
 
+  // Sync user profile to user_profiles table
+  try {
+    await supabase.from("user_profiles").upsert({
+      org_id: orgData.id,
+      user_id: user.id,
+      full_name: (user.user_metadata?.full_name as string) || null,
+      headline: (user.user_metadata?.headline as string) || null,
+      email: user.email || null,
+    });
+  } catch (profileErr) {
+    console.warn("Could not sync user_profiles on organization registration:", profileErr);
+  }
+
   return orgData as Organization;
 }

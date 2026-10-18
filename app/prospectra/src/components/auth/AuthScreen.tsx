@@ -25,6 +25,7 @@ import type {
 import { router } from "expo-router";
 import { validateLogin, validateSignup } from "../../validation/authValidation";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
 import AuthFooterLink from "./AuthFooterLink";
 import AuthHeader from "./AuthHeader";
@@ -41,7 +42,7 @@ import {
 
 export default function AuthScreen() {
   const colors = useTheme();
-  const { login } = useLogin();
+  const { login, isLoading: isLoggingIn } = useLogin();
   const { signup } = useSignup();
   const [mode, setMode] = useState<AuthMode>(authMode.login);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -59,6 +60,19 @@ export default function AuthScreen() {
       setReducedMotion,
     );
     return () => sub.remove();
+  }, []);
+
+  // When user opens auth screen with an existing matched token, evaluate and redirect
+  useEffect(() => {
+    let isMounted = true;
+    checkUserOnboardingStatus().then((status) => {
+      if (isMounted && status.isAuthenticated) {
+        router.replace(status.targetRoute);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const changeMode = (next: AuthMode) => {
@@ -89,6 +103,8 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.login.success,
       });
+      const status = await checkUserOnboardingStatus();
+      router.replace(status.targetRoute);
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,
@@ -115,7 +131,7 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.signup.success,
       });
-      router.push("/organization-registration");
+      router.replace("/profile-setup");
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,
@@ -153,7 +169,7 @@ export default function AuthScreen() {
           />
           <Animated.View style={animatedForm}>
             {mode === authMode.login ? (
-              <LoginForm onSubmit={handleLogin} />
+              <LoginForm onSubmit={handleLogin} isLoading={isLoggingIn} />
             ) : (
               <SignupForm onSubmit={handleSignup} />
             )}

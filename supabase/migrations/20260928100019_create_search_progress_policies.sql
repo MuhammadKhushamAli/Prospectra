@@ -1,1 +1,0 @@
-REVOKE ALL ON public.search_progress FROM anon, authenticated;

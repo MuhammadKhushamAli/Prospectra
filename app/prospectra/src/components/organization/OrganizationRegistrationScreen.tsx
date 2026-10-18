@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,6 +11,8 @@ import { router } from "expo-router";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useOrganization } from "../../hooks/useOrganization";
+import { getSupabaseClient } from "../../config/supabaseClient";
+import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
 import OrganizationRegistrationHeader from "./OrganizationRegistrationHeader";
 import OrganizationRegistrationForm from "./OrganizationRegistrationForm";
@@ -28,6 +30,18 @@ export default function OrganizationRegistrationScreen() {
     variant: NotificationVariant;
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    checkUserOnboardingStatus().then((status) => {
+      if (!isMounted) return;
+      router.replace(status.targetRoute);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleRegister = async (name: string) => {
     setNotification(null);
@@ -50,7 +64,12 @@ export default function OrganizationRegistrationScreen() {
     }
   };
 
-  const handleBackToLogin = () => {
+  const handleBackToLogin = async () => {
+    try {
+      await getSupabaseClient().auth.signOut();
+    } catch {
+      // ignore
+    }
     router.replace("/auth");
   };
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +15,8 @@ import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useDomainVerification } from "../../hooks/useDomainVerification";
 import type { DnsInstructions } from "../../services/domainService";
+import { getSupabaseClient } from "../../config/supabaseClient";
+import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
 import Button from "../ui/Button";
 import DomainVerificationHeader from "./DomainVerificationHeader";
@@ -29,12 +31,8 @@ import {
 
 export default function DomainVerificationScreen() {
   const colors = useTheme();
-  const {
-    verifyDomain,
-    checkDomainStatus,
-    isLoading,
-    isCheckingStatus,
-  } = useDomainVerification();
+  const { verifyDomain, checkDomainStatus, isLoading, isCheckingStatus } =
+    useDomainVerification();
 
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
@@ -43,9 +41,52 @@ export default function DomainVerificationScreen() {
 
   const [activeDomain, setActiveDomain] = useState<string>("");
   const [token, setToken] = useState<string | null>(null);
-  const [dnsInstructions, setDnsInstructions] = useState<DnsInstructions | null>(null);
+  const [dnsInstructions, setDnsInstructions] =
+    useState<DnsInstructions | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function init() {
+      try {
+        const status = await checkUserOnboardingStatus();
+        if (!isMounted) return;
+        router.replace(status.targetRoute);
+        if (status.orgId) {
+          const supabase = getSupabaseClient();
+          const { data: rec } = await supabase
+            .from("domain_verifications")
+            .select("domain, verification_status, dns_records")
+            .eq("org_id", status.orgId)
+            .maybeSingle();
+
+          if (!isMounted) return;
+          if (rec) {
+            setActiveDomain(rec.domain || "");
+            setCurrentStatus(rec.verification_status);
+            const dns = rec.dns_records as any;
+            if (dns?.value) {
+              setToken(dns.value);
+            }
+            setDnsInstructions({
+              title: "Add this DNS record to your domain provider:",
+              type: dns?.type || "TXT",
+              host:
+                dns?.name || `_prospectra${rec.domain ? `.${rec.domain}` : ""}`,
+              value: dns?.value || "",
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    init();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleVerify = async (domain: string) => {
     setNotification(null);
@@ -59,7 +100,9 @@ export default function DomainVerificationScreen() {
       if (result.dns_instructions) {
         setDnsInstructions(result.dns_instructions);
       }
-      const status = result.verification_status || (result.verified ? "verified" : "pending");
+      const status =
+        result.verification_status ||
+        (result.verified ? "verified" : "pending");
       setCurrentStatus(status);
 
       if (result.verified) {
@@ -70,7 +113,8 @@ export default function DomainVerificationScreen() {
       } else {
         setNotification({
           variant: notificationVariant.success,
-          message: "DNS verification token generated. Add the TXT record to your DNS.",
+          message:
+            "DNS verification token generated. Add the TXT record to your DNS.",
         });
       }
     } catch (err: any) {
@@ -136,7 +180,12 @@ export default function DomainVerificationScreen() {
     }
   };
 
-  const handleBackToLogin = () => {
+  const handleBackToLogin = async () => {
+    try {
+      await getSupabaseClient().auth.signOut();
+    } catch {
+      // ignore
+    }
     router.replace("/auth");
   };
 
@@ -192,19 +241,29 @@ export default function DomainVerificationScreen() {
                     },
                   ]}
                 >
-                  <Text style={[styles.statusBadgeText, { color: colors.surfaceElevated }]}>
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      { color: colors.surfaceElevated },
+                    ]}
+                  >
                     {currentStatus ? currentStatus.toUpperCase() : "PENDING"}
                   </Text>
                 </View>
               </View>
 
-              <Text style={[styles.instructions, { color: colors.textSecondary }]}>
-                {dnsInstructions?.title || "Add this DNS record to your domain provider:"}
+              <Text
+                style={[styles.instructions, { color: colors.textSecondary }]}
+              >
+                {dnsInstructions?.title ||
+                  "Add this DNS record to your domain provider:"}
               </Text>
 
               <View style={styles.recordRow}>
                 <View style={styles.recordField}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                  >
                     Record Type
                   </Text>
                   <Text style={[styles.fieldValue, { color: colors.text }]}>
@@ -212,18 +271,23 @@ export default function DomainVerificationScreen() {
                   </Text>
                 </View>
                 <View style={styles.recordField}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                  >
                     Host / Name
                   </Text>
                   <Text style={[styles.fieldValue, { color: colors.text }]}>
-                    {dnsInstructions?.host || `_prospectra${activeDomain ? `.${activeDomain}` : ""}`}
+                    {dnsInstructions?.host ||
+                      `_prospectra${activeDomain ? `.${activeDomain}` : ""}`}
                   </Text>
                 </View>
               </View>
 
               {token ? (
                 <View style={styles.tokenValueBlock}>
-                  <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>
+                  <Text
+                    style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                  >
                     Value / Token
                   </Text>
                   <View
@@ -247,7 +311,9 @@ export default function DomainVerificationScreen() {
                     style={({ pressed }) => [
                       styles.copyBtn,
                       {
-                        backgroundColor: copied ? colors.success : colors.surfaceElevated,
+                        backgroundColor: copied
+                          ? colors.success
+                          : colors.surfaceElevated,
                         borderColor: copied ? colors.success : colors.border,
                         opacity: pressed ? 0.8 : 1,
                       },
@@ -256,7 +322,11 @@ export default function DomainVerificationScreen() {
                     <Text
                       style={[
                         styles.copyBtnText,
-                        { color: copied ? colors.surfaceElevated : colors.primary },
+                        {
+                          color: copied
+                            ? colors.surfaceElevated
+                            : colors.primary,
+                        },
                       ]}
                     >
                       {copied ? "Copied to clipboard!" : "Copy Token"}
@@ -277,6 +347,16 @@ export default function DomainVerificationScreen() {
                   disabled={isCheckingStatus}
                 />
               </View>
+
+              {isVerified ? (
+                <View style={styles.continueWrap}>
+                  <Button
+                    label={domainVerificationCopy.actions.continueToDashboard}
+                    variant={buttonVariant.primary}
+                    onPress={() => router.replace("/home")}
+                  />
+                </View>
+              ) : null}
             </View>
           ) : null}
 
@@ -375,5 +455,8 @@ const styles = StyleSheet.create({
   },
   statusActionWrap: {
     marginTop: tokens.spacing.sm,
+  },
+  continueWrap: {
+    marginTop: tokens.spacing.xs,
   },
 });
