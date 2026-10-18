@@ -14,7 +14,8 @@ import { router } from "expo-router";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useDomainVerification } from "../../hooks/useDomainVerification";
-import type { DnsInstructions } from "../../services/domainService";
+import type { DnsInstructions } from "../../types/domain";
+import type { NotificationVariant } from "../../types/ui";
 import { getSupabaseClient } from "../../config/supabaseClient";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
@@ -26,7 +27,6 @@ import {
   buttonVariant,
   domainVerificationCopy,
   notificationVariant,
-  type NotificationVariant,
 } from "../../constants/constants";
 
 export default function DomainVerificationScreen() {

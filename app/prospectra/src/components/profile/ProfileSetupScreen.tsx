@@ -17,10 +17,10 @@ import NotificationBanner from "../ui/NotificationBanner";
 import ProfileSetupHeader from "./ProfileSetupHeader";
 import ProfileSetupForm from "./ProfileSetupForm";
 import ProfileSetupFooterLink from "./ProfileSetupFooterLink";
+import type { NotificationVariant } from "../../types/ui";
 import {
   notificationVariant,
   profileSetupCopy,
-  type NotificationVariant,
 } from "../../constants/constants";
 
 export default function ProfileSetupScreen() {

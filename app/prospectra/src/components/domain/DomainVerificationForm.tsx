@@ -12,11 +12,9 @@ import {
   isFreeEmailProvider,
   validateDomain,
 } from "../../validation/domainValidation";
+import type { DomainVerificationFormProps } from "../../types/domain";
 
-interface DomainVerificationFormProps {
-  onSubmit?: (domain: string) => void;
-  isLoading?: boolean;
-}
+export type { DomainVerificationFormProps };
 
 export default function DomainVerificationForm({
   onSubmit,

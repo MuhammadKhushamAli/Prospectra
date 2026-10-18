@@ -3,9 +3,11 @@ import { useCallback, useState } from "react";
 import {
   getProfileFromSupabase,
   updateProfileWithSupabase,
-  type UpdateProfileParams,
-  type UserProfileData,
 } from "../services/profileService";
+import type {
+  UpdateProfileParams,
+  UserProfileData,
+} from "../types/profile";
 
 export function useProfile() {
   const [isLoading, setIsLoading] = useState(false);

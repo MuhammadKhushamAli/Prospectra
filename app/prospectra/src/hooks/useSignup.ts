@@ -1,10 +1,7 @@
 import { useCallback, useState } from "react";
 
-import {
-  signupWithSupabase,
-  type AuthResponse,
-  type SignupCredentials,
-} from "../services/authService";
+import { signupWithSupabase } from "../services/authService";
+import type { AuthResponse, SignupCredentials } from "../types/auth";
 
 export function useSignup() {
   const [isLoading, setIsLoading] = useState(false);

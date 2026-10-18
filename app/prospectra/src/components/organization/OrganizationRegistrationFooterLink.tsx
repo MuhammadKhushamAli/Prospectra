@@ -3,10 +3,9 @@ import { StyleSheet, Text } from "react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { organizationRegistrationCopy } from "../../constants/constants";
+import type { OrganizationRegistrationFooterLinkProps } from "../../types/organization";
 
-interface OrganizationRegistrationFooterLinkProps {
-  onPress?: () => void;
-}
+export type { OrganizationRegistrationFooterLinkProps };
 
 export default function OrganizationRegistrationFooterLink({
   onPress,

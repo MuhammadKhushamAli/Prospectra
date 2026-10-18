@@ -6,14 +6,10 @@ import { useTheme } from "../../hooks/useTheme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
-import type { LoginCredentials } from "../../services/authService";
+import type { LoginCredentials, LoginFormProps } from "../../types/auth";
 import { authCopy } from "../../constants/constants";
 
-interface LoginFormProps {
-  onSubmit?: (credentials: LoginCredentials) => void;
-  onForgotPassword?: () => void;
-  isLoading?: boolean;
-}
+export type { LoginFormProps };
 
 export default function LoginForm({
   onSubmit,

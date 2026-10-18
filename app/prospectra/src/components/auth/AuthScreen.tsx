@@ -19,9 +19,11 @@ import { useTheme } from "../../hooks/useTheme";
 import { useLogin } from "../../hooks/useLogin";
 import { useSignup } from "../../hooks/useSignup";
 import type {
+  AuthMode,
   LoginCredentials,
   SignupCredentials,
-} from "../../services/authService";
+} from "../../types/auth";
+import type { NotificationVariant } from "../../types/ui";
 import { router } from "expo-router";
 import { validateLogin, validateSignup } from "../../validation/authValidation";
 import { getErrorMessage } from "../../utils/getErrorMessage";
@@ -36,8 +38,6 @@ import {
   authCopy,
   authMode,
   notificationVariant,
-  type AuthMode,
-  type NotificationVariant,
 } from "../../constants/constants";
 
 export default function AuthScreen() {

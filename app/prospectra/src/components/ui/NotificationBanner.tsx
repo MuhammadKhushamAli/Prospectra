@@ -3,13 +3,10 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { notificationVariant, type NotificationVariant } from "../../constants/constants";
+import { notificationVariant } from "../../constants/constants";
+import type { NotificationBannerProps, NotificationVariant } from "../../types/ui";
 
-interface NotificationBannerProps {
-  variant: NotificationVariant;
-  message: string;
-  onDismiss?: () => void;
-}
+export type { NotificationBannerProps };
 
 export default function NotificationBanner({
   variant,

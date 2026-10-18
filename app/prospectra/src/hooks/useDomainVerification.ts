@@ -3,9 +3,11 @@ import { useCallback, useState } from "react";
 import {
   getDomainStatusFromBackend,
   verifyDomainWithBackend,
-  type DomainStatusResponse,
-  type VerifyDomainResponse,
 } from "../services/domainService";
+import type {
+  DomainStatusResponse,
+  VerifyDomainResponse,
+} from "../types/domain";
 
 export function useDomainVerification() {
   const [isLoading, setIsLoading] = useState(false);

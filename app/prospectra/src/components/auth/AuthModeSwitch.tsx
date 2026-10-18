@@ -15,13 +15,10 @@ import Animated, {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { authCopy, authMode, type AuthMode } from "../../constants/constants";
+import { authCopy, authMode } from "../../constants/constants";
+import type { AuthMode, AuthModeSwitchProps } from "../../types/auth";
 
-interface AuthModeSwitchProps {
-  mode: AuthMode;
-  onChange: (mode: AuthMode) => void;
-  reducedMotion?: boolean;
-}
+export type { AuthModeSwitchProps };
 
 export default function AuthModeSwitch({
   mode,

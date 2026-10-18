@@ -6,11 +6,9 @@ import Button from "../ui/Button";
 import TextField from "../ui/TextField";
 import { organizationRegistrationCopy } from "../../constants/constants";
 import { validateOrganizationName } from "../../validation/organizationValidation";
+import type { OrganizationRegistrationFormProps } from "../../types/organization";
 
-interface OrganizationRegistrationFormProps {
-  onSubmit?: (name: string) => void;
-  isLoading?: boolean;
-}
+export type { OrganizationRegistrationFormProps };
 
 export default function OrganizationRegistrationForm({
   onSubmit,

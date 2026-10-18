@@ -6,11 +6,9 @@ import { tokens } from "../../constants/theme";
 import { authCopy } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
 import TextField from "./TextField";
+import type { PasswordFieldProps } from "../../types/ui";
 
-interface PasswordFieldProps extends TextInputProps {
-  label: string;
-  placeholder?: string;
-}
+export type { PasswordFieldProps };
 
 export default function PasswordField({
   label,

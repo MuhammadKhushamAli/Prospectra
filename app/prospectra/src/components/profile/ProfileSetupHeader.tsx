@@ -3,10 +3,9 @@ import { Image, StyleSheet, Text, View } from "react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { appName, profileSetupCopy } from "../../constants/constants";
+import type { ProfileSetupHeaderProps } from "../../types/profile";
 
-interface ProfileSetupHeaderProps {
-  userName?: string;
-}
+export type { ProfileSetupHeaderProps };
 
 export default function ProfileSetupHeader({ userName }: ProfileSetupHeaderProps) {
   const colors = useTheme();

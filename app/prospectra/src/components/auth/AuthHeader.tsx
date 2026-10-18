@@ -2,11 +2,10 @@ import { Image, StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { appName, authCopy, authMode, type AuthMode } from "../../constants/constants";
+import { appName, authCopy, authMode } from "../../constants/constants";
+import type { AuthHeaderProps, AuthMode } from "../../types/auth";
 
-interface AuthHeaderProps {
-  mode: AuthMode;
-}
+export type { AuthHeaderProps };
 
 export default function AuthHeader({ mode }: AuthHeaderProps) {
   const colors = useTheme();

@@ -5,12 +5,10 @@ import { tokens } from "../../constants/theme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
-import type { SignupCredentials } from "../../services/authService";
+import type { SignupCredentials, SignupFormProps } from "../../types/auth";
 import { authCopy } from "../../constants/constants";
 
-interface SignupFormProps {
-  onSubmit?: (credentials: SignupCredentials, confirmPassword: string) => void;
-}
+export type { SignupFormProps };
 
 export default function SignupForm({ onSubmit }: SignupFormProps) {
   const [fullName, setFullName] = useState("");

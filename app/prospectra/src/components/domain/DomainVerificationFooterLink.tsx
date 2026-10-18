@@ -3,10 +3,9 @@ import { StyleSheet, Text } from "react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { domainVerificationCopy } from "../../constants/constants";
+import type { DomainVerificationFooterLinkProps } from "../../types/domain";
 
-interface DomainVerificationFooterLinkProps {
-  onPress?: () => void;
-}
+export type { DomainVerificationFooterLinkProps };
 
 export default function DomainVerificationFooterLink({
   onPress,

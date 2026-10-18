@@ -15,11 +15,13 @@ interface ButtonProps {
 
 interface TextFieldProps extends TextInputProps {
   label?: string;
+  rightSlot?: React.ReactNode;
   error?: string | null;
 }
 
 interface PasswordFieldProps extends TextInputProps {
   label?: string;
+  rightSlot?: React.ReactNode;
   error?: string | null;
 }
 

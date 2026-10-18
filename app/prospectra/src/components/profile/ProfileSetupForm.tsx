@@ -6,12 +6,9 @@ import Button from "../ui/Button";
 import TextField from "../ui/TextField";
 import { profileSetupCopy } from "../../constants/constants";
 import { validateProfileHeadline } from "../../validation/profileValidation";
+import type { ProfileSetupFormProps } from "../../types/profile";
 
-interface ProfileSetupFormProps {
-  initialHeadline?: string;
-  onSubmit?: (headline: string) => void;
-  isLoading?: boolean;
-}
+export type { ProfileSetupFormProps };
 
 export default function ProfileSetupForm({
   initialHeadline = "",

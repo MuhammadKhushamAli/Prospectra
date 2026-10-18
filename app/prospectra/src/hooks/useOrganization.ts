@@ -1,10 +1,10 @@
 import { useCallback, useState } from "react";
 
-import {
-  registerOrganizationWithSupabase,
-  type Organization,
-  type RegisterOrganizationParams,
-} from "../services/organizationService";
+import { registerOrganizationWithSupabase } from "../services/organizationService";
+import type {
+  Organization,
+  RegisterOrganizationParams,
+} from "../types/organization";
 
 export function useOrganization() {
   const [isLoading, setIsLoading] = useState(false);

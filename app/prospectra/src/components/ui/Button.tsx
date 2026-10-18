@@ -1,15 +1,11 @@
 import { Pressable, StyleSheet, Text } from "react-native";
 
 import { tokens } from "../../constants/theme";
-import { buttonVariant, type ButtonVariant } from "../../constants/constants";
+import { buttonVariant } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
+import type { ButtonProps, ButtonVariant } from "../../types/ui";
 
-interface ButtonProps {
-  label: string;
-  variant?: ButtonVariant;
-  onPress?: () => void;
-  disabled?: boolean;
-}
+export type { ButtonProps };
 
 export default function Button({
   label,

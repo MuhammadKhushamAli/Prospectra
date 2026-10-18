@@ -14,10 +14,8 @@ import { router } from "expo-router";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { getSupabaseClient } from "../../config/supabaseClient";
-import {
-  checkUserOnboardingStatus,
-  type UserOnboardingStatus,
-} from "../../services/onboardingService";
+import { checkUserOnboardingStatus } from "../../services/onboardingService";
+import type { UserOnboardingStatus } from "../../types/onboarding";
 import { appName, buttonVariant, homeCopy } from "../../constants/constants";
 import Button from "../../components/ui/Button";
 

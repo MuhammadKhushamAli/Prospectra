@@ -2,12 +2,10 @@ import { StyleSheet, Text } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { authCopy, authMode, type AuthMode } from "../../constants/constants";
+import { authCopy, authMode } from "../../constants/constants";
+import type { AuthFooterLinkProps, AuthMode } from "../../types/auth";
 
-interface AuthFooterLinkProps {
-  mode: AuthMode;
-  onPress?: () => void;
-}
+export type { AuthFooterLinkProps };
 
 export default function AuthFooterLink({ mode, onPress }: AuthFooterLinkProps) {
   const colors = useTheme();

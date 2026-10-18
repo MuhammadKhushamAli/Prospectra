@@ -10,11 +10,9 @@ import {
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 
-interface TextFieldProps extends TextInputProps {
-  label: string;
-  rightSlot?: React.ReactNode;
-  error?: string | null;
-}
+import type { TextFieldProps } from "../../types/ui";
+
+export type { TextFieldProps };
 
 export default function TextField({
   label,

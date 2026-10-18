@@ -1,7 +1,7 @@
 import type {
   LoginCredentials,
   SignupCredentials,
-} from "../services/authService";
+} from "../types/auth";
 import { authValidationMessages } from "../constants/constants";
 
 export const passwordRegex =

@@ -17,10 +17,10 @@ import NotificationBanner from "../ui/NotificationBanner";
 import OrganizationRegistrationHeader from "./OrganizationRegistrationHeader";
 import OrganizationRegistrationForm from "./OrganizationRegistrationForm";
 import OrganizationRegistrationFooterLink from "./OrganizationRegistrationFooterLink";
+import type { NotificationVariant } from "../../types/ui";
 import {
   notificationVariant,
   organizationRegistrationCopy,
-  type NotificationVariant,
 } from "../../constants/constants";
 
 export default function OrganizationRegistrationScreen() {

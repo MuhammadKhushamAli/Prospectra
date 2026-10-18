@@ -3,10 +3,9 @@ import { StyleSheet, Text } from "react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { profileSetupCopy } from "../../constants/constants";
+import type { ProfileSetupFooterLinkProps } from "../../types/profile";
 
-interface ProfileSetupFooterLinkProps {
-  onPress?: () => void;
-}
+export type { ProfileSetupFooterLinkProps };
 
 export default function ProfileSetupFooterLink({
   onPress,
