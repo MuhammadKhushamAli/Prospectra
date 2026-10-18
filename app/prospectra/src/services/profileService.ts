@@ -1,15 +1,10 @@
 import { getSupabaseClient } from "../config/supabaseClient";
+import type {
+  UpdateProfileParams,
+  UserProfileData,
+} from "../types/profile";
 
-export interface UpdateProfileParams {
-  headline: string;
-}
-
-export interface UserProfileData {
-  userId: string;
-  fullName: string;
-  email: string;
-  headline: string;
-}
+export type { UpdateProfileParams, UserProfileData };
 
 export async function updateProfileWithSupabase(
   params: UpdateProfileParams,

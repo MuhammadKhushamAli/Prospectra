@@ -2,37 +2,19 @@ import axios from "axios";
 
 import { getSupabaseClient } from "../config/supabaseClient";
 import { backendApiPath } from "../constants/api";
+import type {
+  DnsInstructions,
+  DnsRecordInfo,
+  DomainStatusResponse,
+  VerifyDomainResponse,
+} from "../types/domain";
 
-export interface DnsRecordInfo {
-  type: string;
-  name: string;
-  value: string;
-}
-
-export interface DnsInstructions {
-  title: string;
-  type: string;
-  host: string;
-  value: string;
-}
-
-export interface VerifyDomainResponse {
-  domain: string;
-  token: string;
-  dns_instructions?: DnsInstructions;
-  verified?: boolean;
-  verification_status?: string;
-  dns_records?: DnsRecordInfo;
-}
-
-export interface DomainStatusResponse {
-  domain: string;
-  verification_status: "pending" | "verified" | "failed" | string;
-  dns_records?: DnsRecordInfo;
-  dns_instructions?: DnsInstructions;
-  verified_at?: string | null;
-  esp_provider?: string | null;
-}
+export type {
+  DnsInstructions,
+  DnsRecordInfo,
+  DomainStatusResponse,
+  VerifyDomainResponse,
+};
 
 export async function resolveUserOrgId(): Promise<string> {
   const supabase = getSupabaseClient();

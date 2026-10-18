@@ -1,24 +1,9 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import type { OrganizationMember, tMemberRole } from "../types/orgMembers";
 import { memberRoles } from "../types/orgMembers";
+import type { UserOnboardingStatus } from "../types/onboarding";
 
-export interface UserOnboardingStatus {
-  isAuthenticated: boolean;
-  hasProfile: boolean;
-  headline: string | null;
-  hasOrganization: boolean;
-  orgId: string | null;
-  orgName?: string | null;
-  role?: tMemberRole | null;
-  hasVerifiedDomain: boolean;
-  domain: string | null;
-  targetRoute:
-    | "/auth"
-    | "/profile-setup"
-    | "/organization-registration"
-    | "/domain-verification"
-    | "/home";
-}
+export type { UserOnboardingStatus };
 
 export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus> {
   try {

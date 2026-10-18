@@ -1,19 +1,11 @@
 import { getSupabaseClient } from "../config/supabaseClient";
-import type { Session, User } from "@supabase/supabase-js";
+import type {
+  AuthResponse,
+  LoginCredentials,
+  SignupCredentials,
+} from "../types/auth";
 
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-export interface SignupCredentials {
-  fullName: string;
-  email: string;
-  password: string;
-}
-export interface AuthResponse {
-  session: Session | null;
-  user: User;
-}
+export type { AuthResponse, LoginCredentials, SignupCredentials };
 
 export async function loginWithSupabase(
   credentials: LoginCredentials,

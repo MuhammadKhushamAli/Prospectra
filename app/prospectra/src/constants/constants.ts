@@ -137,10 +137,8 @@ const homeCopy = {
   },
 } as const;
 
-type AuthMode = (typeof authMode)[keyof typeof authMode];
-type ButtonVariant = (typeof buttonVariant)[keyof typeof buttonVariant];
-type NotificationVariant =
-  (typeof notificationVariant)[keyof typeof notificationVariant];
+import type { AuthMode } from "../types/auth";
+import type { ButtonVariant, NotificationVariant } from "../types/ui";
 
 export {
   appName,

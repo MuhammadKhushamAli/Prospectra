@@ -1,16 +1,10 @@
 import { getSupabaseClient } from "../config/supabaseClient";
+import type {
+  Organization,
+  RegisterOrganizationParams,
+} from "../types/organization";
 
-export interface RegisterOrganizationParams {
-  name: string;
-}
-
-export interface Organization {
-  id: string;
-  name: string;
-  owner_id: string;
-  pending_threshold: number;
-  created_at: string;
-}
+export type { Organization, RegisterOrganizationParams };
 
 export async function registerOrganizationWithSupabase(
   params: RegisterOrganizationParams,
