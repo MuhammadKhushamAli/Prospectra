@@ -47,7 +47,7 @@ export default function ProfileSetupScreen() {
 
         // If user already completed profile, redirect them forward
         if (status.hasProfile) {
-          router.replace(status.targetRoute);
+          router.replace(status.targetRoute as any);
           return;
         }
 

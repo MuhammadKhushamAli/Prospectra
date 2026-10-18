@@ -31,21 +31,8 @@ export default function HomeRoute() {
       try {
         const onboarding = await checkUserOnboardingStatus();
         if (!isMounted) return;
-
-        if (!onboarding.isAuthenticated) {
-          router.replace("/auth");
-          return;
-        }
-        if (!onboarding.hasProfile) {
-          router.replace("/profile-setup");
-          return;
-        }
-        if (!onboarding.hasOrganization) {
-          router.replace("/organization-registration");
-          return;
-        }
-        if (!onboarding.hasVerifiedDomain) {
-          router.replace("/domain-verification");
+        if (onboarding.targetRoute !== "/home") {
+          router.replace(onboarding.targetRoute as any);
           return;
         }
 

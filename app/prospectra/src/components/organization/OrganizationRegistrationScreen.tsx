@@ -35,7 +35,8 @@ export default function OrganizationRegistrationScreen() {
     let isMounted = true;
     checkUserOnboardingStatus().then((status) => {
       if (!isMounted) return;
-      router.replace(status.targetRoute);
+      if (status.targetRoute !== "/organization-registration") {
+        router.replace(status.targetRoute as any);
       }
     });
     return () => {

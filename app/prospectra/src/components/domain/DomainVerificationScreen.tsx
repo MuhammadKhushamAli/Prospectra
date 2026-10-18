@@ -52,7 +52,10 @@ export default function DomainVerificationScreen() {
       try {
         const status = await checkUserOnboardingStatus();
         if (!isMounted) return;
-        router.replace(status.targetRoute);
+        if (status.targetRoute !== "/domain-verification") {
+          router.replace(status.targetRoute as any);
+          return;
+        }
         if (status.orgId) {
           const supabase = getSupabaseClient();
           const { data: rec } = await supabase

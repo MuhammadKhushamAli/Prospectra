@@ -67,7 +67,7 @@ export default function AuthScreen() {
     let isMounted = true;
     checkUserOnboardingStatus().then((status) => {
       if (isMounted && status.isAuthenticated) {
-        router.replace(status.targetRoute);
+        router.replace(status.targetRoute as any);
       }
     });
     return () => {
@@ -104,7 +104,7 @@ export default function AuthScreen() {
         message: authCopy.login.success,
       });
       const status = await checkUserOnboardingStatus();
-      router.replace(status.targetRoute);
+      router.replace(status.targetRoute as any);
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,
@@ -131,7 +131,7 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.signup.success,
       });
-      router.replace("/profile-setup");
+      router.replace("/profile-setup" as any);
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,

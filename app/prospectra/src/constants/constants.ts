@@ -125,6 +125,7 @@ const profileValidationMessages = {
 const homeCopy = {
   title: "Workspace Dashboard",
   subtitle: "Your organization and verified domain are active.",
+  user: "Account",
   organization: "Organization",
   domain: "Verified Domain",
   verifiedBadge: "VERIFIED",

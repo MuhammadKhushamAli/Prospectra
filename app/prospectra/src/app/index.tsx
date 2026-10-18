@@ -15,7 +15,7 @@ export default function IndexRoute() {
       try {
         const status = await checkUserOnboardingStatus();
         if (isMounted) {
-          router.replace(status.targetRoute);
+          router.replace(status.targetRoute as any);
         }
       } catch {
         if (isMounted) {
