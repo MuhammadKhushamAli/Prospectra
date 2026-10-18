@@ -23,6 +23,8 @@ import Button from "../ui/Button";
 import DomainVerificationHeader from "./DomainVerificationHeader";
 import DomainVerificationForm from "./DomainVerificationForm";
 import DomainVerificationFooterLink from "./DomainVerificationFooterLink";
+import * as Clipboard from "expo-clipboard";
+import { Check, Copy } from "lucide-react-native";
 import {
   buttonVariant,
   domainVerificationCopy,
@@ -45,6 +47,7 @@ export default function DomainVerificationScreen() {
     useState<DnsInstructions | null>(null);
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedHost, setCopiedHost] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -170,16 +173,42 @@ export default function DomainVerificationScreen() {
     }
   };
 
-  const handleCopyToken = async () => {
-    if (!token) return;
+  const copyToClipboard = async (text: string): Promise<boolean> => {
     try {
-      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(token);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-      }
+      await Clipboard.setStringAsync(text);
+      return true;
     } catch {
-      // Fallback
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch {
+        return false;
+      }
+      return false;
+    }
+  };
+
+  const handleCopyToken = async () => {
+    const textToCopy = token || dnsInstructions?.value;
+    if (!textToCopy) return;
+    const ok = await copyToClipboard(textToCopy);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  const handleCopyHost = async () => {
+    const hostToCopy =
+      dnsInstructions?.host ||
+      `_prospectra${activeDomain ? `.${activeDomain}` : ""}`;
+    if (!hostToCopy) return;
+    const ok = await copyToClipboard(hostToCopy);
+    if (ok) {
+      setCopiedHost(true);
+      setTimeout(() => setCopiedHost(false), 2500);
     }
   };
 
@@ -274,11 +303,34 @@ export default function DomainVerificationScreen() {
                   </Text>
                 </View>
                 <View style={styles.recordField}>
-                  <Text
-                    style={[styles.fieldLabel, { color: colors.textSecondary }]}
-                  >
-                    Host / Name
-                  </Text>
+                  <View style={styles.fieldLabelRow}>
+                    <Text
+                      style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                    >
+                      Host / Name
+                    </Text>
+                    <Pressable
+                      onPress={handleCopyHost}
+                      style={({ pressed }) => [
+                        styles.inlineCopyBtn,
+                        { opacity: pressed ? 0.7 : 1 },
+                      ]}
+                    >
+                      {copiedHost ? (
+                        <Check size={12} color={colors.success} />
+                      ) : (
+                        <Copy size={12} color={colors.textSecondary} />
+                      )}
+                      <Text
+                        style={[
+                          styles.inlineCopyText,
+                          { color: copiedHost ? colors.success : colors.textSecondary },
+                        ]}
+                      >
+                        {copiedHost ? "Copied" : "Copy"}
+                      </Text>
+                    </Pressable>
+                  </View>
                   <Text style={[styles.fieldValue, { color: colors.text }]}>
                     {dnsInstructions?.host ||
                       `_prospectra${activeDomain ? `.${activeDomain}` : ""}`}
@@ -286,7 +338,7 @@ export default function DomainVerificationScreen() {
                 </View>
               </View>
 
-              {token ? (
+              {token || dnsInstructions?.value ? (
                 <View style={styles.tokenValueBlock}>
                   <Text
                     style={[styles.fieldLabel, { color: colors.textSecondary }]}
@@ -306,7 +358,7 @@ export default function DomainVerificationScreen() {
                       selectable
                       style={[styles.tokenText, { color: colors.text }]}
                     >
-                      {token}
+                      {token || dnsInstructions?.value}
                     </Text>
                   </View>
                   <Pressable
@@ -322,6 +374,11 @@ export default function DomainVerificationScreen() {
                       },
                     ]}
                   >
+                    {copied ? (
+                      <Check size={14} color={colors.surfaceElevated} />
+                    ) : (
+                      <Copy size={14} color={colors.primary} />
+                    )}
                     <Text
                       style={[
                         styles.copyBtnText,
@@ -444,13 +501,32 @@ const styles = StyleSheet.create({
     fontSize: tokens.fontSize.xs,
     lineHeight: 16,
   },
+  fieldLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+  },
+  inlineCopyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+  },
+  inlineCopyText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+  },
   copyBtn: {
     borderWidth: 1,
     borderRadius: tokens.radius.md,
     paddingVertical: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
     alignSelf: "flex-start",
+    flexDirection: "row",
     alignItems: "center",
+    gap: tokens.spacing.xs,
   },
   copyBtnText: {
     fontFamily: "DMSansSemiBold",

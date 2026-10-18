@@ -16,8 +16,7 @@ import { useTheme } from "../../hooks/useTheme";
 import { getSupabaseClient } from "../../config/supabaseClient";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import type { UserOnboardingStatus } from "../../types/onboarding";
-import { appName, buttonVariant, homeCopy } from "../../constants/constants";
-import Button from "../../components/ui/Button";
+import { appName, homeCopy } from "../../constants/constants";
 
 export default function HomeRoute() {
   const colors = useTheme();
@@ -70,9 +69,6 @@ export default function HomeRoute() {
     router.replace("/auth");
   };
 
-  const handleManageDomain = () => {
-    router.push("/domain-verification");
-  };
 
   if (isLoading) {
     return (
@@ -212,13 +208,6 @@ export default function HomeRoute() {
             <Text style={[styles.readyDesc, { color: colors.textSecondary }]}>
               {homeCopy.readyDescription}
             </Text>
-            <View style={styles.readyActions}>
-              <Button
-                label={homeCopy.actions.manageDomain}
-                variant={buttonVariant.ghost}
-                onPress={handleManageDomain}
-              />
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -341,9 +330,5 @@ const styles = StyleSheet.create({
   readyDesc: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
-    lineHeight: 20,
-  },
-  readyActions: {
-    marginTop: tokens.spacing.xs,
   },
 });
