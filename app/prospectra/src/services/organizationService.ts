@@ -43,7 +43,7 @@ export async function registerOrganizationWithSupabase(
 
   if (memberErr) throw memberErr;
 
-  // Sync user profile to user_profiles table
+  // Sync user profile to user_profiles table and skills tables
   try {
     await supabase.from("user_profiles").upsert({
       org_id: orgData.id,
@@ -52,6 +52,33 @@ export async function registerOrganizationWithSupabase(
       headline: (user.user_metadata?.headline as string) || null,
       email: user.email || null,
     });
+
+    const userSkills = (user.user_metadata?.skills as string[]) || [];
+    if (userSkills.length > 0) {
+      for (const skillName of userSkills) {
+        try {
+          const { data: skillRow } = await supabase
+            .from("skills")
+            .insert({
+              org_id: orgData.id,
+              name: skillName,
+              description: skillName,
+              category: "General",
+            })
+            .select("id")
+            .single();
+
+          if (skillRow?.id) {
+            await supabase.from("user_skills").upsert({
+              user_id: user.id,
+              skill_id: skillRow.id,
+            });
+          }
+        } catch {
+          // Non-fatal if skill already exists or insert fails
+        }
+      }
+    }
   } catch (profileErr) {
     console.warn("Could not sync user_profiles on organization registration:", profileErr);
   }

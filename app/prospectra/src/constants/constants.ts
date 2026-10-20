@@ -122,6 +122,24 @@ const profileValidationMessages = {
   headlineTooLong: "Headline must be less than 120 characters.",
 } as const;
 
+const skillsCopy = {
+  sectionTitle: "Skills & Expertise",
+  sectionSubtitle: "Add skills to help personalize and power your outreach targeting.",
+  inputLabel: "Add a skill",
+  placeholder: "e.g. Lead Generation, Cold Email",
+  addButton: "Add",
+  suggestionsTitle: "Quick Suggestions",
+  emptySkillsText: "No skills added yet. Type a skill or tap suggestions below.",
+  skillsCount: "skills added",
+} as const;
+
+const skillsValidationMessages = {
+  emptySkill: "Enter a skill name.",
+  skillTooShort: "Skill name must be at least 2 characters.",
+  skillTooLong: "Skill name must be less than 50 characters.",
+  duplicateSkill: "This skill has already been added.",
+} as const;
+
 const homeCopy = {
   title: "Workspace Dashboard",
   subtitle: "Your organization and verified domain are active.",
@@ -155,5 +173,7 @@ export {
   organizationValidationMessages,
   profileSetupCopy,
   profileValidationMessages,
+  skillsCopy,
+  skillsValidationMessages,
 };
 export type { AuthMode, ButtonVariant, NotificationVariant };

@@ -28,6 +28,7 @@ export default function ProfileSetupScreen() {
   const { updateProfile, isLoading } = useProfile();
   const [userName, setUserName] = useState<string>("");
   const [initialHeadline, setInitialHeadline] = useState<string>("");
+  const [initialSkills, setInitialSkills] = useState<string[]>([]);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
     message: string;
@@ -39,17 +40,7 @@ export default function ProfileSetupScreen() {
       try {
         const status = await checkUserOnboardingStatus();
         if (!isMounted) return;
-
-        if (!status.isAuthenticated) {
-          router.replace("/auth");
-          return;
-        }
-
-        // If user already completed profile, redirect them forward
-        if (status.hasProfile) {
-          router.replace(status.targetRoute as any);
-          return;
-        }
+        router.replace(status.targetRoute);
 
         const supabase = getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
@@ -59,6 +50,8 @@ export default function ProfileSetupScreen() {
           setUserName(name);
           const hl = (u.user_metadata?.headline as string) || "";
           setInitialHeadline(hl);
+          const sk = (u.user_metadata?.skills as string[]) || [];
+          setInitialSkills(sk);
         }
       } catch {
         if (isMounted) {
@@ -74,10 +67,13 @@ export default function ProfileSetupScreen() {
     };
   }, []);
 
-  const handleSaveProfile = async (headline: string) => {
+  const handleSaveProfile = async (params: {
+    headline: string;
+    skills: string[];
+  }) => {
     setNotification(null);
     try {
-      await updateProfile({ headline });
+      await updateProfile(params);
       setNotification({
         variant: notificationVariant.success,
         message: profileSetupCopy.success,
@@ -123,6 +119,7 @@ export default function ProfileSetupScreen() {
           <ProfileSetupHeader userName={userName} />
           <ProfileSetupForm
             initialHeadline={initialHeadline}
+            initialSkills={initialSkills}
             onSubmit={handleSaveProfile}
             isLoading={isLoading}
           />

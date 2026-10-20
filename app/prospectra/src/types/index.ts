@@ -7,3 +7,4 @@ export * from "./onboarding";
 export * from "./ui";
 export * from "./theme";
 export * from "./api";
+export * from "./skills";

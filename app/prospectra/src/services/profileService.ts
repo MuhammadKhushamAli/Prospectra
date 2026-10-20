@@ -18,11 +18,13 @@ export async function updateProfileWithSupabase(
 
   const trimmedHeadline = params.headline.trim();
   if (!trimmedHeadline) throw new Error("Professional headline is required.");
+  const skills = params.skills || [];
 
   // 1. Update Supabase Auth user metadata
   const { data: updateData, error: updateErr } = await supabase.auth.updateUser({
     data: {
       headline: trimmedHeadline,
+      skills,
       profile_completed: true,
     },
   });
@@ -30,7 +32,7 @@ export async function updateProfileWithSupabase(
   if (updateErr) throw updateErr;
   const updatedUser = updateData.user ?? user;
 
-  // 2. If user is already part of an organization, sync to user_profiles table
+  // 2. If user is already part of an organization, sync to user_profiles table and skills tables
   try {
     const { data: member } = await supabase
       .from("organization_members")
@@ -48,6 +50,32 @@ export async function updateProfileWithSupabase(
         headline: trimmedHeadline,
         email: updatedUser.email || null,
       });
+
+      if (skills.length > 0) {
+        for (const skillName of skills) {
+          try {
+            const { data: skillRow } = await supabase
+              .from("skills")
+              .insert({
+                org_id: orgId,
+                name: skillName,
+                description: skillName,
+                category: "General",
+              })
+              .select("id")
+              .single();
+
+            if (skillRow?.id) {
+              await supabase.from("user_skills").upsert({
+                user_id: user.id,
+                skill_id: skillRow.id,
+              });
+            }
+          } catch {
+            // Ignore individual skill sync error
+          }
+        }
+      }
     }
   } catch (syncErr) {
     // Non-fatal if organization does not exist yet
@@ -59,6 +87,7 @@ export async function updateProfileWithSupabase(
     fullName: (updatedUser.user_metadata?.full_name as string) || "",
     email: updatedUser.email || "",
     headline: trimmedHeadline,
+    skills,
   };
 }
 
@@ -69,6 +98,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
 
   const user = sessionData.session.user;
   const metadataHeadline = (user.user_metadata?.headline as string) || "";
+  const skills = (user.user_metadata?.skills as string[]) || [];
 
   if (metadataHeadline) {
     return {
@@ -76,6 +106,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
       fullName: (user.user_metadata?.full_name as string) || "",
       email: user.email || "",
       headline: metadataHeadline,
+      skills,
     };
   }
 
@@ -93,6 +124,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
       fullName: profileRow.full_name || (user.user_metadata?.full_name as string) || "",
       email: profileRow.email || user.email || "",
       headline: profileRow.headline,
+      skills,
     };
   }
 

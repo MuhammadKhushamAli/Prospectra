@@ -8,14 +8,18 @@ import { profileSetupCopy } from "../../constants/constants";
 import { validateProfileHeadline } from "../../validation/profileValidation";
 import type { ProfileSetupFormProps } from "../../types/profile";
 
+import ProfileSkillsSection from "./ProfileSkillsSection";
+
 export type { ProfileSetupFormProps };
 
 export default function ProfileSetupForm({
   initialHeadline = "",
+  initialSkills = [],
   onSubmit,
   isLoading = false,
 }: ProfileSetupFormProps) {
   const [headline, setHeadline] = useState(initialHeadline);
+  const [skills, setSkills] = useState<string[]>(initialSkills);
   const [error, setError] = useState<string | null>(null);
 
   const handleHeadlineChange = (text: string) => {
@@ -25,6 +29,16 @@ export default function ProfileSetupForm({
     }
   };
 
+  const handleAddSkill = (skill: string) => {
+    setSkills((prev) => [...prev, skill]);
+  };
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setSkills((prev) =>
+      prev.filter((s) => s.toLowerCase() !== skillToRemove.toLowerCase()),
+    );
+  };
+
   const handleSubmit = () => {
     const validationError = validateProfileHeadline(headline);
     if (validationError) {
@@ -32,7 +46,10 @@ export default function ProfileSetupForm({
       return;
     }
     setError(null);
-    onSubmit?.(headline.trim());
+    onSubmit?.({
+      headline: headline.trim(),
+      skills,
+    });
   };
 
   return (
@@ -48,6 +65,14 @@ export default function ProfileSetupForm({
         editable={!isLoading}
         error={error}
       />
+
+      <ProfileSkillsSection
+        skills={skills}
+        onAddSkill={handleAddSkill}
+        onRemoveSkill={handleRemoveSkill}
+        editable={!isLoading}
+      />
+
       <Button
         label={
           isLoading
