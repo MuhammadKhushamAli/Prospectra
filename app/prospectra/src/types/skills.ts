@@ -2,7 +2,6 @@ interface Skill {
   id: string;
   org_id: string;
   name: string;
-  category?: string | null;
   created_at?: string;
 }
 

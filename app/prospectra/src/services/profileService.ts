@@ -104,7 +104,6 @@ export async function updateProfileWithSupabase(
         .insert({
           org_id: orgId,
           name: cleanName,
-          category: "General",
         })
         .select("id")
         .single();

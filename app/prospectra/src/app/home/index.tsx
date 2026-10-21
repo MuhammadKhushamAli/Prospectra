@@ -447,38 +447,6 @@ export default function HomeRoute() {
                     : homeCopy.actions.startProspecting}
                 </Text>
               </Pressable>
-
-              <Pressable
-                onPress={() =>
-                  handlePerformOperation(homeCopy.actions.findCompanies)
-                }
-                style={({ pressed }) => [
-                  styles.operationButton,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                    opacity: !hasProfile ? 0.7 : pressed ? 0.85 : 1,
-                  },
-                ]}
-              >
-                {!hasProfile ? (
-                  <Lock color={colors.textDisabled} size={16} strokeWidth={2} />
-                ) : null}
-                <Text
-                  style={[
-                    styles.operationButtonText,
-                    {
-                      color: !hasProfile
-                        ? colors.textDisabled
-                        : colors.text,
-                    },
-                  ]}
-                >
-                  {!hasProfile
-                    ? `${homeCopy.actions.findCompanies} (${homeCopy.lockedBadge})`
-                    : homeCopy.actions.findCompanies}
-                </Text>
-              </Pressable>
             </View>
           </View>
         </View>
