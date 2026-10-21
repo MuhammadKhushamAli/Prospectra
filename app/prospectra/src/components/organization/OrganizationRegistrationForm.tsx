@@ -1,11 +1,15 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
+import { useTheme } from "../../hooks/useTheme";
 import Button from "../ui/Button";
 import TextField from "../ui/TextField";
 import { organizationRegistrationCopy } from "../../constants/constants";
-import { validateOrganizationName } from "../../validation/organizationValidation";
+import {
+  validateCompanyFinderThreshold,
+  validateOrganizationName,
+} from "../../validation/organizationValidation";
 import type { OrganizationRegistrationFormProps } from "../../types/organization";
 
 export type { OrganizationRegistrationFormProps };
@@ -14,24 +18,43 @@ export default function OrganizationRegistrationForm({
   onSubmit,
   isLoading,
 }: OrganizationRegistrationFormProps) {
+  const colors = useTheme();
   const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [threshold, setThreshold] = useState("500");
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [thresholdError, setThresholdError] = useState<string | null>(null);
 
   const handleNameChange = (text: string) => {
     setName(text);
-    if (error) {
-      setError(null);
+    if (nameError) {
+      setNameError(null);
+    }
+  };
+
+  const handleThresholdChange = (text: string) => {
+    setThreshold(text);
+    if (thresholdError) {
+      setThresholdError(null);
     }
   };
 
   const handleSubmit = () => {
-    const validationError = validateOrganizationName(name);
-    if (validationError) {
-      setError(validationError);
+    const vNameError = validateOrganizationName(name);
+    const vThresholdError = validateCompanyFinderThreshold(threshold);
+
+    if (vNameError || vThresholdError) {
+      setNameError(vNameError);
+      setThresholdError(vThresholdError);
       return;
     }
-    setError(null);
-    onSubmit?.(name.trim());
+
+    setNameError(null);
+    setThresholdError(null);
+    const parsedThreshold = parseInt(threshold.trim(), 10);
+    onSubmit?.({
+      name: name.trim(),
+      pending_threshold: isNaN(parsedThreshold) ? 500 : parsedThreshold,
+    });
   };
 
   return (
@@ -45,8 +68,26 @@ export default function OrganizationRegistrationForm({
         value={name}
         onChangeText={handleNameChange}
         editable={!isLoading}
-        error={error}
+        error={nameError}
       />
+
+      <View style={styles.thresholdBlock}>
+        <TextField
+          label={organizationRegistrationCopy.fields.threshold}
+          placeholder={organizationRegistrationCopy.placeholders.threshold}
+          keyboardType="number-pad"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={threshold}
+          onChangeText={handleThresholdChange}
+          editable={!isLoading}
+          error={thresholdError}
+        />
+        <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+          {organizationRegistrationCopy.helpers.threshold}
+        </Text>
+      </View>
+
       <Button
         label={
           isLoading
@@ -62,4 +103,13 @@ export default function OrganizationRegistrationForm({
 
 const styles = StyleSheet.create({
   form: { gap: tokens.spacing.md },
+  thresholdBlock: {
+    gap: 4,
+  },
+  helperText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+    paddingHorizontal: 2,
+  },
 });

@@ -19,12 +19,20 @@ export async function registerOrganizationWithSupabase(
   const trimmedName = params.name.trim();
   if (!trimmedName) throw new Error("Organization name is required.");
 
-  // Insert organization with current user as owner
+  const threshold =
+    typeof params.pending_threshold === "number" &&
+    !isNaN(params.pending_threshold) &&
+    params.pending_threshold > 0
+      ? Math.floor(params.pending_threshold)
+      : 500;
+
+  // Insert organization with current user as owner and specified company finder threshold
   const { data: orgData, error: orgErr } = await supabase
     .from("organizations")
     .insert({
       name: trimmedName,
       owner_id: user.id,
+      pending_threshold: threshold,
     })
     .select()
     .single();
@@ -42,46 +50,6 @@ export async function registerOrganizationWithSupabase(
     });
 
   if (memberErr) throw memberErr;
-
-  // Sync user profile to user_profiles table and skills tables
-  try {
-    await supabase.from("user_profiles").upsert({
-      org_id: orgData.id,
-      user_id: user.id,
-      full_name: (user.user_metadata?.full_name as string) || null,
-      headline: (user.user_metadata?.headline as string) || null,
-      email: user.email || null,
-    });
-
-    const userSkills = (user.user_metadata?.skills as string[]) || [];
-    if (userSkills.length > 0) {
-      for (const skillName of userSkills) {
-        try {
-          const { data: skillRow } = await supabase
-            .from("skills")
-            .insert({
-              org_id: orgData.id,
-              name: skillName,
-              description: skillName,
-              category: "General",
-            })
-            .select("id")
-            .single();
-
-          if (skillRow?.id) {
-            await supabase.from("user_skills").upsert({
-              user_id: user.id,
-              skill_id: skillRow.id,
-            });
-          }
-        } catch {
-          // Non-fatal if skill already exists or insert fails
-        }
-      }
-    }
-  } catch (profileErr) {
-    console.warn("Could not sync user_profiles on organization registration:", profileErr);
-  }
 
   return orgData as Organization;
 }

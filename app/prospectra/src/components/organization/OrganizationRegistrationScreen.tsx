@@ -44,10 +44,13 @@ export default function OrganizationRegistrationScreen() {
     };
   }, []);
 
-  const handleRegister = async (name: string) => {
+  const handleRegister = async (params: {
+    name: string;
+    pending_threshold: number;
+  }) => {
     setNotification(null);
     try {
-      await registerOrganization({ name });
+      await registerOrganization(params);
       setNotification({
         variant: notificationVariant.success,
         message: organizationRegistrationCopy.success,

@@ -1,5 +1,6 @@
 interface RegisterOrganizationParams {
   name: string;
+  pending_threshold?: number;
 }
 
 interface Organization {
@@ -11,7 +12,7 @@ interface Organization {
 }
 
 interface OrganizationRegistrationFormProps {
-  onSubmit?: (name: string) => void;
+  onSubmit?: (params: { name: string; pending_threshold: number }) => void;
   isLoading?: boolean;
 }
 

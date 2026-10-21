@@ -13,3 +13,17 @@ export function validateOrganizationName(name: string): string | null {
   }
   return null;
 }
+
+export function validateCompanyFinderThreshold(
+  thresholdStr: string | number,
+): string | null {
+  const str = String(thresholdStr).trim();
+  if (!str) {
+    return organizationValidationMessages.missingThreshold;
+  }
+  const num = Number(str);
+  if (!Number.isFinite(num) || !Number.isInteger(num) || num < 1 || num > 100000) {
+    return organizationValidationMessages.invalidThreshold;
+  }
+  return null;
+}

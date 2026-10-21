@@ -1,3 +1,5 @@
+import type { ProfileSkillItem } from "./skills";
+
 interface UserProfile {
   org_id: string;
   user_id: string;
@@ -9,7 +11,7 @@ interface UserProfile {
 
 interface UpdateProfileParams {
   headline: string;
-  skills?: string[];
+  skills?: ProfileSkillItem[];
 }
 
 interface UserProfileData {
@@ -17,7 +19,7 @@ interface UserProfileData {
   fullName: string;
   email: string;
   headline: string;
-  skills?: string[];
+  skills?: ProfileSkillItem[];
   orgId?: string | null;
 }
 
@@ -27,12 +29,14 @@ interface ProfileSetupHeaderProps {
 
 interface ProfileSetupFormProps {
   initialHeadline?: string;
-  initialSkills?: string[];
-  onSubmit?: (params: { headline: string; skills: string[] }) => void;
+  initialSkills?: ProfileSkillItem[];
+  onSubmit?: (params: { headline: string; skills: ProfileSkillItem[] }) => void;
   isLoading?: boolean;
 }
 
 interface ProfileSetupFooterLinkProps {
+  onBackToDashboard?: () => void;
+  onSignOut?: () => void;
   onPress?: () => void;
 }
 
@@ -43,4 +47,5 @@ export type {
   ProfileSetupHeaderProps,
   ProfileSetupFormProps,
   ProfileSetupFooterLinkProps,
+  ProfileSkillItem,
 };

@@ -131,7 +131,7 @@ export default function AuthScreen() {
         variant: notificationVariant.success,
         message: authCopy.signup.success,
       });
-      router.replace("/profile-setup" as any);
+      router.replace("/organization-registration" as any);
     } catch (error) {
       setNotification({
         variant: notificationVariant.error,

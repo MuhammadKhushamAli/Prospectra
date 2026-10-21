@@ -78,12 +78,17 @@ const domainValidationMessages = {
 
 const organizationRegistrationCopy = {
   title: "Register organization",
-  subtitle: "Set up your workspace to manage clients and team.",
+  subtitle: "Set up your workspace and discovery threshold to manage clients and outreach.",
   fields: {
     name: "Organization name",
+    threshold: "Company finder threshold",
   },
   placeholders: {
     name: "e.g. Acme Technologies",
+    threshold: "e.g. 500",
+  },
+  helpers: {
+    threshold: "Target queue size of pending prospective companies to discover continuously.",
   },
   actions: {
     submit: "Continue to domain setup",
@@ -97,11 +102,13 @@ const organizationValidationMessages = {
   missingName: "Enter your organization name.",
   nameTooShort: "Organization name must be at least 2 characters.",
   nameTooLong: "Organization name must be less than 100 characters.",
+  missingThreshold: "Enter a company finder threshold.",
+  invalidThreshold: "Company finder threshold must be a whole number between 1 and 100,000.",
 } as const;
 
 const profileSetupCopy = {
   title: "Complete your profile",
-  subtitle: "Set up your professional headline to personalize your outreach profile.",
+  subtitle: "Set up your headline and categorized skills to unlock outreach and workspace operations.",
   fields: {
     headline: "Professional headline",
   },
@@ -109,9 +116,10 @@ const profileSetupCopy = {
     headline: "e.g. Lead Consultant & Founder",
   },
   actions: {
-    submit: "Continue to organization setup",
+    submit: "Save & continue to Dashboard",
     submitting: "Saving profile...",
-    backToLogin: "Back to login",
+    backToDashboard: "Back to Dashboard",
+    backToLogin: "Sign out",
   },
   success: "Profile saved successfully.",
 } as const;
@@ -124,13 +132,15 @@ const profileValidationMessages = {
 
 const skillsCopy = {
   sectionTitle: "Skills & Expertise",
-  sectionSubtitle: "Add skills to help personalize and power your outreach targeting.",
+  sectionSubtitle: "Add skills with categories to power intelligent client-matching and personalized outreach.",
   inputLabel: "Add a skill",
-  placeholder: "e.g. Lead Generation, Cold Email",
-  addButton: "Add",
-  suggestionsTitle: "Quick Suggestions",
-  emptySkillsText: "No skills added yet. Type a skill or tap suggestions below.",
+  placeholder: "e.g. Cold Email, Lead Generation",
+  categoryLabel: "Category",
+  addButton: "Add Skill",
+  suggestionsTitle: "Quick Categorized Suggestions",
+  emptySkillsText: "No skills added yet. Select a category, enter a skill name, or tap quick suggestions below.",
   skillsCount: "skills added",
+  missingCategory: "Select or enter a category for this skill.",
 } as const;
 
 const skillsValidationMessages = {
@@ -138,6 +148,7 @@ const skillsValidationMessages = {
   skillTooShort: "Skill name must be at least 2 characters.",
   skillTooLong: "Skill name must be less than 50 characters.",
   duplicateSkill: "This skill has already been added.",
+  missingCategory: "Please choose or provide a category for this skill.",
 } as const;
 
 const homeCopy = {
@@ -150,9 +161,19 @@ const homeCopy = {
   statusActive: "Active",
   readyTitle: "Ready to Prospect",
   readyDescription: "Your domain is authenticated and ready for cold outreach campaigns.",
+  profileIncompleteTitle: "Profile Setup Required",
+  profileIncompleteDesc: "Complete your professional headline and categorized skills to unlock lead prospecting, company search, and automated outreach operations.",
+  completeProfileButton: "Complete Profile",
+  profileCompleteBadge: "Active",
+  editProfile: "Edit Profile",
+  operationsLockedAlert: "Operation Locked: You must complete your profile before initiating prospecting or workspace operations.",
+  lockedBadge: "Locked",
   actions: {
     signOut: "Sign out",
     manageDomain: "Manage Domain",
+    startProspecting: "Start Prospecting",
+    findCompanies: "Find Companies",
+    lockedAction: "Locked (Profile Required)",
   },
 } as const;
 

@@ -29,9 +29,9 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     const user = sessionData.session.user;
     const userId = user.id;
 
-    // 1. Check if user has completed profile (headline set in user_metadata or user_profiles table)
+    // 1. Evaluate Profile Completion status
     let headline = (user.user_metadata?.headline as string) || null;
-    let hasProfile = Boolean(headline || user.user_metadata?.profile_completed);
+    let hasProfile = Boolean(headline && user.user_metadata?.profile_completed);
 
     if (!hasProfile) {
       const { data: profileRow } = await supabase
@@ -48,29 +48,13 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       }
     }
 
-    if (!hasProfile) {
-      return {
-        isAuthenticated: true,
-        hasProfile: false,
-        headline: null,
-        hasOrganization: false,
-        orgId: null,
-        orgName: null,
-        role: null,
-        hasVerifiedDomain: false,
-        domain: null,
-        targetRoute: "/profile-setup",
-      };
-    }
-
-
+    // 2. Organization Check (initial post-signup step)
     const { data: member } = await supabase
       .from("organization_members")
       .select("org_id, role")
       .eq("user_id", userId)
       .limit(1)
       .maybeSingle<Pick<OrganizationMember, "org_id" | "role">>();
-
 
     if (member?.role === memberRoles[1]) {
       let orgName: string | null = null;
@@ -88,7 +72,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
 
       return {
         isAuthenticated: true,
-        hasProfile: true,
+        hasProfile,
         headline,
         hasOrganization: true,
         orgId: member.org_id,
@@ -120,10 +104,11 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       }
     }
 
+    // If user has not yet registered an organization, route to organization registration
     if (!orgId) {
       return {
         isAuthenticated: true,
-        hasProfile: true,
+        hasProfile,
         headline,
         hasOrganization: false,
         orgId: null,
@@ -148,7 +133,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       }
     }
 
-    // 3. Check domain verification status (for founder/owner)
+    // 3. Domain verification status check (next step before reaching home)
     const { data: domainRec } = await supabase
       .from("domain_verifications")
       .select("domain, verification_status")
@@ -161,7 +146,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     if (!isVerified) {
       return {
         isAuthenticated: true,
-        hasProfile: true,
+        hasProfile,
         headline,
         hasOrganization: true,
         orgId,
@@ -173,9 +158,11 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       };
     }
 
+    // 4. Organization and Domain verification complete -> Target route is /home
+    // Home screen will display the "Complete Profile" button and enforce lock if !hasProfile
     return {
       isAuthenticated: true,
-      hasProfile: true,
+      hasProfile,
       headline,
       hasOrganization: true,
       orgId,
