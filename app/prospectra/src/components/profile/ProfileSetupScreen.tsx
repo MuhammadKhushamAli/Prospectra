@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -25,50 +27,58 @@ import {
 
 export default function ProfileSetupScreen() {
   const colors = useTheme();
-  const { updateProfile, isLoading } = useProfile();
+  const { updateProfile, getProfile, isLoading } = useProfile();
   const [userName, setUserName] = useState<string>("");
   const [initialHeadline, setInitialHeadline] = useState<string>("");
   const [initialSkills, setInitialSkills] = useState<string[]>([]);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
     message: string;
   } | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function init() {
-      try {
-        const status = await checkUserOnboardingStatus();
-        if (!isMounted) return;
-        if (!status.isAuthenticated && status.targetRoute !== "/profile-setup") {
-          router.replace(status.targetRoute);
-          return;
-        }
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      async function init() {
+        try {
+          const status = await checkUserOnboardingStatus();
+          if (!isMounted) return;
+          if (!status.isAuthenticated && status.targetRoute !== "/profile-setup") {
+            router.replace(status.targetRoute);
+            return;
+          }
 
-        const supabase = getSupabaseClient();
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (isMounted && sessionData?.session?.user) {
-          const u = sessionData.session.user;
-          const name = (u.user_metadata?.full_name as string) || "";
-          setUserName(name);
-          const hl = (u.user_metadata?.headline as string) || "";
-          setInitialHeadline(hl);
-          const sk = (u.user_metadata?.skills as string[]) || [];
-          setInitialSkills(sk);
-        }
-      } catch {
-        if (isMounted) {
-          router.replace("/auth");
+          // Load profile directly from database tables
+          const profile = await getProfile();
+          if (isMounted && profile) {
+            setUserName(profile.fullName || "");
+            setInitialHeadline(profile.headline || "");
+            setInitialSkills(profile.skills || []);
+          } else if (isMounted) {
+            const supabase = getSupabaseClient();
+            const { data: sessionData } = await supabase.auth.getSession();
+            const email = sessionData?.session?.user?.email || "";
+            setUserName(email.split("@")[0] || "");
+          }
+        } catch {
+          if (isMounted) {
+            router.replace("/auth");
+          }
+        } finally {
+          if (isMounted) {
+            setIsInitializing(false);
+          }
         }
       }
-    }
 
-    init();
+      init();
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      return () => {
+        isMounted = false;
+      };
+    }, [getProfile]),
+  );
 
   const handleSaveProfile = async (params: {
     headline: string;
@@ -101,6 +111,16 @@ export default function ProfileSetupScreen() {
     }
     router.replace("/auth");
   };
+
+  if (isInitializing) {
+    return (
+      <View
+        style={[styles.loadingScreen, { backgroundColor: colors.background }]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -139,6 +159,11 @@ export default function ProfileSetupScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   content: {
     flexGrow: 1,
     width: "100%",

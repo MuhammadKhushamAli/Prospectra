@@ -29,24 +29,17 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     const user = sessionData.session.user;
     const userId = user.id;
 
-    // 1. Evaluate Profile Completion status
-    let headline = (user.user_metadata?.headline as string) || null;
-    let hasProfile = Boolean(headline && user.user_metadata?.profile_completed);
+    // 1. Evaluate Profile Completion status directly from user_profiles table (No auth metadata)
+    const { data: profileRow } = await supabase
+      .from("user_profiles")
+      .select("headline")
+      .eq("user_id", userId)
+      .not("headline", "is", null)
+      .limit(1)
+      .maybeSingle();
 
-    if (!hasProfile) {
-      const { data: profileRow } = await supabase
-        .from("user_profiles")
-        .select("headline")
-        .eq("user_id", userId)
-        .not("headline", "is", null)
-        .limit(1)
-        .maybeSingle();
-
-      if (profileRow?.headline) {
-        hasProfile = true;
-        headline = profileRow.headline;
-      }
-    }
+    const headline = profileRow?.headline?.trim() || null;
+    const hasProfile = Boolean(headline);
 
     // 2. Organization Check (initial post-signup step)
     const { data: member } = await supabase

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
@@ -21,6 +21,14 @@ export default function ProfileSetupForm({
   const [headline, setHeadline] = useState(initialHeadline);
   const [skills, setSkills] = useState<string[]>(initialSkills);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setHeadline(initialHeadline);
+  }, [initialHeadline]);
+
+  useEffect(() => {
+    setSkills(initialSkills);
+  }, [initialSkills]);
 
   const handleHeadlineChange = (text: string) => {
     setHeadline(text);
