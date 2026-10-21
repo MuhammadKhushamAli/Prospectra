@@ -11,7 +11,7 @@ interface UserProfile {
 
 interface UpdateProfileParams {
   headline: string;
-  skills?: ProfileSkillItem[];
+  skills?: string[];
 }
 
 interface UserProfileData {
@@ -19,7 +19,7 @@ interface UserProfileData {
   fullName: string;
   email: string;
   headline: string;
-  skills?: ProfileSkillItem[];
+  skills?: string[];
   orgId?: string | null;
 }
 
@@ -29,8 +29,8 @@ interface ProfileSetupHeaderProps {
 
 interface ProfileSetupFormProps {
   initialHeadline?: string;
-  initialSkills?: ProfileSkillItem[];
-  onSubmit?: (params: { headline: string; skills: ProfileSkillItem[] }) => void;
+  initialSkills?: string[];
+  onSubmit?: (params: { headline: string; skills: string[] }) => void;
   isLoading?: boolean;
 }
 

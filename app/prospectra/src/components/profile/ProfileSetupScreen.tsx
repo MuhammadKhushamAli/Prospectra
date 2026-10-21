@@ -40,8 +40,9 @@ export default function ProfileSetupScreen() {
       try {
         const status = await checkUserOnboardingStatus();
         if (!isMounted) return;
-        if (status.targetRoute !== "/profile-setup") {
+        if (!status.isAuthenticated && status.targetRoute !== "/profile-setup") {
           router.replace(status.targetRoute);
+          return;
         }
 
         const supabase = getSupabaseClient();
@@ -80,8 +81,8 @@ export default function ProfileSetupScreen() {
         variant: notificationVariant.success,
         message: profileSetupCopy.success,
       });
-      // Advance to organization registration
-      router.replace("/organization-registration");
+      // Advance to Dashboard
+      router.replace("/home");
     } catch (err: any) {
       const msg =
         err?.message || "Failed to save profile. Please try again.";
@@ -125,7 +126,10 @@ export default function ProfileSetupScreen() {
             onSubmit={handleSaveProfile}
             isLoading={isLoading}
           />
-          <ProfileSetupFooterLink onPress={handleBackToLogin} />
+          <ProfileSetupFooterLink
+            onBackToDashboard={() => router.replace("/home")}
+            onSignOut={handleBackToLogin}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

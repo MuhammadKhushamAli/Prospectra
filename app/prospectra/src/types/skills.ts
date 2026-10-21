@@ -2,7 +2,6 @@ interface Skill {
   id: string;
   org_id: string;
   name: string;
-  description: string;
   category?: string | null;
   created_at?: string;
 }
@@ -18,8 +17,8 @@ interface ProfileSkillItem {
 }
 
 interface ProfileSkillsSectionProps {
-  skills: ProfileSkillItem[];
-  onAddSkill: (skill: ProfileSkillItem) => void;
+  skills: string[];
+  onAddSkill: (skillName: string) => void;
   onRemoveSkill: (skillName: string) => void;
   editable?: boolean;
 }
