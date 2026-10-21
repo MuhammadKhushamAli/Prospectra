@@ -71,7 +71,7 @@ export default function AuthScreen() {
       }
     });
     return () => {
-      isMounted = false;
+      isMounted = false; 
     };
   }, []);
 

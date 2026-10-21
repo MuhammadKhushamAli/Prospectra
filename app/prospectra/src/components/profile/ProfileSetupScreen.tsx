@@ -40,7 +40,9 @@ export default function ProfileSetupScreen() {
       try {
         const status = await checkUserOnboardingStatus();
         if (!isMounted) return;
-        router.replace(status.targetRoute);
+        if (status.targetRoute !== "/profile-setup") {
+          router.replace(status.targetRoute);
+        }
 
         const supabase = getSupabaseClient();
         const { data: sessionData } = await supabase.auth.getSession();
