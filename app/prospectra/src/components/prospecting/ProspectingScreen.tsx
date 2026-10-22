@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Briefcase,
   Building2,
+  ChevronRight,
   Clock,
   ExternalLink,
   Globe,
@@ -37,6 +38,8 @@ import type {
   ProspectingRole,
   ProspectingTab,
 } from "../../types/prospecting";
+import CompanyDetailModal from "./CompanyDetailModal";
+import EmailDetailModal from "./EmailDetailModal";
 
 export default function ProspectingScreen() {
   const colors = useTheme();
@@ -52,6 +55,17 @@ export default function ProspectingScreen() {
   const [emails, setEmails] = useState<EmailProspect[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [selectedCompany, setSelectedCompany] = useState<CompanyProspect | null>(null);
+  const [selectedEmail, setSelectedEmail] = useState<EmailProspect | null>(null);
+
+  const getAssociatedEmailForCompany = (companyId: string) => {
+    return emails.find((e) => e.company_id === companyId) || null;
+  };
+
+  const getAssociatedCompanyForEmail = (companyId: string) => {
+    return companies.find((c) => c.id === companyId) || null;
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -150,117 +164,110 @@ export default function ProspectingScreen() {
   const renderCompanyItem = ({ item }: { item: CompanyProspect }) => {
     const statusColor = getCompanyStatusColor(item.status);
     const statusLabel = getCompanyStatusLabel(item.status);
+    const authScore = item.company_auth?.score;
 
     return (
-      <View
-        style={[
+      <Pressable
+        onPress={() => setSelectedCompany(item)}
+        style={({ pressed }) => [
           styles.prospectCard,
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
+            opacity: pressed ? 0.75 : 1,
           },
         ]}
       >
-        <View style={styles.cardTopRow}>
-          <View style={styles.companyNameWrap}>
-            <Building2 size={18} color={colors.primary} />
+        <View style={styles.cardHeaderRow}>
+          <View
+            style={[
+              styles.avatarIcon,
+              {
+                backgroundColor: `${colors.primary}12`,
+                borderColor: `${colors.primary}30`,
+              },
+            ]}
+          >
+            <Building2 size={16} color={colors.primary} />
+          </View>
+
+          <View style={styles.cardHeaderInfo}>
             <Text
-              style={[styles.companyName, { color: colors.text }]}
+              style={[styles.cardTitle, { color: colors.text }]}
               numberOfLines={1}
             >
               {item.name}
             </Text>
+            {item.domain ? (
+              <Text
+                style={[styles.cardSubtext, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {item.domain}
+              </Text>
+            ) : null}
           </View>
-          <View
-            style={[
-              styles.statusChip,
-              { backgroundColor: `${statusColor}20`, borderColor: statusColor },
-            ]}
-          >
-            <Text style={[styles.statusChipText, { color: statusColor }]}>
-              {statusLabel}
-            </Text>
+
+          <View style={styles.cardRightGroup}>
+            <View
+              style={[
+                styles.compactStatusChip,
+                {
+                  backgroundColor: `${statusColor}18`,
+                  borderColor: `${statusColor}50`,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.compactStatusDot,
+                  { backgroundColor: statusColor },
+                ]}
+              />
+              <Text style={[styles.compactStatusText, { color: statusColor }]}>
+                {statusLabel}
+              </Text>
+            </View>
+            <ChevronRight size={15} color={colors.textDisabled} />
           </View>
         </View>
 
-        {item.domain ? (
-          <View style={styles.metaRow}>
-            <Globe size={14} color={colors.textSecondary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {item.domain}
-            </Text>
-          </View>
-        ) : null}
+        <View style={styles.cardMetaRow}>
+          <Text
+            style={[styles.cardMetaText, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {[item.industry, item.size].filter(Boolean).join(" • ")}
+          </Text>
 
-        <View style={styles.tagsRow}>
-          {item.industry ? (
+          {authScore !== undefined ? (
             <View
               style={[
-                styles.infoBadge,
+                styles.miniMatchBadge,
                 {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Briefcase size={12} color={colors.textSecondary} />
-              <Text
-                style={[styles.infoBadgeText, { color: colors.textSecondary }]}
-              >
-                {item.industry}
-              </Text>
-            </View>
-          ) : null}
-
-          {item.size ? (
-            <View
-              style={[
-                styles.infoBadge,
-                {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Users size={12} color={colors.textSecondary} />
-              <Text
-                style={[styles.infoBadgeText, { color: colors.textSecondary }]}
-              >
-                {item.size}
-              </Text>
-            </View>
-          ) : null}
-
-          {item.company_auth ? (
-            <View
-              style={[
-                styles.infoBadge,
-                {
-                  backgroundColor: colors.surfaceElevated,
+                  backgroundColor:
+                    authScore >= 70
+                      ? `${colors.success}15`
+                      : `${colors.warning}15`,
                   borderColor:
-                    item.company_auth.score >= 70
-                      ? colors.success
-                      : colors.warning,
+                    authScore >= 70
+                      ? `${colors.success}40`
+                      : `${colors.warning}40`,
                 },
               ]}
             >
               <Text
                 style={[
-                  styles.infoBadgeText,
-                  {
-                    color:
-                      item.company_auth.score >= 70
-                        ? colors.success
-                        : colors.warning,
-                  },
+                  styles.miniMatchText,
+                  { color: authScore >= 70 ? colors.success : colors.warning },
                 ]}
               >
-                Match: {item.company_auth.score}%
+                {authScore}% Match
               </Text>
             </View>
           ) : null}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -272,128 +279,124 @@ export default function ProspectingScreen() {
         : item.status === "rejected"
           ? "Rejected"
           : "Approved";
+    const verificationScore = item.verification?.score;
+    const subject = item.email_body?.subject || item.subject || "No Subject";
+    const bodyPreview = item.email_body?.body || item.body || "";
 
     return (
-      <View
-        style={[
+      <Pressable
+        onPress={() => setSelectedEmail(item)}
+        style={({ pressed }) => [
           styles.prospectCard,
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
+            opacity: pressed ? 0.75 : 1,
           },
         ]}
       >
-        <View style={styles.cardTopRow}>
-          <View style={styles.companyNameWrap}>
-            <Mail size={18} color={colors.primary} />
+        <View style={styles.cardHeaderRow}>
+          <View
+            style={[
+              styles.avatarIcon,
+              {
+                backgroundColor: `${colors.primary}12`,
+                borderColor: `${colors.primary}30`,
+              },
+            ]}
+          >
+            <Mail size={16} color={colors.primary} />
+          </View>
+
+          <View style={styles.cardHeaderInfo}>
             <Text
-              style={[styles.companyName, { color: colors.text }]}
+              style={[styles.cardTitle, { color: colors.text }]}
               numberOfLines={1}
             >
               {item.company_name || "Target Outreach"}
             </Text>
-          </View>
-          <View
-            style={[
-              styles.statusChip,
-              { backgroundColor: `${statusColor}20`, borderColor: statusColor },
-            ]}
-          >
-            <Text style={[styles.statusChipText, { color: statusColor }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.emailAddressRow}>
-          <Text
-            style={[styles.emailAddressText, { color: colors.textSecondary }]}
-            numberOfLines={1}
-          >
-            To: {item.to_email || "Lead Contact"}
-          </Text>
-          <Text
-            style={[styles.emailAddressText, { color: colors.textDisabled }]}
-            numberOfLines={1}
-          >
-            From: {item.from_email || "Verified Agent"}
-          </Text>
-        </View>
-
-        <Text
-          style={[styles.emailSubject, { color: colors.text }]}
-          numberOfLines={2}
-        >
-          {item.email_body?.subject || item.subject}
-        </Text>
-
-        <View
-          style={[
-            styles.emailBodyPreview,
-            {
-              backgroundColor: colors.surfaceElevated,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text
-            style={[styles.emailBodyText, { color: colors.textSecondary }]}
-            numberOfLines={3}
-          >
-            {item.email_body?.body || item.body}
-          </Text>
-        </View>
-
-        <View style={styles.tagsRow}>
-          {item.company_domain ? (
-            <View
-              style={[
-                styles.infoBadge,
-                {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Globe size={12} color={colors.textSecondary} />
+            {item.company_domain ? (
               <Text
-                style={[styles.infoBadgeText, { color: colors.textSecondary }]}
+                style={[styles.cardSubtext, { color: colors.textSecondary }]}
+                numberOfLines={1}
               >
                 {item.company_domain}
               </Text>
-            </View>
-          ) : null}
+            ) : null}
+          </View>
 
-          {item.verification ? (
+          <View style={styles.cardRightGroup}>
             <View
               style={[
-                styles.infoBadge,
+                styles.compactStatusChip,
                 {
-                  backgroundColor: colors.surfaceElevated,
+                  backgroundColor: `${statusColor}18`,
+                  borderColor: `${statusColor}50`,
+                },
+              ]}
+            >
+              <View
+                style={[
+                  styles.compactStatusDot,
+                  { backgroundColor: statusColor },
+                ]}
+              />
+              <Text style={[styles.compactStatusText, { color: statusColor }]}>
+                {statusLabel}
+              </Text>
+            </View>
+            <ChevronRight size={15} color={colors.textDisabled} />
+          </View>
+        </View>
+
+        <Text
+          style={[styles.emailCardSubject, { color: colors.text }]}
+          numberOfLines={1}
+        >
+          {subject}
+        </Text>
+
+        <View style={styles.cardMetaRow}>
+          <Text
+            style={[styles.emailCardSnippet, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {bodyPreview}
+          </Text>
+
+          {verificationScore !== undefined ? (
+            <View
+              style={[
+                styles.miniMatchBadge,
+                {
+                  backgroundColor:
+                    verificationScore >= 70
+                      ? `${colors.success}15`
+                      : `${colors.warning}15`,
                   borderColor:
-                    item.verification.score >= 70
-                      ? colors.success
-                      : colors.warning,
+                    verificationScore >= 70
+                      ? `${colors.success}40`
+                      : `${colors.warning}40`,
                 },
               ]}
             >
               <Text
                 style={[
-                  styles.infoBadgeText,
+                  styles.miniMatchText,
                   {
                     color:
-                      item.verification.score >= 70
+                      verificationScore >= 70
                         ? colors.success
                         : colors.warning,
                   },
                 ]}
               >
-                Agent Verification: {item.verification.score}%
+                {verificationScore}% Verified
               </Text>
             </View>
           ) : null}
         </View>
-      </View>
+      </Pressable>
     );
   };
 
@@ -951,6 +954,34 @@ export default function ProspectingScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Company Detail Modal */}
+      <CompanyDetailModal
+        visible={Boolean(selectedCompany)}
+        company={selectedCompany}
+        onClose={() => setSelectedCompany(null)}
+        associatedEmail={
+          selectedCompany ? getAssociatedEmailForCompany(selectedCompany.id) : null
+        }
+        onViewEmail={(email) => {
+          setSelectedCompany(null);
+          setSelectedEmail(email);
+        }}
+      />
+
+      {/* Email Detail Modal */}
+      <EmailDetailModal
+        visible={Boolean(selectedEmail)}
+        email={selectedEmail}
+        onClose={() => setSelectedEmail(null)}
+        associatedCompany={
+          selectedEmail ? getAssociatedCompanyForEmail(selectedEmail.company_id) : null
+        }
+        onViewCompany={(company) => {
+          setSelectedEmail(null);
+          setSelectedCompany(company);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -1082,9 +1113,97 @@ const styles = StyleSheet.create({
   },
   prospectCard: {
     padding: tokens.spacing.md,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
+    gap: 8,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: tokens.spacing.sm,
+  },
+  avatarIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardHeaderInfo: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.sm,
+  },
+  cardSubtext: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    marginTop: 1,
+  },
+  cardRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  compactStatusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+  },
+  compactStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: tokens.radius.full,
+  },
+  compactStatusText: {
+    fontFamily: "DMSansBold",
+    fontSize: 10,
+    letterSpacing: 0.2,
+  },
+  cardMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacing.sm,
+    marginTop: 2,
+  },
+  cardMetaText: {
+    flex: 1,
+    flexShrink: 1,
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    marginRight: 6,
+  },
+  miniMatchBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    flexShrink: 0,
+    alignSelf: "center",
+  },
+  miniMatchText: {
+    fontFamily: "DMSansBold",
+    fontSize: 10,
+  },
+  emailCardSubject: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 19,
+  },
+  emailCardSnippet: {
+    flex: 1,
+    flexShrink: 1,
+    fontFamily: "DMSans",
+    fontSize: 11,
+    lineHeight: 16,
+    marginRight: 6,
   },
   cardTopRow: {
     flexDirection: "row",
@@ -1187,4 +1306,15 @@ const styles = StyleSheet.create({
     fontSize: tokens.fontSize.sm,
     textAlign: "center",
   },
+  tapDetailsPrompt: {
+    marginTop: 2,
+    paddingTop: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(150, 150, 150, 0.15)",
+  },
+  tapDetailsText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+  },
 });
+
