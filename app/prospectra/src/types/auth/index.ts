@@ -1,7 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
+import { authModes } from "../../constants/auth";
 
-const authModes = ["login", "signup"] as const;
-type tAuthMode = typeof authModes[number];
+type tAuthMode = (typeof authModes)[number];
 type AuthMode = tAuthMode;
 
 interface LoginCredentials {
@@ -59,6 +59,5 @@ export type {
   AuthModeSwitchProps,
 };
 
-export {
-  authModes,
-};
+// Re-export runtime constant for convenience
+export { authModes };

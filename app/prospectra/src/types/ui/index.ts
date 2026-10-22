@@ -1,10 +1,8 @@
 import type { TextInputProps } from "react-native";
+import { buttonVariants, notificationVariants } from "../../constants/ui";
 
-const buttonVariants = ["primary", "ghost"] as const;
-type ButtonVariant = typeof buttonVariants[number];
-
-const notificationVariants = ["error", "success"] as const;
-type NotificationVariant = typeof notificationVariants[number];
+type ButtonVariant = (typeof buttonVariants)[number];
+type NotificationVariant = (typeof notificationVariants)[number];
 
 interface ButtonProps {
   label: string;
@@ -40,7 +38,5 @@ export type {
   NotificationBannerProps,
 };
 
-export {
-  buttonVariants,
-  notificationVariants,
-};
+// Re-export runtime constants for backward compatibility
+export { buttonVariants, notificationVariants };

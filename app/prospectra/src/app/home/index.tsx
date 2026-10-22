@@ -99,6 +99,11 @@ export default function HomeRoute() {
       return;
     }
 
+    if (operationName === homeCopy.actions.startProspecting) {
+      router.push("/prospecting" as any);
+      return;
+    }
+
     setNotification({
       variant: notificationVariant.success,
       message: `${operationName} initialized successfully.`,

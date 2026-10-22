@@ -12,10 +12,10 @@ from app.models.dns_record import DNSRecord
 
 import os
 
-DOMAIN_VERIFICATION_TABLE = os.environ.get("DOMAIN_VERIFICATION_TABLE")
-
-if not DOMAIN_VERIFICATION_TABLE:
-    raise ValueError("DOMAIN_VERIFICATION_TABLE environment variable is not set")
+DOMAIN_VERIFICATION_TABLE = (
+    os.environ.get("DOMAIN_VERIFICATION_TABLE")
+    or os.environ.get("SUPABASE_DOMAIN_VERIFICATIONS_TABLE_NAME", "domain_verifications")
+)
 
 
 

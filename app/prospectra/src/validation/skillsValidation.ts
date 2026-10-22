@@ -4,7 +4,6 @@ import type { ProfileSkillItem } from "../types/skills";
 export function validateSkillName(
   name: string,
   existingSkills: Array<string | ProfileSkillItem>,
-  category?: string,
 ): string | null {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -24,13 +23,6 @@ export function validateSkillName(
 
   if (isDuplicate) {
     return skillsValidationMessages.duplicateSkill;
-  }
-
-  if (category !== undefined) {
-    const trimmedCategory = category.trim();
-    if (!trimmedCategory) {
-      return skillsValidationMessages.missingCategory;
-    }
   }
 
   return null;

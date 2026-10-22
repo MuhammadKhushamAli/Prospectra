@@ -21,7 +21,7 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
         records = [asdict(company) for company in accepted_companies]
             
         if records:
-            table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "user_companies")
+            table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
             await supabase.table(table_name).upsert(records).execute()
             
     except Exception as e:

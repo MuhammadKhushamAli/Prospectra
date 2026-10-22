@@ -1,4 +1,4 @@
-import { theme } from "../constants/theme";
+import { theme } from "../../constants/theme";
 
 type AppTheme = (typeof theme)["light"];
 

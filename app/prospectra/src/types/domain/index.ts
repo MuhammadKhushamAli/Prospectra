@@ -1,8 +1,10 @@
-const domainVerificationStatuses = ["pending", "verified", "failed"] as const;
-type tDomainVerificationStatus = typeof domainVerificationStatuses[number];
+import {
+  domainVerificationStatuses,
+  espProviders,
+} from "../../constants/domain";
 
-const espProviders = ["google", "resend"] as const;
-type tEspProvider = typeof espProviders[number];
+type tDomainVerificationStatus = (typeof domainVerificationStatuses)[number];
+type tEspProvider = (typeof espProviders)[number];
 
 interface DnsRecordInfo {
   type: string;
@@ -65,7 +67,5 @@ export type {
   DomainVerificationFooterLinkProps,
 };
 
-export {
-  domainVerificationStatuses,
-  espProviders,
-};
+// Re-export runtime constants for backward compatibility
+export { domainVerificationStatuses, espProviders };

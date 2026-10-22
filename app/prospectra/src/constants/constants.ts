@@ -108,7 +108,7 @@ const organizationValidationMessages = {
 
 const profileSetupCopy = {
   title: "Complete your profile",
-  subtitle: "Set up your headline and categorized skills to unlock outreach and workspace operations.",
+  subtitle: "Set up your headline and skills to unlock outreach and workspace operations.",
   fields: {
     headline: "Professional headline",
   },
@@ -132,15 +132,13 @@ const profileValidationMessages = {
 
 const skillsCopy = {
   sectionTitle: "Skills & Expertise",
-  sectionSubtitle: "Add skills with categories to power intelligent client-matching and personalized outreach.",
+  sectionSubtitle: "Add skills to power intelligent client-matching and personalized outreach.",
   inputLabel: "Add a skill",
   placeholder: "e.g. Cold Email, Lead Generation",
-  categoryLabel: "Category",
   addButton: "Add Skill",
-  suggestionsTitle: "Quick Categorized Suggestions",
-  emptySkillsText: "No skills added yet. Select a category, enter a skill name, or tap quick suggestions below.",
+  suggestionsTitle: "Quick Suggestions",
+  emptySkillsText: "No skills added yet. Enter a skill name, or tap quick suggestions below.",
   skillsCount: "skills added",
-  missingCategory: "Select or enter a category for this skill.",
 } as const;
 
 const skillsValidationMessages = {
@@ -148,7 +146,6 @@ const skillsValidationMessages = {
   skillTooShort: "Skill name must be at least 2 characters.",
   skillTooLong: "Skill name must be less than 50 characters.",
   duplicateSkill: "This skill has already been added.",
-  missingCategory: "Please choose or provide a category for this skill.",
 } as const;
 
 const homeCopy = {
@@ -162,7 +159,7 @@ const homeCopy = {
   readyTitle: "Ready to Prospect",
   readyDescription: "Your domain is authenticated and ready for cold outreach campaigns.",
   profileIncompleteTitle: "Profile Setup Required",
-  profileIncompleteDesc: "Complete your professional headline and categorized skills to unlock lead prospecting, company search, and automated outreach operations.",
+  profileIncompleteDesc: "Complete your professional headline and skills to unlock lead prospecting, company search, and automated outreach operations.",
   completeProfileButton: "Complete Profile",
   profileCompleteBadge: "Active",
   editProfile: "Edit Profile",

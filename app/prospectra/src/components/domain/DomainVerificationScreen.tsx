@@ -17,6 +17,7 @@ import { useDomainVerification } from "../../hooks/useDomainVerification";
 import type { DnsInstructions } from "../../types/domain";
 import type { NotificationVariant } from "../../types/ui";
 import { getSupabaseClient } from "../../config/supabaseClient";
+import { TABLES } from "../../constants/tables";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
 import Button from "../ui/Button";
@@ -62,7 +63,7 @@ export default function DomainVerificationScreen() {
         if (status.orgId) {
           const supabase = getSupabaseClient();
           const { data: rec } = await supabase
-            .from("domain_verifications")
+            .from(TABLES.DOMAIN_VERIFICATIONS)
             .select("domain, verification_status, dns_records")
             .eq("org_id", status.orgId)
             .maybeSingle();

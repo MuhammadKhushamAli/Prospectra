@@ -7,11 +7,11 @@ from typing import Optional
 
 @dataclass
 class Skill:
-    """A skill associated with a user."""
+    """A skill associated with an organization or user."""
     id: str
     org_id: str
-    user_id: str
     name: str
-    description: Optional[str]
-    category: str
     created_at: datetime
+    user_id: Optional[str] = None
+    description: Optional[str] = None
+

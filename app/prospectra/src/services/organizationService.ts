@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../config/supabaseClient";
+import { TABLES } from "../constants/tables";
 import type {
   Organization,
   RegisterOrganizationParams,
@@ -28,7 +29,7 @@ export async function registerOrganizationWithSupabase(
 
   // Insert organization with current user as owner and specified company finder threshold
   const { data: orgData, error: orgErr } = await supabase
-    .from("organizations")
+    .from(TABLES.ORGANIZATIONS)
     .insert({
       name: trimmedName,
       owner_id: user.id,
@@ -42,7 +43,7 @@ export async function registerOrganizationWithSupabase(
 
   // Register user as founder member
   const { error: memberErr } = await supabase
-    .from("organization_members")
+    .from(TABLES.ORGANIZATION_MEMBERS)
     .insert({
       org_id: orgData.id,
       user_id: user.id,

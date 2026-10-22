@@ -8,3 +8,5 @@ export * from "./ui";
 export * from "./theme";
 export * from "./api";
 export * from "./skills";
+export * from "./prospecting";
+export * from "./tables";

@@ -16,7 +16,7 @@ async def get_company_node(state: EmailGraphState) -> Dict[str, Any]:
         
     try:
         supabase = await get_supabase_client()
-        table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "user_companies")
+        table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
         
         response = await supabase.table(table_name).select("*").eq("id", target_company_id).single().execute()
         

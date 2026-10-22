@@ -2,6 +2,7 @@ import axios from "axios";
 
 import { getSupabaseClient } from "../config/supabaseClient";
 import { backendApiPath } from "../constants/api";
+import { TABLES } from "../constants/tables";
 import type {
   DnsInstructions,
   DnsRecordInfo,
@@ -26,7 +27,7 @@ export async function resolveUserOrgId(): Promise<string> {
 
   // 1. Check organization_members
   const { data: member } = await supabase
-    .from("organization_members")
+    .from(TABLES.ORGANIZATION_MEMBERS)
     .select("org_id")
     .eq("user_id", userId)
     .limit(1)
@@ -36,7 +37,7 @@ export async function resolveUserOrgId(): Promise<string> {
 
   // 2. Check organizations where user is owner
   const { data: org } = await supabase
-    .from("organizations")
+    .from(TABLES.ORGANIZATIONS)
     .select("id")
     .eq("owner_id", userId)
     .limit(1)

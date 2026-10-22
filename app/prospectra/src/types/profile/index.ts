@@ -1,4 +1,4 @@
-import type { ProfileSkillItem } from "./skills";
+import type { ProfileSkillItem } from "../skills";
 
 interface UserProfile {
   org_id: string;

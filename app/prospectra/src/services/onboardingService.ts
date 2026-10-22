@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../config/supabaseClient";
+import { TABLES } from "../constants/tables";
 import type { OrganizationMember, tMemberRole } from "../types/orgMembers";
 import { memberRoles } from "../types/orgMembers";
 import type { UserOnboardingStatus } from "../types/onboarding";
@@ -31,7 +32,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
 
     // 1. Evaluate Profile Completion status directly from user_profiles table (No auth metadata)
     const { data: profileRow } = await supabase
-      .from("user_profiles")
+      .from(TABLES.USER_PROFILES)
       .select("headline")
       .eq("user_id", userId)
       .not("headline", "is", null)
@@ -43,7 +44,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
 
     // 2. Organization Check (initial post-signup step)
     const { data: member } = await supabase
-      .from("organization_members")
+      .from(TABLES.ORGANIZATION_MEMBERS)
       .select("org_id, role")
       .eq("user_id", userId)
       .limit(1)
@@ -53,7 +54,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       let orgName: string | null = null;
       if (member.org_id) {
         const { data: org } = await supabase
-          .from("organizations")
+          .from(TABLES.ORGANIZATIONS)
           .select("name")
           .eq("id", member.org_id)
           .limit(1)
@@ -84,7 +85,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     if (!orgId) {
       // Check if user is owner of an organization
       const { data: org } = await supabase
-        .from("organizations")
+        .from(TABLES.ORGANIZATIONS)
         .select("id, name")
         .eq("owner_id", userId)
         .limit(1)
@@ -116,7 +117,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     // If orgName not fetched yet, fetch it
     if (!orgName) {
       const { data: org } = await supabase
-        .from("organizations")
+        .from(TABLES.ORGANIZATIONS)
         .select("name")
         .eq("id", orgId)
         .limit(1)
@@ -128,7 +129,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
 
     // 3. Domain verification status check (next step before reaching home)
     const { data: domainRec } = await supabase
-      .from("domain_verifications")
+      .from(TABLES.DOMAIN_VERIFICATIONS)
       .select("domain, verification_status")
       .eq("org_id", orgId)
       .limit(1)

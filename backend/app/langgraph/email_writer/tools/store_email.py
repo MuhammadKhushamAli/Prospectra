@@ -15,7 +15,7 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
         
     try:
         supabase = await get_supabase_client()
-        table_name = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "user_emails")
+        table_name = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "emails")
 
         user_id = getattr(user_context, "user_id", None) if not isinstance(user_context, dict) else user_context.get("user_id")
         company_name = getattr(target_company, "name", None) if not isinstance(target_company, dict) else target_company.get("name")

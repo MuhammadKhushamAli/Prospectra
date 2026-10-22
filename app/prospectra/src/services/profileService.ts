@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../config/supabaseClient";
+import { TABLES } from "../constants/tables";
 import type {
   UpdateProfileParams,
   UserProfileData,
@@ -23,7 +24,7 @@ export async function updateProfileWithSupabase(
   // 1. Resolve user's organization ID
   let orgId: string | null = null;
   const { data: member } = await supabase
-    .from("organization_members")
+    .from(TABLES.ORGANIZATION_MEMBERS)
     .select("org_id")
     .eq("user_id", user.id)
     .limit(1)
@@ -33,7 +34,7 @@ export async function updateProfileWithSupabase(
     orgId = member.org_id;
   } else {
     const { data: org } = await supabase
-      .from("organizations")
+      .from(TABLES.ORGANIZATIONS)
       .select("id")
       .eq("owner_id", user.id)
       .limit(1)
@@ -51,7 +52,7 @@ export async function updateProfileWithSupabase(
 
   // 2. Fetch existing profile to retain existing full_name if present
   const { data: existingProfile } = await supabase
-    .from("user_profiles")
+    .from(TABLES.USER_PROFILES)
     .select("full_name")
     .eq("org_id", orgId)
     .eq("user_id", user.id)
@@ -62,7 +63,7 @@ export async function updateProfileWithSupabase(
     (user.email ? user.email.split("@")[0] : "");
 
   // 3. Upsert user profile into user_profiles table (No auth metadata)
-  const { error: profileErr } = await supabase.from("user_profiles").upsert({
+  const { error: profileErr } = await supabase.from(TABLES.USER_PROFILES).upsert({
     org_id: orgId,
     user_id: user.id,
     full_name: fullName || null,
@@ -74,7 +75,7 @@ export async function updateProfileWithSupabase(
 
   // 4. Sync skills into relational skills and user_skills tables (No auth metadata)
   const { data: currentLinks } = await supabase
-    .from("user_skills")
+    .from(TABLES.USER_SKILLS)
     .select("skill_id")
     .eq("user_id", user.id);
 
@@ -89,7 +90,7 @@ export async function updateProfileWithSupabase(
 
     // Check if skill already exists in this organization
     const { data: foundSkill } = await supabase
-      .from("skills")
+      .from(TABLES.SKILLS)
       .select("id")
       .eq("org_id", orgId)
       .ilike("name", cleanName)
@@ -100,7 +101,7 @@ export async function updateProfileWithSupabase(
       skillId = foundSkill.id;
     } else {
       const { data: insertedSkill, error: insertErr } = await supabase
-        .from("skills")
+        .from(TABLES.SKILLS)
         .insert({
           org_id: orgId,
           name: cleanName,
@@ -117,7 +118,7 @@ export async function updateProfileWithSupabase(
 
     if (skillId) {
       targetSkillIds.push(skillId);
-      await supabase.from("user_skills").upsert({
+      await supabase.from(TABLES.USER_SKILLS).upsert({
         user_id: user.id,
         skill_id: skillId,
       });
@@ -130,7 +131,7 @@ export async function updateProfileWithSupabase(
   );
   if (toDelete.length > 0) {
     await supabase
-      .from("user_skills")
+      .from(TABLES.USER_SKILLS)
       .delete()
       .eq("user_id", user.id)
       .in("skill_id", toDelete);
@@ -155,7 +156,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
 
   // 1. Fetch user profile directly from user_profiles table (No auth metadata)
   const { data: profileRow } = await supabase
-    .from("user_profiles")
+    .from(TABLES.USER_PROFILES)
     .select("org_id, headline, full_name, email")
     .eq("user_id", user.id)
     .limit(1)
@@ -163,7 +164,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
 
   // 2. Fetch skills from user_skills and skills tables (No auth metadata)
   const { data: userSkillsRecords } = await supabase
-    .from("user_skills")
+    .from(TABLES.USER_SKILLS)
     .select("skill_id")
     .eq("user_id", user.id);
 
@@ -171,7 +172,7 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
   if (userSkillsRecords && userSkillsRecords.length > 0) {
     const skillIds = userSkillsRecords.map((r) => r.skill_id);
     const { data: skillsData } = await supabase
-      .from("skills")
+      .from(TABLES.SKILLS)
       .select("name")
       .in("id", skillIds);
 
