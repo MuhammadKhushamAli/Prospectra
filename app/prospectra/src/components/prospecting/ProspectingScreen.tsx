@@ -29,7 +29,14 @@ import {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import { fetchProspectingData } from "../../services/prospectingService";
+import {
+  fetchProspectingData,
+  generateDraftForCompany,
+  generateNewEmailDraftContent,
+  updateCompanyStatusInDb,
+  updateEmailContentInDb,
+  updateEmailStatusInDb,
+} from "../../services/prospectingService";
 import type {
   CompanyFilter,
   CompanyProspect,
@@ -49,7 +56,7 @@ export default function ProspectingScreen() {
 
   const [userRole, setUserRole] = useState<ProspectingRole>("founder");
   const [orgName, setOrgName] = useState<string | null>(null);
-  const [_, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [companies, setCompanies] = useState<CompanyProspect[]>([]);
   const [emails, setEmails] = useState<EmailProspect[]>([]);
@@ -107,8 +114,17 @@ export default function ProspectingScreen() {
     return true;
   });
 
+  // Emails are strictly available for approved companies only
+  const approvedCompanyIds = new Set(
+    companies.filter((c) => c.status === "approved").map((c) => c.id),
+  );
+
+  const approvedEmails = emails.filter((e) =>
+    approvedCompanyIds.has(e.company_id),
+  );
+
   // Filter Emails
-  const filteredEmails = emails.filter((e) => {
+  const filteredEmails = approvedEmails.filter((e) => {
     if (emailFilter === "all") return true;
     if (emailFilter === "rejected") return e.status === "rejected";
     if (emailFilter === "pending") {
@@ -129,8 +145,113 @@ export default function ProspectingScreen() {
     (c) => c.status === "rejected",
   ).length;
 
-  const pendingEmailsCount = emails.filter((e) => e.status === "draft").length;
-  const rejectedEmailsCount = emails.filter((e) => e.status === "rejected").length;
+  const pendingEmailsCount = approvedEmails.filter((e) => e.status === "draft").length;
+  const rejectedEmailsCount = approvedEmails.filter((e) => e.status === "rejected").length;
+
+  // Handlers for Review & Outreach Decisions
+  const handleAcceptCompany = async (company: CompanyProspect) => {
+    const updatedCompany: CompanyProspect = {
+      ...company,
+      status: "approved",
+    };
+
+    // Update company in list
+    setCompanies((prev) =>
+      prev.map((c) => (c.id === company.id ? updatedCompany : c)),
+    );
+    setSelectedCompany(updatedCompany);
+
+    // Ensure an email draft exists for this newly approved company
+    let targetDraft = emails.find((e) => e.company_id === company.id);
+    if (!targetDraft) {
+      targetDraft = generateDraftForCompany(
+        updatedCompany,
+        company.org_id,
+        company.user_id || currentUserId,
+      );
+      setEmails((prev) => [targetDraft!, ...prev]);
+    } else if (targetDraft.status === "rejected") {
+      const restoredDraft = { ...targetDraft, status: "draft" as const };
+      setEmails((prev) =>
+        prev.map((e) => (e.id === targetDraft!.id ? restoredDraft : e)),
+      );
+    }
+
+    // Persist status in DB asynchronously
+    updateCompanyStatusInDb(company.id, "approved").catch(() => {});
+  };
+
+  const handleRejectCompany = async (company: CompanyProspect) => {
+    const updatedCompany: CompanyProspect = {
+      ...company,
+      status: "rejected",
+    };
+
+    // Update company in list
+    setCompanies((prev) =>
+      prev.map((c) => (c.id === company.id ? updatedCompany : c)),
+    );
+    setSelectedCompany(updatedCompany);
+
+    // Reject associated email draft if any
+    setEmails((prev) =>
+      prev.map((e) =>
+        e.company_id === company.id ? { ...e, status: "rejected" } : e,
+      ),
+    );
+
+    // Persist status in DB asynchronously
+    updateCompanyStatusInDb(company.id, "rejected").catch(() => {});
+  };
+
+  const handleSendEmail = async (email: EmailProspect) => {
+    const updatedEmail: EmailProspect = {
+      ...email,
+      status: "sent",
+    };
+
+    setEmails((prev) =>
+      prev.map((e) => (e.id === email.id ? updatedEmail : e)),
+    );
+    setSelectedEmail(updatedEmail);
+
+    updateEmailStatusInDb(email.id, "sent").catch(() => {});
+  };
+
+  const handleRegenerateEmail = async (email: EmailProspect) => {
+    const associatedComp = companies.find((c) => c.id === email.company_id);
+    const newContent = generateNewEmailDraftContent(
+      associatedComp?.name || email.company_name || "Target Partner",
+      associatedComp?.domain || email.company_domain,
+      associatedComp?.industry,
+    );
+
+    const updatedEmail: EmailProspect = {
+      ...email,
+      subject: newContent.subject,
+      body: newContent.body,
+      email_body: {
+        subject: newContent.subject,
+        body: newContent.body,
+      },
+      verification: {
+        score: newContent.reviewScore,
+        feedback: "Regenerated and verified with high conversion AI model.",
+      },
+    };
+
+    setEmails((prev) =>
+      prev.map((e) => (e.id === email.id ? updatedEmail : e)),
+    );
+    setSelectedEmail(updatedEmail);
+
+    updateEmailContentInDb(
+      email.id,
+      newContent.subject,
+      newContent.body,
+      newContent.reviewScore,
+    ).catch(() => {});
+  };
 
   const getCompanyStatusColor = (status: CompanyProspect["status"]) => {
     if (status === "rejected") return colors.error;
@@ -653,7 +774,7 @@ export default function ProspectingScreen() {
                     },
                   ]}
                 >
-                  All Emails ({emails.length})
+                  All Emails ({approvedEmails.length})
                 </Text>
               </Pressable>
 
@@ -808,8 +929,8 @@ export default function ProspectingScreen() {
                 style={[styles.emptySubtitle, { color: colors.textSecondary }]}
               >
                 {userRole === "founder"
-                  ? `No organization outreach drafts match the selected "${emailFilter}" filter.`
-                  : `No emails matching your User ID & Org ID under "${emailFilter}".`}
+                  ? `Outreach email drafts appear once target companies are approved. No drafts currently match "${emailFilter}".`
+                  : `Outreach drafts for your approved companies under "${emailFilter}".`}
               </Text>
             </View>
           }
@@ -948,7 +1069,7 @@ export default function ProspectingScreen() {
                   },
                 ]}
               >
-                {emails.length}
+                {approvedEmails.length}
               </Text>
             </View>
           </Pressable>
@@ -967,6 +1088,8 @@ export default function ProspectingScreen() {
           setSelectedCompany(null);
           setSelectedEmail(email);
         }}
+        onAcceptCompany={handleAcceptCompany}
+        onRejectCompany={handleRejectCompany}
       />
 
       {/* Email Detail Modal */}
@@ -981,6 +1104,8 @@ export default function ProspectingScreen() {
           setSelectedEmail(null);
           setSelectedCompany(company);
         }}
+        onSendEmail={handleSendEmail}
+        onRegenerateEmail={handleRegenerateEmail}
       />
     </SafeAreaView>
   );

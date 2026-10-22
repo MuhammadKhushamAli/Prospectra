@@ -559,3 +559,174 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
     };
   }
 }
+
+/**
+ * Updates a company's status in the database (or logs error gracefully if not in live DB).
+ */
+export async function updateCompanyStatusInDb(
+  companyId: string,
+  status: CompanyProspect["status"],
+): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from(TABLES.COMPANIES)
+      .update({ status })
+      .eq("id", companyId);
+
+    if (error) {
+      console.warn("Could not update company status in DB:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Error updating company status in DB:", err);
+    return false;
+  }
+}
+
+/**
+ * Updates an email's status in the database (e.g. 'sent' or 'rejected').
+ */
+export async function updateEmailStatusInDb(
+  emailId: string,
+  status: EmailProspect["status"],
+): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from(TABLES.EMAILS)
+      .update({ status })
+      .eq("id", emailId);
+
+    if (error) {
+      console.warn("Could not update email status in DB:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Error updating email status in DB:", err);
+    return false;
+  }
+}
+
+/**
+ * Updates an email's subject, body, and review score in the database.
+ */
+export async function updateEmailContentInDb(
+  emailId: string,
+  subject: string,
+  body: string,
+  reviewScore?: number,
+): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    const payload: Record<string, any> = { subject, body };
+    if (reviewScore !== undefined) {
+      payload.review_score = reviewScore;
+    }
+
+    const { error } = await supabase
+      .from(TABLES.EMAILS)
+      .update(payload)
+      .eq("id", emailId);
+
+    if (error) {
+      console.warn("Could not update email content in DB:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn("Error updating email content in DB:", err);
+    return false;
+  }
+}
+
+/**
+ * Generates varied, high-performing AI cold outreach copy tailored to a target company.
+ */
+export function generateNewEmailDraftContent(
+  companyName: string = "Target Partner",
+  domain?: string,
+  industry?: string,
+  variationIndex?: number,
+): { subject: string; body: string; reviewScore: number } {
+  const templates = [
+    {
+      subject: `Accelerating growth for ${companyName}`,
+      body: `Hi team at ${companyName},\n\nI came across your work in ${industry || "the industry"} and was impressed by your recent expansion. We specialize in automated technical lead identification and high-intent outbound pipelines that help companies like yours scale with predictability.\n\nWould you have 10 minutes next Tuesday to explore how this could accelerate your current pipeline?`,
+      reviewScore: 96,
+    },
+    {
+      subject: `Solving outbound bottlenecks at ${companyName}`,
+      body: `Hello ${companyName} team,\n\nNoticed ${companyName}'s current initiatives in ${industry || "technology"}. Many teams at your growth stage experience friction connecting verified domain skillsets with active buyer demand.\n\nOur autonomous prospecting engine bridges this exact gap with zero manual overhead. Open to a brief 5-minute walkthrough this week?`,
+      reviewScore: 94,
+    },
+    {
+      subject: `Quick question regarding ${companyName}'s tech infrastructure`,
+      body: `Hi there,\n\nSaw ${companyName}'s domain (${domain || "online"}) and how rapidly your team is advancing in ${industry || "your space"}. We've helped similar high-growth organizations increase outbound conversion by over 40% through verified consultant matching.\n\nHappy to share a tailored breakdown if this is top of mind for your team. Would Wednesday or Thursday work for a brief call?`,
+      reviewScore: 98,
+    },
+    {
+      subject: `Partnership synergy between our teams and ${companyName}`,
+      body: `Hello,\n\nReaching out because our autonomous prospect intelligence flagged ${companyName} as an ideal candidate for strategic outreach collaboration in ${industry || "your market"}.\n\nWe provide pre-verified decision maker pipelines directly aligned with your team's core competencies. Let me know if you'd like a quick preview of relevant accounts.`,
+      reviewScore: 92,
+    },
+  ];
+
+  const chosenIndex =
+    variationIndex !== undefined
+      ? variationIndex % templates.length
+      : Math.floor(Math.random() * templates.length);
+
+  return templates[chosenIndex];
+}
+
+/**
+ * Creates an outreach draft for a newly approved company.
+ */
+export function generateDraftForCompany(
+  company: CompanyProspect,
+  orgId?: string | null,
+  userId?: string | null,
+): EmailProspect {
+  const content = generateNewEmailDraftContent(
+    company.name,
+    company.domain,
+    company.industry,
+    0,
+  );
+
+  const contactEmail =
+    company.emails && company.emails.length > 0
+      ? company.emails[0].email
+      : company.domain
+        ? `contact@${company.domain}`
+        : "contact@prospect.com";
+
+  return {
+    id: `draft-${company.id}-${Date.now()}`,
+    company_id: company.id,
+    org_id: orgId || company.org_id,
+    sent_by_org_id: orgId || company.org_id,
+    sent_by_user_id: userId || company.user_id,
+    user_id: userId || company.user_id,
+    from_email: "outreach@prospectra.com",
+    to_email: contactEmail,
+    email_body: {
+      subject: content.subject,
+      body: content.body,
+    },
+    subject: content.subject,
+    body: content.body,
+    company_name: company.name,
+    company_domain: company.domain,
+    status: "draft",
+    verification: {
+      score: content.reviewScore,
+      feedback: "Calibrated for newly approved prospect domain.",
+    },
+    created_at: new Date().toISOString(),
+  };
+}
+

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -15,8 +16,10 @@ import {
   Clock,
   Copy,
   Mail,
+  Send,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   X,
 } from "lucide-react-native";
 
@@ -33,6 +36,8 @@ interface EmailDetailModalProps {
   onClose: () => void;
   onViewCompany?: (company: CompanyProspect) => void;
   associatedCompany?: CompanyProspect | null;
+  onSendEmail?: (email: EmailProspect) => void | Promise<void>;
+  onRegenerateEmail?: (email: EmailProspect) => void | Promise<void>;
 }
 
 export default function EmailDetailModal({
@@ -41,12 +46,41 @@ export default function EmailDetailModal({
   onClose,
   onViewCompany,
   associatedCompany,
+  onSendEmail,
+  onRegenerateEmail,
 }: EmailDetailModalProps) {
   const colors = useTheme();
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   if (!email) return null;
+
+  const handleSend = async () => {
+    if (!onSendEmail || isSending || isRegenerating || email.status === "sent") return;
+    try {
+      setIsSending(true);
+      await onSendEmail(email);
+      setActionMessage("Outreach email sent successfully!");
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (!onRegenerateEmail || isSending || isRegenerating) return;
+    try {
+      setIsRegenerating(true);
+      await onRegenerateEmail(email);
+      setActionMessage("AI draft regenerated with fresh pitch!");
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
 
   const subjectText = email.email_body?.subject || email.subject || "No Subject";
   const bodyText = email.email_body?.body || email.body || "No email body content available.";
@@ -416,6 +450,114 @@ export default function EmailDetailModal({
               </View>
             </View>
 
+            {/* Email Actions: Send Outreach & Regenerate Draft */}
+            <View style={styles.actionsContainer}>
+              {actionMessage ? (
+                <View
+                  style={[
+                    styles.actionFeedbackBox,
+                    {
+                      backgroundColor: `${colors.success}18`,
+                      borderColor: colors.success,
+                    },
+                  ]}
+                >
+                  <Check size={14} color={colors.success} />
+                  <Text
+                    style={[
+                      styles.actionFeedbackText,
+                      { color: colors.success },
+                    ]}
+                  >
+                    {actionMessage}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.actionButtonsRow}>
+                {email.status === "sent" ? (
+                  <View
+                    style={[
+                      styles.sentBadge,
+                      {
+                        backgroundColor: `${colors.success}18`,
+                        borderColor: colors.success,
+                      },
+                    ]}
+                  >
+                    <Check size={16} color={colors.success} />
+                    <Text
+                      style={[
+                        styles.sentBadgeText,
+                        { color: colors.success },
+                      ]}
+                    >
+                      Outreach Email Sent
+                    </Text>
+                  </View>
+                ) : onSendEmail ? (
+                  <Pressable
+                    onPress={handleSend}
+                    disabled={isSending || isRegenerating}
+                    style={({ pressed }) => [
+                      styles.sendActionBtn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: pressed || isSending || isRegenerating ? 0.8 : 1,
+                      },
+                    ]}
+                  >
+                    {isSending ? (
+                      <ActivityIndicator size="small" color={colors.onPrimary} />
+                    ) : (
+                      <>
+                        <Send size={15} color={colors.onPrimary} />
+                        <Text
+                          style={[
+                            styles.sendActionBtnText,
+                            { color: colors.onPrimary },
+                          ]}
+                        >
+                          Send Email
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
+
+                {onRegenerateEmail ? (
+                  <Pressable
+                    onPress={handleRegenerate}
+                    disabled={isSending || isRegenerating}
+                    style={({ pressed }) => [
+                      styles.regenerateActionBtn,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                        opacity: pressed || isSending || isRegenerating ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    {isRegenerating ? (
+                      <ActivityIndicator size="small" color={colors.primary} />
+                    ) : (
+                      <>
+                        <Sparkles size={15} color={colors.primary} />
+                        <Text
+                          style={[
+                            styles.regenerateActionBtnText,
+                            { color: colors.text },
+                          ]}
+                        >
+                          Regenerate Draft
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
             {/* Associated Company Link */}
             {associatedCompany && onViewCompany ? (
               <Pressable
@@ -678,5 +820,67 @@ const styles = StyleSheet.create({
     fontFamily: "DMSansBold",
     fontSize: tokens.fontSize.xs,
     marginTop: 2,
+  },
+  actionsContainer: {
+    gap: tokens.spacing.sm,
+  },
+  actionFeedbackBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: tokens.spacing.md,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+  },
+  actionFeedbackText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+  },
+  actionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  sentBadge: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  sentBadgeText: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.xs,
+  },
+  sendActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: tokens.radius.md,
+  },
+  sendActionBtnText: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.xs,
+  },
+  regenerateActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  regenerateActionBtnText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
   },
 });

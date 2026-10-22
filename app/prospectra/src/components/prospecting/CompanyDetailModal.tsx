@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -39,6 +40,8 @@ interface CompanyDetailModalProps {
   onClose: () => void;
   onViewEmail?: (email: EmailProspect) => void;
   associatedEmail?: EmailProspect | null;
+  onAcceptCompany?: (company: CompanyProspect) => void | Promise<void>;
+  onRejectCompany?: (company: CompanyProspect) => void | Promise<void>;
 }
 
 export default function CompanyDetailModal({
@@ -47,11 +50,41 @@ export default function CompanyDetailModal({
   onClose,
   onViewEmail,
   associatedEmail,
+  onAcceptCompany,
+  onRejectCompany,
 }: CompanyDetailModalProps) {
   const colors = useTheme();
   const [copiedDomain, setCopiedDomain] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
 
   if (!company) return null;
+
+  const isPending =
+    company.status === "pending_review" ||
+    company.status === "discovered" ||
+    company.status === "enriched" ||
+    company.status === "pending_send_approval";
+
+  const handleAccept = async () => {
+    if (!onAcceptCompany || isAccepting || isRejecting) return;
+    try {
+      setIsAccepting(true);
+      await onAcceptCompany(company);
+    } finally {
+      setIsAccepting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!onRejectCompany || isAccepting || isRejecting) return;
+    try {
+      setIsRejecting(true);
+      await onRejectCompany(company);
+    } finally {
+      setIsRejecting(false);
+    }
+  };
 
   const handleCopyDomain = async () => {
     if (!company.domain) return;
@@ -327,9 +360,113 @@ export default function CompanyDetailModal({
               </View>
             ) : null}
 
-            {/* Quick Actions (Outreach Draft, Website) */}
+            {/* Review Decision: Accept or Reject (only visible for pending companies) */}
+            {isPending && (onAcceptCompany || onRejectCompany) ? (
+              <View
+                style={[
+                  styles.card,
+                  styles.decisionCard,
+                  {
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: `${colors.primary}50`,
+                  },
+                ]}
+              >
+                <View style={styles.decisionHeader}>
+                  <View
+                    style={[
+                      styles.decisionHeaderIcon,
+                      {
+                        backgroundColor: `${colors.primary}18`,
+                        borderColor: `${colors.primary}30`,
+                      },
+                    ]}
+                  >
+                    <Sparkles size={16} color={colors.primary} />
+                  </View>
+                  <View style={styles.decisionHeaderTextWrap}>
+                    <Text style={[styles.decisionTitle, { color: colors.text }]}>
+                      Review Decision
+                    </Text>
+                    <Text
+                      style={[
+                        styles.decisionSubtitle,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Accepting approves this prospect and enables outreach drafting.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.decisionButtonsRow}>
+                  {onAcceptCompany ? (
+                    <Pressable
+                      onPress={handleAccept}
+                      disabled={isAccepting || isRejecting}
+                      style={({ pressed }) => [
+                        styles.acceptBtn,
+                        {
+                          backgroundColor: colors.success,
+                          opacity: pressed || isAccepting || isRejecting ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      {isAccepting ? (
+                        <ActivityIndicator size="small" color={colors.onPrimary} />
+                      ) : (
+                        <>
+                          <Check size={16} color={colors.onPrimary} />
+                          <Text
+                            style={[
+                              styles.decisionBtnText,
+                              { color: colors.onPrimary },
+                            ]}
+                          >
+                            Accept Company
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : null}
+
+                  {onRejectCompany ? (
+                    <Pressable
+                      onPress={handleReject}
+                      disabled={isAccepting || isRejecting}
+                      style={({ pressed }) => [
+                        styles.rejectBtn,
+                        {
+                          backgroundColor: `${colors.error}15`,
+                          borderColor: colors.error,
+                          opacity: pressed || isAccepting || isRejecting ? 0.8 : 1,
+                        },
+                      ]}
+                    >
+                      {isRejecting ? (
+                        <ActivityIndicator size="small" color={colors.error} />
+                      ) : (
+                        <>
+                          <X size={16} color={colors.error} />
+                          <Text
+                            style={[
+                              styles.decisionBtnText,
+                              { color: colors.error },
+                            ]}
+                          >
+                            Reject
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ) : null}
+
+            {/* Quick Actions (Outreach Draft only for approved companies, Website) */}
             <View style={styles.actionsContainer}>
-              {associatedEmail && onViewEmail ? (
+              {company.status === "approved" && associatedEmail && onViewEmail ? (
                 <Pressable
                   onPress={() => onViewEmail(associatedEmail)}
                   style={({ pressed }) => [
@@ -823,6 +960,65 @@ const styles = StyleSheet.create({
   },
   contactEmail: {
     fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+  },
+  decisionCard: {
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
+  },
+  decisionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  decisionHeaderIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  decisionHeaderTextWrap: {
+    flex: 1,
+  },
+  decisionTitle: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.sm,
+  },
+  decisionSubtitle: {
+    fontFamily: "DMSans",
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  decisionButtonsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+    marginTop: 4,
+  },
+  acceptBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: tokens.radius.md,
+  },
+  rejectBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  decisionBtnText: {
+    fontFamily: "DMSansBold",
     fontSize: tokens.fontSize.xs,
   },
 });
