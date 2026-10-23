@@ -62,12 +62,12 @@ export default function AuthScreen() {
     return () => sub.remove();
   }, []);
 
-  // When user opens auth screen with an existing matched token, evaluate and redirect
+  // When user opens auth screen with an existing matched session, redirect only if already fully onboarded
   useEffect(() => {
     let isMounted = true;
     checkUserOnboardingStatus().then((status) => {
       if (isMounted && status.isAuthenticated) {
-        router.replace(status.targetRoute as any);
+        router.replace(status.targetRoute);
       }
     });
     return () => {

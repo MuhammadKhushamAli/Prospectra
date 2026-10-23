@@ -1,22 +1,72 @@
-"""LangGraph node for searching companies via Apollo and Tavily."""
-
+import asyncio
+from datetime import datetime
+import os
+from urllib.parse import urlparse
 import uuid
 from typing import Any, Dict, List
 
 from ..state.state import GraphState
 from app.models.company import Company
 from app.models.search_progress import SearchProgress
-from datetime import datetime
 from app.services.apollo_companies import find_apollo_companies
-from app.services.tavily import search_tavily
-
-
-import asyncio
-import os
+from app.services.tavily import filter_and_clean_tavily_results, search_tavily
 from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
 from app.services.supabase import get_supabase_client
 
 SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
+
+
+def is_valid_uuid(val: Any) -> bool:
+    if not val or not isinstance(val, (str, uuid.UUID)):
+        return False
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
+async def _ensure_skill_target_id(supabase: Any, org_id: str, user_context: Any) -> str:
+    """Ensure an active skill_target exists for the organization so foreign keys are satisfied."""
+    try:
+        res = await (
+            supabase.table("skill_targets")
+            .select("id")
+            .eq("org_id", str(org_id))
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        if res.data and len(res.data) > 0:
+            return res.data[0]["id"]
+
+        skills: List[str] = []
+        if user_context:
+            skills_data = getattr(user_context, "skills", None)
+            if skills_data is None and isinstance(user_context, dict):
+                skills_data = user_context.get("skills")
+            if skills_data:
+                for s in skills_data:
+                    name = getattr(s, "name", None) or (s.get("name") if isinstance(s, dict) else None)
+                    if name:
+                        skills.append(name)
+
+        new_res = await (
+            supabase.table("skill_targets")
+            .insert({
+                "org_id": str(org_id),
+                "target_profile": f"Target profiles for {', '.join(skills[:3])}" if skills else "Default Target Profile",
+                "search_keywords": skills,
+                "is_active": True,
+            })
+            .execute()
+        )
+        if new_res.data and len(new_res.data) > 0:
+            return new_res.data[0]["id"]
+    except Exception as e:
+        print(f"Warning: Failed to ensure skill_target for org {org_id}: {str(e)}")
+    return ""
+
 
 async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     """Node that executes Apollo and Tavily searches and parses results into Company objects."""
@@ -25,25 +75,26 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     if not search_prompt:
         raise ValueError("search_prompt is missing from the state.")
 
-    org_id = getattr(user_context, "org_id", "") if user_context and not isinstance(user_context, dict) else (user_context or {}).get("org_id", "")
+    org_id = (
+        getattr(user_context, "org_id", "")
+        if user_context and not isinstance(user_context, dict)
+        else (user_context or {}).get("org_id", "")
+    )
+    if not org_id:
+        org_id = state.get("org_id", "")
 
     apollo_prompt = search_prompt.apollo
     tavily_prompt = search_prompt.tavily
-    
+
     searched_companies: List[Company] = []
     search_progress: List[SearchProgress] = []
     errors: List[str] = state.get("errors", [])
-    
-    skill_target_id = state.get("skill_target_id", "")
 
-    def is_valid_uuid(val: Any) -> bool:
-        if not val or not isinstance(val, (str, uuid.UUID)):
-            return False
-        try:
-            uuid.UUID(str(val))
-            return True
-        except (ValueError, TypeError, AttributeError):
-            return False
+    supabase = await get_supabase_client()
+
+    skill_target_id = state.get("skill_target_id", "")
+    if not is_valid_uuid(skill_target_id) and is_valid_uuid(org_id):
+        skill_target_id = await _ensure_skill_target_id(supabase, str(org_id), user_context)
 
     can_track_progress = is_valid_uuid(org_id) and is_valid_uuid(skill_target_id)
     last_page_apollo = 0
@@ -51,9 +102,14 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
 
     if can_track_progress:
         try:
-            supabase = await get_supabase_client()
-            response = await supabase.table(SEARCH_PROGRESS_TABLE).select("source, last_page_fetched").eq("org_id", str(org_id)).eq("skill_target_id", str(skill_target_id)).execute()
-            for record in response.data:
+            response = await (
+                supabase.table(SEARCH_PROGRESS_TABLE)
+                .select("source, last_page_fetched")
+                .eq("org_id", str(org_id))
+                .eq("skill_target_id", str(skill_target_id))
+                .execute()
+            )
+            for record in response.data or []:
                 if record.get("source") == "apollo":
                     last_page_apollo = record.get("last_page_fetched", 0)
                 elif record.get("source") == "tavily":
@@ -71,12 +127,14 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             organizations = data.get("organizations", [])
 
             for org in organizations:
+                raw_domain = org.get("primary_domain") or ""
+                website_url = org.get("website_url") or ""
                 company = Company(
                     id=str(uuid.uuid4()),
                     org_id=str(org_id),
                     name=org.get("name", "Unknown"),
-                    domain=org.get("primary_domain", ""),
-                    website=org.get("website_url"),
+                    domain=raw_domain.lower() if raw_domain else "",
+                    website=website_url if website_url else (f"https://{raw_domain}" if raw_domain else None),
                     linkedin_url=org.get("linkedin_url"),
                     industry=org.get("industry", ""),
                     size=str(org.get("estimated_num_employees", "")) if org.get("estimated_num_employees") else "",
@@ -92,11 +150,12 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
                         skill_target_id=str(skill_target_id),
                         last_page_fetched=current_apollo_page,
                         last_fetched_at=datetime.utcnow(),
-                        source="apollo"
+                        source="apollo",
                     )
                 )
         except Exception as e:
             errors.append(f"Apollo API error: {str(e)}")
+            print(f"Apollo API error: {str(e)}")
 
     # 2. Call Tavily API
     if tavily_prompt:
@@ -105,18 +164,19 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
 
             data = await search_tavily(tavily_prompt)
             results = data.get("results", [])
+            cleaned_companies = filter_and_clean_tavily_results(results)
 
-            for res in results:
+            for item in cleaned_companies:
                 company = Company(
                     id=str(uuid.uuid4()),
                     org_id=str(org_id),
-                    name=res.get("title", "Unknown"),
-                    domain=res.get("url", ""),
-                    website=res.get("url"),
+                    name=item["name"],
+                    domain=item["domain"],
+                    website=item["website"],
                     industry="",
                     size="",
                     source="tavily",
-                    raw_signals=res,
+                    raw_signals=item["raw_signals"],
                 )
                 searched_companies.append(company)
 
@@ -127,16 +187,20 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
                         skill_target_id=str(skill_target_id),
                         last_page_fetched=current_tavily_page,
                         last_fetched_at=datetime.utcnow(),
-                        source="tavily"
+                        source="tavily",
                     )
                 )
         except Exception as e:
             errors.append(f"Tavily API error: {str(e)}")
+            print(f"Tavily API error: {str(e)}")
 
+    # Persist progress to Supabase and await completion
     if search_progress:
-        asyncio.create_task(store_search_progress(search_progress))
+        await store_search_progress(search_progress)
 
     return {
         "searched_companies": searched_companies,
-        "errors": errors
+        "skill_target_id": skill_target_id,
+        "errors": errors,
     }
+

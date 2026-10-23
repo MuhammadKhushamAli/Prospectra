@@ -20,4 +20,5 @@ class GraphState(TypedDict, total=False):
     accepted_companies: List[Company]
     rejected_companies: List[Company]
     search_feedback: str
+    skill_target_id: str
     errors: List[str]

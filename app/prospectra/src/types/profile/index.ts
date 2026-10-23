@@ -12,6 +12,7 @@ interface UserProfile {
 interface UpdateProfileParams {
   headline: string;
   skills?: string[];
+  fullName?: string;
 }
 
 interface UserProfileData {

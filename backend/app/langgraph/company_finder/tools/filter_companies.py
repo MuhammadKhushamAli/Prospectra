@@ -20,6 +20,11 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
             
         auth_info = company_auth_scores.get(company.name)
         if auth_info:
+            if not isinstance(company.raw_signals, dict):
+                company.raw_signals = {}
+            company.raw_signals["auth_score"] = auth_info.score
+            company.raw_signals["auth_feedback"] = auth_info.feedback
+
             if auth_info.score >= 70:
                 accepted_companies.append(company)
             else:

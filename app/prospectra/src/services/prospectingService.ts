@@ -74,7 +74,7 @@ export function mapEmailRow(
 }
 
 export function subscribeToProspectingRealtime(
-  orgId: string | null,
+  orgIdOrGetter: string | null | (() => string | null),
   callbacks: {
     onCompanyChange: (
       company: CompanyProspect,
@@ -87,7 +87,11 @@ export function subscribeToProspectingRealtime(
   },
 ): () => void {
   const supabase = getSupabaseClient();
-  const channelName = `prospecting-live-${orgId || "all"}-${Date.now()}`;
+  const channelName = `prospecting-live-feed-${Date.now()}`;
+
+  const getTargetOrgId = () => {
+    return typeof orgIdOrGetter === "function" ? orgIdOrGetter() : orgIdOrGetter;
+  };
 
   const channel = supabase
     .channel(channelName)
@@ -97,12 +101,15 @@ export function subscribeToProspectingRealtime(
         event: "*",
         schema: "public",
         table: TABLES.COMPANIES,
-        ...(orgId ? { filter: `org_id=eq.${orgId}` } : {}),
       },
       (payload) => {
         const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
         const row: any = eventType === "DELETE" ? payload.old : payload.new;
         if (row && row.id) {
+          const currentOrgId = getTargetOrgId();
+          if (currentOrgId && row.org_id && row.org_id !== currentOrgId) {
+            return;
+          }
           callbacks.onCompanyChange(mapCompanyRow(row), eventType);
         }
       },
@@ -113,17 +120,24 @@ export function subscribeToProspectingRealtime(
         event: "*",
         schema: "public",
         table: TABLES.EMAILS,
-        ...(orgId ? { filter: `sent_by_org_id=eq.${orgId}` } : {}),
       },
       (payload) => {
         const eventType = payload.eventType as "INSERT" | "UPDATE" | "DELETE";
         const row: any = eventType === "DELETE" ? payload.old : payload.new;
         if (row && row.id) {
+          const currentOrgId = getTargetOrgId();
+          if (currentOrgId && row.sent_by_org_id && row.sent_by_org_id !== currentOrgId) {
+            return;
+          }
           callbacks.onEmailChange(mapEmailRow(row), eventType);
         }
       },
     )
-    .subscribe();
+    .subscribe((status, err) => {
+      if (status === "CHANNEL_ERROR") {
+        console.warn("Realtime subscription channel error:", err?.message || err);
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);

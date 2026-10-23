@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -101,21 +101,26 @@ export default function ProspectingScreen() {
     }, [loadData]),
   );
 
+  const orgIdRef = useRef<string | null>(orgId);
+  useEffect(() => {
+    orgIdRef.current = orgId;
+  }, [orgId]);
+
   // Subscribe to Supabase Realtime changes on companies and emails
   useEffect(() => {
-    const unsubscribe = subscribeToProspectingRealtime(orgId, {
+    const unsubscribe = subscribeToProspectingRealtime(() => orgIdRef.current, {
       onCompanyChange: (changedCompany, eventType) => {
         setCompanies((prev) => {
           if (eventType === "DELETE") {
             return prev.filter((c) => c.id !== changedCompany.id);
           }
-          if (eventType === "INSERT") {
-            if (prev.some((c) => c.id === changedCompany.id)) return prev;
-            return [changedCompany, ...prev];
+          const exists = prev.some((c) => c.id === changedCompany.id);
+          if (exists) {
+            return prev.map((c) =>
+              c.id === changedCompany.id ? changedCompany : c,
+            );
           }
-          return prev.map((c) =>
-            c.id === changedCompany.id ? changedCompany : c,
-          );
+          return [changedCompany, ...prev];
         });
 
         setSelectedCompany((prev) => {
@@ -129,13 +134,13 @@ export default function ProspectingScreen() {
           if (eventType === "DELETE") {
             return prev.filter((e) => e.id !== changedEmail.id);
           }
-          if (eventType === "INSERT") {
-            if (prev.some((e) => e.id === changedEmail.id)) return prev;
-            return [changedEmail, ...prev];
+          const exists = prev.some((e) => e.id === changedEmail.id);
+          if (exists) {
+            return prev.map((e) =>
+              e.id === changedEmail.id ? changedEmail : e,
+            );
           }
-          return prev.map((e) =>
-            e.id === changedEmail.id ? changedEmail : e,
-          );
+          return [changedEmail, ...prev];
         });
 
         setSelectedEmail((prev) => {
@@ -149,7 +154,7 @@ export default function ProspectingScreen() {
     return () => {
       unsubscribe();
     };
-  }, [orgId]);
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -161,18 +166,35 @@ export default function ProspectingScreen() {
     try {
       setIsFindingCompanies(true);
       setFinderFeedback("Initiating autonomous prospect search...");
-      const res = await initiateCompanyFinder();
+      const res = await initiateCompanyFinder(undefined, orgId || undefined);
       if (res.status === "threshold_met") {
         setFinderFeedback("Threshold met! Target pending prospects are already available.");
+        setIsFindingCompanies(false);
+        setTimeout(() => setFinderFeedback(null), 4000);
       } else {
         setFinderFeedback("Company finder active! Discovered prospects will appear in real time.");
+        // Active discovery poll safeguard: checks every 4s for up to 28s while agent is discovering
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          try {
+            const freshData = await fetchProspectingData();
+            setCompanies(freshData.companies);
+            setEmails(freshData.emails);
+          } catch {
+            // silent catch during active poll
+          }
+          if (pollCount >= 7) {
+            clearInterval(pollInterval);
+            setIsFindingCompanies(false);
+            setFinderFeedback(null);
+          }
+        }, 4000);
       }
-      setTimeout(() => setFinderFeedback(null), 5000);
     } catch {
       setFinderFeedback("Company finder started. Monitoring real-time updates...");
-      setTimeout(() => setFinderFeedback(null), 4000);
-    } finally {
       setIsFindingCompanies(false);
+      setTimeout(() => setFinderFeedback(null), 4000);
     }
   };
 

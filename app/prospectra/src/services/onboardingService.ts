@@ -9,10 +9,11 @@ export type { UserOnboardingStatus };
 export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus> {
   try {
     const supabase = getSupabaseClient();
-    const { data: sessionData, error: sessionErr } =
-      await supabase.auth.getSession();
+    // Validate user against server to prevent stale/orphaned sessions from bypassing auth
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
 
-    if (sessionErr || !sessionData?.session?.user) {
+    if (userErr || !userData?.user) {
+      await supabase.auth.signOut().catch(() => {});
       return {
         isAuthenticated: false,
         hasProfile: false,
@@ -27,7 +28,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       };
     }
 
-    const user = sessionData.session.user;
+    const user = userData.user;
     const userId = user.id;
 
     // 1. Evaluate Profile Completion status directly from user_profiles table (No auth metadata)

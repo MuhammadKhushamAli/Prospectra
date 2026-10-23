@@ -59,14 +59,15 @@ export async function updateProfileWithSupabase(
     .maybeSingle();
 
   const fullName =
+    params.fullName?.trim() ||
     existingProfile?.full_name ||
-    (user.email ? user.email.split("@")[0] : "");
+    null;
 
-  // 3. Upsert user profile into user_profiles table (No auth metadata)
+  // 3. Upsert user profile into user_profiles table
   const { error: profileErr } = await supabase.from(TABLES.USER_PROFILES).upsert({
     org_id: orgId,
     user_id: user.id,
-    full_name: fullName || null,
+    full_name: fullName,
     headline: trimmedHeadline,
     email: user.email || null,
   });
@@ -185,7 +186,8 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
     return {
       userId: user.id,
       fullName:
-        profileRow.full_name || (user.email ? user.email.split("@")[0] : ""),
+        profileRow.full_name ||
+        "",
       email: profileRow.email || user.email || "",
       headline: profileRow.headline || "",
       skills,

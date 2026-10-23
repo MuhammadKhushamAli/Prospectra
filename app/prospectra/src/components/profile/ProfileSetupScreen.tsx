@@ -57,9 +57,12 @@ export default function ProfileSetupScreen() {
             setInitialSkills(profile.skills || []);
           } else if (isMounted) {
             const supabase = getSupabaseClient();
-            const { data: sessionData } = await supabase.auth.getSession();
-            const email = sessionData?.session?.user?.email || "";
-            setUserName(email.split("@")[0] || "");
+            const { data: userData } = await supabase.auth.getUser();
+            const fullName =
+              userData?.user?.user_metadata?.full_name ||
+              userData?.user?.user_metadata?.name ||
+              "";
+            setUserName(fullName);
           }
         } catch {
           if (isMounted) {

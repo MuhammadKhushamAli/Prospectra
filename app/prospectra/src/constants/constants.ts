@@ -110,9 +110,11 @@ const profileSetupCopy = {
   title: "Complete your profile",
   subtitle: "Set up your headline and skills to unlock outreach and workspace operations.",
   fields: {
+    fullName: "Full name",
     headline: "Professional headline",
   },
   placeholders: {
+    fullName: "e.g. Alex Mercer",
     headline: "e.g. Lead Consultant & Founder",
   },
   actions: {

@@ -10,9 +10,7 @@ CREATE TABLE companies (
     source TEXT[] NOT NULL DEFAULT '{}',
     raw_signals JSONB NOT NULL DEFAULT '{}'::jsonb,
     status company_status NOT NULL DEFAULT 'discovered',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (org_id, linkedin_url),
-    UNIQUE (org_id, domain)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_companies_org_status ON companies(org_id, status);

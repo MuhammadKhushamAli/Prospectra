@@ -17,10 +17,11 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
     
     try:
         supabase = await get_supabase_client()
-        
+        table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
+
         records = []
         for company in accepted_companies:
-            rec = asdict(company)
+            rec = asdict(company) if hasattr(company, "__dataclass_fields__") else dict(company)
             # Ensure status is pending_review for newly discovered leads awaiting human review
             if rec.get("status") in ("active", "discovered", "", None):
                 rec["status"] = "pending_review"
@@ -30,10 +31,10 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
             records.append(rec)
 
         if records:
-            table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
             await supabase.table(table_name).upsert(records).execute()
             
     except Exception as e:
+        print(f"Error storing companies to Supabase: {str(e)}")
         errors = state.get("errors", [])
         error_msg = f"Failed to store to Supabase: {str(e)}"
         if error_msg not in errors:

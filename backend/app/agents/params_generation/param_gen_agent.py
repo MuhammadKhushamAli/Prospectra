@@ -19,15 +19,20 @@ from .pydantic_model import PromptGenerationResponse
 SYSTEM_PROMPT = """
 You are Prospectra's parameter-generation agent.
 
-Your job is to convert a user's natural-language description of their ideal
-prospect or target company into two sets of structured search parameters:
+Your job is to convert a user's skills, context, and target prospect goals into two sets of structured search parameters:
 
-1. Apollo parameters - filters for the Apollo organization-search API.
-2. Tavily parameters - a concise, high-quality search prompt for Tavily.
+1. Apollo parameters - filters for the Apollo organization-search API:
+   - Use standard filters like q_organization_keyword_tags, organization_locations, target_organizations_catagories.
+
+2. Tavily parameters - a concise, high-quality search prompt to find TARGET PROSPECT COMPANIES and BUSINESSES:
+   - MUST search for actual companies, software agencies, SaaS firms, consultancies, or enterprise client businesses that need or use the user's services.
+   - CRITICAL REQUIREMENT: NEVER search for jobs, job boards, hiring ads, career vacancies, or freelance job postings! NEVER use words like "jobs", "hiring", "careers", "apply", "job openings", or "vacancies".
+   - Construct queries aimed at discovering company homepages and business profiles (e.g., "top software development agencies and SaaS companies utilizing Python and React Native").
 
 CRITICAL RULES
+- Target COMPANIES and ORGANIZATIONS, never job boards or job postings.
 - Be precise - never hallucinate filter values.
-- CRITICAL: 'must use the user's data given in prompt not do descision from you own.'
+- Must prioritize the user's skills and context provided in the prompt.
 """
 
 
@@ -75,6 +80,14 @@ async def generate_params(
     
     if response.apollo:
         matched_uids = get_apollo_tech_uids_for_user(user_context)
-        response.apollo.currently_using_any_of_technology_uids = matched_uids
+        # Apollo free tier returns 422 on currently_using_any_of_technology_uids.
+        # Map tech names to q_organization_keyword_tags to find relevant companies on free tier.
+        if matched_uids:
+            existing_tags = response.apollo.q_organization_keyword_tags or []
+            for uid in matched_uids:
+                clean_tag = uid.replace("_", " ")
+                if clean_tag not in existing_tags:
+                    existing_tags.append(clean_tag)
+            response.apollo.q_organization_keyword_tags = existing_tags[:6]
         
     return response

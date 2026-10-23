@@ -55,10 +55,6 @@ class ApolloPrompt(BaseModel):
         default=None,
         description="Organization revenue range, expressed as whole currency units.",
     )
-    currently_using_any_of_technology_uids: list[str] | None = Field(
-        default=None,
-        description="DO NOT FILL THIS FIELD. The system will auto-populate it. Leave as null.",
-    )
     q_organization_keyword_tags: list[str] | None = Field(
         default=None,
         description="Keywords associated with organizations to include.",
