@@ -27,4 +27,4 @@ class Company:
     website: Optional[str] = None
     linkedin_url: Optional[str] = None
     raw_signals: Optional[dict] = None
-    status: Literal["active", "inactive"] = "active"
+    status: str = "pending_review"

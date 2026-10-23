@@ -55,8 +55,8 @@ async def authenticate_company(
         Authenticity score (0-100) and feedback if score < 70.
     """
     user_input = (
-        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
-        f"SEARCHED COMPANY:\n{json.dumps(asdict(searched_company), indent=2)}"
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2, default=str)}\n\n"
+        f"SEARCHED COMPANY:\n{json.dumps(asdict(searched_company), indent=2, default=str)}"
     )
 
     client = AsyncOpenAI(

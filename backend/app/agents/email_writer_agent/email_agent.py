@@ -56,8 +56,8 @@ async def write_email(
         Generated subject and body for the email.
     """
     user_input = (
-        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
-        f"TARGET COMPANY:\n{json.dumps(asdict(target_company), indent=2)}"
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2, default=str)}\n\n"
+        f"TARGET COMPANY:\n{json.dumps(asdict(target_company), indent=2, default=str)}"
     )
 
     client = AsyncOpenAI(

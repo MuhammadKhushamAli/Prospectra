@@ -36,13 +36,23 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     
     skill_target_id = state.get("skill_target_id", "")
 
+    def is_valid_uuid(val: Any) -> bool:
+        if not val or not isinstance(val, (str, uuid.UUID)):
+            return False
+        try:
+            uuid.UUID(str(val))
+            return True
+        except (ValueError, TypeError, AttributeError):
+            return False
+
+    can_track_progress = is_valid_uuid(org_id) and is_valid_uuid(skill_target_id)
     last_page_apollo = 0
     last_page_tavily = 0
-    
-    if org_id and skill_target_id:
+
+    if can_track_progress:
         try:
             supabase = await get_supabase_client()
-            response = await supabase.table(SEARCH_PROGRESS_TABLE).select("source, last_page_fetched").eq("org_id", org_id).eq("skill_target_id", skill_target_id).execute()
+            response = await supabase.table(SEARCH_PROGRESS_TABLE).select("source, last_page_fetched").eq("org_id", str(org_id)).eq("skill_target_id", str(skill_target_id)).execute()
             for record in response.data:
                 if record.get("source") == "apollo":
                     last_page_apollo = record.get("last_page_fetched", 0)
@@ -54,18 +64,16 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     # 1. Call Apollo API
     if apollo_prompt:
         try:
-            company_id = uuid.uuid4()
-
             current_apollo_page = last_page_apollo + 1
             apollo_prompt.page = current_apollo_page
-            
+
             data = await find_apollo_companies(apollo_prompt)
             organizations = data.get("organizations", [])
-            
+
             for org in organizations:
                 company = Company(
-                    id=company_id,
-                    org_id=org_id,
+                    id=str(uuid.uuid4()),
+                    org_id=str(org_id),
                     name=org.get("name", "Unknown"),
                     domain=org.get("primary_domain", ""),
                     website=org.get("website_url"),
@@ -76,33 +84,32 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
                     raw_signals=org,
                 )
                 searched_companies.append(company)
-                
-            search_progress.append(
-                SearchProgress(
-                    org_id=org_id,
-                    skill_target_id=skill_target_id,
-                    last_page_fetched=current_apollo_page,
-                    last_fetched_at=datetime.utcnow(),
-                    source="apollo"
+
+            if can_track_progress:
+                search_progress.append(
+                    SearchProgress(
+                        org_id=str(org_id),
+                        skill_target_id=str(skill_target_id),
+                        last_page_fetched=current_apollo_page,
+                        last_fetched_at=datetime.utcnow(),
+                        source="apollo"
+                    )
                 )
-            )
         except Exception as e:
             errors.append(f"Apollo API error: {str(e)}")
 
     # 2. Call Tavily API
     if tavily_prompt:
         try:
-            company_id = uuid.uuid4()
-
             current_tavily_page = last_page_tavily + 1
-            
+
             data = await search_tavily(tavily_prompt)
             results = data.get("results", [])
-            
+
             for res in results:
                 company = Company(
-                    id=company_id,
-                    org_id=org_id,
+                    id=str(uuid.uuid4()),
+                    org_id=str(org_id),
                     name=res.get("title", "Unknown"),
                     domain=res.get("url", ""),
                     website=res.get("url"),
@@ -112,22 +119,23 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
                     raw_signals=res,
                 )
                 searched_companies.append(company)
-                
-            search_progress.append(
-                SearchProgress(
-                    org_id=org_id,
-                    skill_target_id=skill_target_id,
-                    last_page_fetched=current_tavily_page,
-                    last_fetched_at=datetime.utcnow(),
-                    source="tavily"
+
+            if can_track_progress:
+                search_progress.append(
+                    SearchProgress(
+                        org_id=str(org_id),
+                        skill_target_id=str(skill_target_id),
+                        last_page_fetched=current_tavily_page,
+                        last_fetched_at=datetime.utcnow(),
+                        source="tavily"
+                    )
                 )
-            )
         except Exception as e:
             errors.append(f"Tavily API error: {str(e)}")
-            
+
     if search_progress:
         asyncio.create_task(store_search_progress(search_progress))
-            
+
     return {
         "searched_companies": searched_companies,
         "errors": errors

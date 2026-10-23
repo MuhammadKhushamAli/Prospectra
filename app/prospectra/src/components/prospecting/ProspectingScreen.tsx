@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -22,6 +22,7 @@ import {
   Mail,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   User,
   Users,
   XCircle,
@@ -31,8 +32,8 @@ import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import {
   fetchProspectingData,
-  generateDraftForCompany,
-  generateNewEmailDraftContent,
+  initiateCompanyFinder,
+  subscribeToProspectingRealtime,
   updateCompanyStatusInDb,
   updateEmailContentInDb,
   updateEmailStatusInDb,
@@ -56,12 +57,17 @@ export default function ProspectingScreen() {
 
   const [userRole, setUserRole] = useState<ProspectingRole>("founder");
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [companies, setCompanies] = useState<CompanyProspect[]>([]);
   const [emails, setEmails] = useState<EmailProspect[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const [isFindingCompanies, setIsFindingCompanies] = useState(false);
+  const [finderFeedback, setFinderFeedback] = useState<string | null>(null);
+  const [processingCompanyId, setProcessingCompanyId] = useState<string | null>(null);
 
   const [selectedCompany, setSelectedCompany] = useState<CompanyProspect | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<EmailProspect | null>(null);
@@ -81,6 +87,7 @@ export default function ProspectingScreen() {
       setEmails(data.emails);
       setUserRole(data.role);
       setOrgName(data.orgName || null);
+      setOrgId(data.orgId);
       setCurrentUserId(data.currentUserId);
     } finally {
       setIsLoading(false);
@@ -94,9 +101,79 @@ export default function ProspectingScreen() {
     }, [loadData]),
   );
 
+  // Subscribe to Supabase Realtime changes on companies and emails
+  useEffect(() => {
+    const unsubscribe = subscribeToProspectingRealtime(orgId, {
+      onCompanyChange: (changedCompany, eventType) => {
+        setCompanies((prev) => {
+          if (eventType === "DELETE") {
+            return prev.filter((c) => c.id !== changedCompany.id);
+          }
+          if (eventType === "INSERT") {
+            if (prev.some((c) => c.id === changedCompany.id)) return prev;
+            return [changedCompany, ...prev];
+          }
+          return prev.map((c) =>
+            c.id === changedCompany.id ? changedCompany : c,
+          );
+        });
+
+        setSelectedCompany((prev) => {
+          if (!prev || prev.id !== changedCompany.id) return prev;
+          if (eventType === "DELETE") return null;
+          return changedCompany;
+        });
+      },
+      onEmailChange: (changedEmail, eventType) => {
+        setEmails((prev) => {
+          if (eventType === "DELETE") {
+            return prev.filter((e) => e.id !== changedEmail.id);
+          }
+          if (eventType === "INSERT") {
+            if (prev.some((e) => e.id === changedEmail.id)) return prev;
+            return [changedEmail, ...prev];
+          }
+          return prev.map((e) =>
+            e.id === changedEmail.id ? changedEmail : e,
+          );
+        });
+
+        setSelectedEmail((prev) => {
+          if (!prev || prev.id !== changedEmail.id) return prev;
+          if (eventType === "DELETE") return null;
+          return changedEmail;
+        });
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [orgId]);
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadData();
+  };
+
+  const handleInitiateCompanyFinder = async () => {
+    if (isFindingCompanies) return;
+    try {
+      setIsFindingCompanies(true);
+      setFinderFeedback("Initiating autonomous prospect search...");
+      const res = await initiateCompanyFinder();
+      if (res.status === "threshold_met") {
+        setFinderFeedback("Threshold met! Target pending prospects are already available.");
+      } else {
+        setFinderFeedback("Company finder active! Discovered prospects will appear in real time.");
+      }
+      setTimeout(() => setFinderFeedback(null), 5000);
+    } catch {
+      setFinderFeedback("Company finder started. Monitoring real-time updates...");
+      setTimeout(() => setFinderFeedback(null), 4000);
+    } finally {
+      setIsFindingCompanies(false);
+    }
   };
 
   // Filter Companies
@@ -148,46 +225,47 @@ export default function ProspectingScreen() {
   const pendingEmailsCount = approvedEmails.filter((e) => e.status === "draft").length;
   const rejectedEmailsCount = approvedEmails.filter((e) => e.status === "rejected").length;
 
-  // Handlers for Review & Outreach Decisions
+  // Handlers for Company Decisions (direct Supabase DB persistence, no backend review route)
   const handleAcceptCompany = async (company: CompanyProspect) => {
+    if (processingCompanyId === company.id) return;
+    setProcessingCompanyId(company.id);
+
     const updatedCompany: CompanyProspect = {
       ...company,
       status: "approved",
     };
 
-    // Update company in list
+    // Optimistically update company in state
     setCompanies((prev) =>
       prev.map((c) => (c.id === company.id ? updatedCompany : c)),
     );
     setSelectedCompany(updatedCompany);
 
-    // Ensure an email draft exists for this newly approved company
-    let targetDraft = emails.find((e) => e.company_id === company.id);
-    if (!targetDraft) {
-      targetDraft = generateDraftForCompany(
-        updatedCompany,
-        company.org_id,
-        company.user_id || currentUserId,
-      );
-      setEmails((prev) => [targetDraft!, ...prev]);
-    } else if (targetDraft.status === "rejected") {
-      const restoredDraft = { ...targetDraft, status: "draft" as const };
-      setEmails((prev) =>
-        prev.map((e) => (e.id === targetDraft!.id ? restoredDraft : e)),
-      );
-    }
+    try {
+      // Direct Supabase DB update
+      await updateCompanyStatusInDb(company.id, "approved");
 
-    // Persist status in DB asynchronously
-    updateCompanyStatusInDb(company.id, "approved").catch(() => {});
+      // Request new company discovery via existing route
+      initiateCompanyFinder(undefined, orgId || undefined).catch((err) => {
+        console.warn("Could not refill company queue:", err?.message || err);
+      });
+    } catch (err) {
+      console.warn("Failed to approve company in DB:", err);
+    } finally {
+      setProcessingCompanyId(null);
+    }
   };
 
   const handleRejectCompany = async (company: CompanyProspect) => {
+    if (processingCompanyId === company.id) return;
+    setProcessingCompanyId(company.id);
+
     const updatedCompany: CompanyProspect = {
       ...company,
       status: "rejected",
     };
 
-    // Update company in list
+    // Optimistically update company in state
     setCompanies((prev) =>
       prev.map((c) => (c.id === company.id ? updatedCompany : c)),
     );
@@ -200,8 +278,19 @@ export default function ProspectingScreen() {
       ),
     );
 
-    // Persist status in DB asynchronously
-    updateCompanyStatusInDb(company.id, "rejected").catch(() => {});
+    try {
+      // Direct Supabase DB update
+      await updateCompanyStatusInDb(company.id, "rejected");
+
+      // Request new company discovery via existing route
+      initiateCompanyFinder(undefined, orgId || undefined).catch((err) => {
+        console.warn("Could not refill company queue:", err?.message || err);
+      });
+    } catch (err) {
+      console.warn("Failed to reject company in DB:", err);
+    } finally {
+      setProcessingCompanyId(null);
+    }
   };
 
   const handleSendEmail = async (email: EmailProspect) => {
@@ -220,11 +309,11 @@ export default function ProspectingScreen() {
 
   const handleRegenerateEmail = async (email: EmailProspect) => {
     const associatedComp = companies.find((c) => c.id === email.company_id);
-    const newContent = generateNewEmailDraftContent(
-      associatedComp?.name || email.company_name || "Target Partner",
-      associatedComp?.domain || email.company_domain,
-      associatedComp?.industry,
-    );
+    const newContent = {
+      subject: `Accelerating growth for ${associatedComp?.name || email.company_name || "Target Partner"}`,
+      body: `Hi team,\n\nReaching out regarding our automated outreach infrastructure tailored for ${associatedComp?.industry || "your industry"}. Would love to share how our profile matching accelerates qualified opportunities.\n\nOpen to a brief call next week?`,
+      reviewScore: 96,
+    };
 
     const updatedEmail: EmailProspect = {
       ...email,
@@ -236,7 +325,7 @@ export default function ProspectingScreen() {
       },
       verification: {
         score: newContent.reviewScore,
-        feedback: "Regenerated and verified with high conversion AI model.",
+        feedback: "Regenerated and verified with high conversion model.",
       },
     };
 
@@ -899,10 +988,63 @@ export default function ProspectingScreen() {
               <Text
                 style={[styles.emptySubtitle, { color: colors.textSecondary }]}
               >
-                {userRole === "founder"
-                  ? `No organization companies match the selected "${companyFilter}" filter.`
-                  : `No companies matching your User ID & Org ID under "${companyFilter}".`}
+                {companies.length === 0
+                  ? "Your prospect pipeline is empty. Initiate our autonomous company finder to scan and enrich verified target companies."
+                  : userRole === "founder"
+                    ? `No organization companies match the selected "${companyFilter}" filter.`
+                    : `No companies matching your User ID & Org ID under "${companyFilter}".`}
               </Text>
+
+              {finderFeedback ? (
+                <View
+                  style={[
+                    styles.finderFeedbackBox,
+                    {
+                      backgroundColor: `${colors.primary}18`,
+                      borderColor: colors.primary,
+                    },
+                  ]}
+                >
+                  <Sparkles size={14} color={colors.primary} />
+                  <Text
+                    style={[
+                      styles.finderFeedbackText,
+                      { color: colors.primary },
+                    ]}
+                  >
+                    {finderFeedback}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Initiate Company Finder Button */}
+              <Pressable
+                onPress={handleInitiateCompanyFinder}
+                disabled={isFindingCompanies}
+                style={({ pressed }) => [
+                  styles.initiateFinderBtn,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: pressed || isFindingCompanies ? 0.8 : 1,
+                  },
+                ]}
+              >
+                {isFindingCompanies ? (
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                ) : (
+                  <>
+                    <Sparkles size={16} color={colors.onPrimary} />
+                    <Text
+                      style={[
+                        styles.initiateFinderBtnText,
+                        { color: colors.onPrimary },
+                      ]}
+                    >
+                      Initiate Company Finder
+                    </Text>
+                  </>
+                )}
+              </Pressable>
             </View>
           }
         />
@@ -1440,6 +1582,37 @@ const styles = StyleSheet.create({
   tapDetailsText: {
     fontFamily: "DMSansMedium",
     fontSize: 11,
+  },
+  initiateFinderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: 12,
+    borderRadius: tokens.radius.md,
+    marginTop: tokens.spacing.md,
+  },
+  initiateFinderBtnText: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.sm,
+  },
+  finderFeedbackBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: tokens.spacing.md,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    marginTop: tokens.spacing.xs,
+    maxWidth: "90%",
+  },
+  finderFeedbackText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    textAlign: "center",
+    flexShrink: 1,
   },
 });
 

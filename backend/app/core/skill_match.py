@@ -1,6 +1,7 @@
 import csv
 import os
 from rapidfuzz import process, fuzz
+from app.models.skills import Skill
 from app.models.user_context import UserContext
 
 _TECH_CHOICES = None
@@ -35,11 +36,11 @@ def match_skill_to_apollo_tech(
     score_cutoff: float = 80.0,
 ) -> list[str]:
     """Fuzzy match a skill against a list of choices."""
-    if not skill.strip() or not choices or limit <= 0:
+    if not skill or not skill.strip() or not choices or limit <= 0:
         return []
 
     results = process.extract(
-        skill,
+        skill.strip(),
         choices,
         scorer=fuzz.WRatio,
         limit=limit,
@@ -50,18 +51,24 @@ def match_skill_to_apollo_tech(
 
 def get_apollo_tech_uids_for_user(user_context: UserContext) -> list[str]:
     """Get matching Apollo technology UIDs for a user's skills."""
-    skills = []
-    if user_context.skills:
-        skills.extend(user_context.skills.programming_languages)
-        skills.extend(user_context.skills.frameworks)
-        skills.extend(user_context.skills.tools)
-        
+    skills: list[str] = []
+
+    if user_context:
+        skills_data = getattr(user_context, "skills", None)
+        if skills_data is None and isinstance(user_context, dict):
+            skills_data = user_context.get("skills")
+
+        if skills_data:
+            for item in skills_data:
+                if item.name and item.name.strip():
+                    skills.append(item.name.strip())
+
     choices = get_tech_choices()
     matched_uids = set()
-    
+
     for skill in skills:
         matches = match_skill_to_apollo_tech(skill, choices)
         for m in matches:
             matched_uids.add(format_tech_uid(m))
-            
+
     return list(matched_uids)

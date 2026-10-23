@@ -18,8 +18,17 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
     try:
         supabase = await get_supabase_client()
         
-        records = [asdict(company) for company in accepted_companies]
-            
+        records = []
+        for company in accepted_companies:
+            rec = asdict(company)
+            # Ensure status is pending_review for newly discovered leads awaiting human review
+            if rec.get("status") in ("active", "discovered", "", None):
+                rec["status"] = "pending_review"
+            # Supabase companies table uses text[] for source column
+            if isinstance(rec.get("source"), str):
+                rec["source"] = [rec["source"]] if rec["source"] else ["apollo"]
+            records.append(rec)
+
         if records:
             table_name = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
             await supabase.table(table_name).upsert(records).execute()

@@ -27,18 +27,9 @@ import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import type {
   CompanyProspect,
+  EmailDetailModalProps,
   EmailProspect,
 } from "../../types/prospecting";
-
-interface EmailDetailModalProps {
-  email: EmailProspect | null;
-  visible: boolean;
-  onClose: () => void;
-  onViewCompany?: (company: CompanyProspect) => void;
-  associatedCompany?: CompanyProspect | null;
-  onSendEmail?: (email: EmailProspect) => void | Promise<void>;
-  onRegenerateEmail?: (email: EmailProspect) => void | Promise<void>;
-}
 
 export default function EmailDetailModal({
   email,

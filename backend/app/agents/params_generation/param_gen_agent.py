@@ -55,7 +55,7 @@ async def generate_params(
     model_name = os.getenv("PARAM_GEN_MODEL", "gpt-4o")
 
     input_str = (
-        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2)}\n\n"
+        f"USER CONTEXT:\n{json.dumps(asdict(user_context), indent=2, default=str)}\n\n"
     )
     
     if search_feedback and previous_prompt:
