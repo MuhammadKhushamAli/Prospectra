@@ -1,0 +1,16 @@
+export const defaultIndustrySuggestions: string[] = [
+  "Software & SaaS",
+  "Artificial Intelligence & ML",
+  "Fintech & Financial Services",
+  "Healthcare & HealthTech",
+  "E-Commerce & Retail",
+  "Marketing & Advertising",
+  "Enterprise IT & Cloud",
+  "Professional & Legal Services",
+  "Real Estate & PropTech",
+  "Cybersecurity",
+  "EdTech & Education",
+  "Logistics & Supply Chain",
+  "CleanTech & Energy",
+  "Manufacturing & Industrial",
+];

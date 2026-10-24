@@ -34,14 +34,39 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     // 1. Evaluate Profile Completion status directly from user_profiles table (No auth metadata)
     const { data: profileRow } = await supabase
       .from(TABLES.USER_PROFILES)
-      .select("headline")
+      .select("headline, org_id")
       .eq("user_id", userId)
       .not("headline", "is", null)
       .limit(1)
       .maybeSingle();
 
     const headline = profileRow?.headline?.trim() || null;
-    const hasProfile = Boolean(headline);
+    let hasTargetIndustries = false;
+    let targetIndustries: string[] = [];
+    let hasProfile = false;
+
+    const checkIndustriesForOrg = async (checkOrgId: string | null) => {
+      if (!checkOrgId) return;
+      try {
+        const { data: targetRec } = await supabase
+          .from(TABLES.TARGET_INDUSTRIES)
+          .select("target_industries")
+          .eq("user_id", userId)
+          .eq("org_id", checkOrgId)
+          .maybeSingle();
+
+        if (
+          targetRec?.target_industries &&
+          Array.isArray(targetRec.target_industries) &&
+          targetRec.target_industries.length > 0
+        ) {
+          hasTargetIndustries = true;
+          targetIndustries = targetRec.target_industries;
+        }
+      } catch (err) {
+        console.warn("Could not check target industries:", err);
+      }
+    };
 
     // 2. Organization Check (initial post-signup step)
     const { data: member } = await supabase
@@ -54,6 +79,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     if (member?.role === memberRoles[1]) {
       let orgName: string | null = null;
       if (member.org_id) {
+        await checkIndustriesForOrg(member.org_id);
         const { data: org } = await supabase
           .from(TABLES.ORGANIZATIONS)
           .select("name")
@@ -65,10 +91,14 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         }
       }
 
+      hasProfile = Boolean(headline) && hasTargetIndustries;
+
       return {
         isAuthenticated: true,
         hasProfile,
         headline,
+        hasTargetIndustries,
+        targetIndustries,
         hasOrganization: true,
         orgId: member.org_id,
         orgName,
@@ -115,6 +145,10 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       };
     }
 
+    // Check target industries for org
+    await checkIndustriesForOrg(orgId);
+    hasProfile = Boolean(headline) && hasTargetIndustries;
+
     // If orgName not fetched yet, fetch it
     if (!orgName) {
       const { data: org } = await supabase
@@ -143,6 +177,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         isAuthenticated: true,
         hasProfile,
         headline,
+        hasTargetIndustries,
+        targetIndustries,
         hasOrganization: true,
         orgId,
         orgName,
@@ -159,6 +195,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       isAuthenticated: true,
       hasProfile,
       headline,
+      hasTargetIndustries,
+      targetIndustries,
       hasOrganization: true,
       orgId,
       orgName,
@@ -173,6 +211,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       isAuthenticated: false,
       hasProfile: false,
       headline: null,
+      hasTargetIndustries: false,
+      targetIndustries: [],
       hasOrganization: false,
       orgId: null,
       orgName: null,

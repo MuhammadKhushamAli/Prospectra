@@ -118,7 +118,7 @@ const profileSetupCopy = {
     headline: "e.g. Lead Consultant & Founder",
   },
   actions: {
-    submit: "Save & continue to Dashboard",
+    submit: "Continue to target industries",
     submitting: "Saving profile...",
     backToDashboard: "Back to Dashboard",
     backToLogin: "Sign out",
@@ -176,6 +176,31 @@ const homeCopy = {
   },
 } as const;
 
+const targetIndustriesCopy = {
+  title: "Target Industries",
+  subtitle: "Select the industries and market sectors you want to target for prospect discovery and outreach.",
+  popularTitle: "Select Target Industries",
+  customLabel: "Add Custom Industry",
+  customPlaceholder: "e.g. Clean Energy, B2B Logistics",
+  addButton: "Add Industry",
+  selectedTitle: "Selected Industries",
+  selectedCount: "industries selected",
+  emptySelected: "No industries selected yet. Tap from the options below or add custom sectors.",
+  actions: {
+    submit: "Complete Profile & Finish",
+    submitting: "Saving target industries...",
+    backToProfile: "Back to profile details",
+    backToDashboard: "Back to Dashboard",
+  },
+  success: "Target industries saved! Your profile setup is now complete.",
+  validation: {
+    minOneRequired: "Please select at least one target industry to complete your profile.",
+    duplicate: "This industry has already been added.",
+    tooShort: "Industry name must be at least 2 characters.",
+    tooLong: "Industry name must be less than 60 characters.",
+  },
+} as const;
+
 import type { AuthMode } from "../types/auth";
 import type { ButtonVariant, NotificationVariant } from "../types/ui";
 
@@ -195,5 +220,6 @@ export {
   profileValidationMessages,
   skillsCopy,
   skillsValidationMessages,
+  targetIndustriesCopy,
 };
 export type { AuthMode, ButtonVariant, NotificationVariant };

@@ -85,7 +85,11 @@ export default function HomeRoute() {
   };
 
   const handleCompleteProfile = () => {
-    router.push("/profile-setup");
+    if (status?.headline && !status?.hasTargetIndustries) {
+      router.push("/target-industries" as any);
+    } else {
+      router.push("/profile-setup");
+    }
   };
 
   const hasProfile = Boolean(status?.hasProfile);

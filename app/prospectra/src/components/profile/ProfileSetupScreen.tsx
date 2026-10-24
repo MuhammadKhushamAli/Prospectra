@@ -94,8 +94,8 @@ export default function ProfileSetupScreen() {
         variant: notificationVariant.success,
         message: profileSetupCopy.success,
       });
-      // Advance to Dashboard
-      router.replace("/home");
+      // Advance to Target Industries page
+      router.replace("/target-industries" as any);
     } catch (err: any) {
       const msg =
         err?.message || "Failed to save profile. Please try again.";

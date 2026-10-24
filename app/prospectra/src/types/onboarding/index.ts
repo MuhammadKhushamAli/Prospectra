@@ -14,6 +14,8 @@ interface UserOnboardingStatus {
   hasVerifiedDomain: boolean;
   domain: string | null;
   targetRoute: tOnboardingRoute;
+  hasTargetIndustries?: boolean;
+  targetIndustries?: string[] | null;
 }
 
 export type { tOnboardingRoute, UserOnboardingStatus };

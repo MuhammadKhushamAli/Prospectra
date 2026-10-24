@@ -11,4 +11,5 @@ export const TABLES = {
   COMPANIES: (process.env.EXPO_PUBLIC_COMPANIES_TABLE || "companies") as string,
   EMAILS: (process.env.EXPO_PUBLIC_EMAILS_TABLE || "emails") as string,
   SEARCH_PROGRESS: (process.env.EXPO_PUBLIC_SEARCH_PROGRESS_TABLE || "search_progress") as string,
+  TARGET_INDUSTRIES: (process.env.EXPO_PUBLIC_TARGET_INDUSTRIES_TABLE || "target_industries") as string,
 } as const;
