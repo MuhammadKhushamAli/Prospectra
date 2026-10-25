@@ -31,6 +31,8 @@ export default function ProfileSetupScreen() {
   const [userName, setUserName] = useState<string>("");
   const [initialHeadline, setInitialHeadline] = useState<string>("");
   const [initialSkills, setInitialSkills] = useState<string[]>([]);
+  const [initialGithubUrl, setInitialGithubUrl] = useState<string>("");
+  const [initialLinkedinUrl, setInitialLinkedinUrl] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
@@ -55,18 +57,12 @@ export default function ProfileSetupScreen() {
 
           // Load profile directly from database tables
           const profile = await getProfile();
-          if (isMounted && profile) {
-            setUserName(profile.fullName || "");
+          if (isMounted && profile?.fullName) {
+            setUserName(profile.fullName);
             setInitialHeadline(profile.headline || "");
             setInitialSkills(profile.skills || []);
-          } else if (isMounted) {
-            const supabase = getSupabaseClient();
-            const { data: userData } = await supabase.auth.getUser();
-            const fullName =
-              userData?.user?.user_metadata?.full_name ||
-              userData?.user?.user_metadata?.name ||
-              "";
-            setUserName(fullName);
+            setInitialGithubUrl(profile.githubUrl || "");
+            setInitialLinkedinUrl(profile.linkedinUrl || "https://linkedin.com/in/");
           }
         } catch {
           if (isMounted) {
@@ -88,18 +84,22 @@ export default function ProfileSetupScreen() {
   );
 
   const handleSaveProfile = async (params: {
+    fullName: string;
     headline: string;
     skills: string[];
+    githubUrl?: string;
+    linkedinUrl?: string;
   }) => {
     setNotification(null);
     try {
       await updateProfile(params);
+      setUserName(params.fullName);
       setNotification({
         variant: notificationVariant.success,
         message: profileSetupCopy.success,
       });
-      // Advance to Target Industries page
-      router.replace("/target-industries" as any);
+      // Advance to Projects showcase page
+      router.replace("/projects" as any);
     } catch (err: any) {
       const msg =
         err?.message || "Failed to save profile. Please try again.";
@@ -148,8 +148,11 @@ export default function ProfileSetupScreen() {
         >
           <ProfileSetupHeader userName={userName} />
           <ProfileSetupForm
+            initialFullName={userName}
             initialHeadline={initialHeadline}
             initialSkills={initialSkills}
+            initialGithubUrl={initialGithubUrl}
+            initialLinkedinUrl={initialLinkedinUrl}
             onSubmit={handleSaveProfile}
             isLoading={isLoading}
           />

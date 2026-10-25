@@ -5,5 +5,7 @@ CREATE TABLE projects (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     tech_stack TEXT[] NOT NULL DEFAULT '{}',
+    live_demo_url TEXT,
+    repo_url TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

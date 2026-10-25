@@ -19,6 +19,8 @@ export const DB_KEYS = {
   FULL_NAME: "full_name",
   HEADLINE: "headline",
   EMAIL: "email",
+  GITHUB_URL: "github_url",
+  LINKEDIN_URL: "linkedin_url",
 
   // Domain Verification
   DOMAIN: "domain",
@@ -32,6 +34,12 @@ export const DB_KEYS = {
   TARGET_INDUSTRIES: "target_industries",
   TARGET_INDUSTRY_ID: "target_industry_id",
   INDUSTRY_ID: "industry_id",
+
+  // Projects
+  TITLE: "title",
+  TECH_STACK: "tech_stack",
+  LIVE_DEMO_URL: "live_demo_url",
+  REPO_URL: "repo_url",
 
   // Search Progress
   QUERY: "query",

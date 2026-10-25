@@ -14,6 +14,8 @@ import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useTargetIndustries } from "../../hooks/useTargetIndustries";
 import { getSupabaseClient } from "../../config/supabaseClient";
+import { TABLES } from "../../constants/tables";
+import { DB_KEYS } from "../../constants/dbKeys";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import NotificationBanner from "../ui/NotificationBanner";
 import TargetIndustriesHeader from "./TargetIndustriesHeader";
@@ -45,7 +47,9 @@ export default function TargetIndustriesScreen() {
           const status = await checkUserOnboardingStatus();
           if (!isMounted) return;
           if (
-            status.targetRoute !== "/profile-setup"
+            status.targetRoute === "/auth" ||
+            status.targetRoute === "/organization-registration" ||
+            status.targetRoute === "/domain-verification"
           ) {
             router.replace(status.targetRoute as any);
             return;
@@ -56,15 +60,20 @@ export default function TargetIndustriesScreen() {
             setInitialIndustries(existing);
           }
 
-          // Fetch user display name
+          // Fetch user full name from user_profiles database table
           const supabase = getSupabaseClient();
-          const { data: userData } = await supabase.auth.getUser();
-          if (isMounted) {
-            const fullName =
-              userData?.user?.user_metadata?.full_name ||
-              userData?.user?.user_metadata?.name ||
-              "";
-            setUserName(fullName);
+          const { data: sessionData } = await supabase.auth.getSession();
+          const currentUserId = sessionData?.session?.user?.id;
+          if (isMounted && currentUserId) {
+            const { data: profileRow } = await supabase
+              .from(TABLES.USER_PROFILES)
+              .select(DB_KEYS.FULL_NAME)
+              .eq(DB_KEYS.USER_ID, currentUserId)
+              .limit(1)
+              .maybeSingle();
+            if (isMounted && profileRow?.full_name) {
+              setUserName(profileRow.full_name);
+            }
           }
         } catch {
           if (isMounted) {

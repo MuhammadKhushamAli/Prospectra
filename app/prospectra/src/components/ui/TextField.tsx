@@ -18,16 +18,22 @@ export default function TextField({
   label,
   rightSlot,
   error,
+  inputWrapStyle,
   ...props
 }: TextFieldProps) {
   const colors = useTheme();
   const [focused, setFocused] = useState(false);
+  const isMultiline = Boolean(props.multiline);
+
   return (
     <View style={styles.wrapper}>
-      <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+      {label ? (
+        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+      ) : null}
       <View
         style={[
           styles.inputWrap,
+          isMultiline && styles.inputWrapMultiline,
           {
             backgroundColor: colors.surface,
             borderColor: error
@@ -36,10 +42,12 @@ export default function TextField({
                 ? colors.primary
                 : colors.border,
           },
+          inputWrapStyle,
         ]}
       >
         <TextInput
           {...props}
+          textAlignVertical={props.textAlignVertical ?? (isMultiline ? "top" : "center")}
           onFocus={(event) => {
             setFocused(true);
             props.onFocus?.(event);
@@ -49,7 +57,12 @@ export default function TextField({
             props.onBlur?.(event);
           }}
           placeholderTextColor={colors.placeholder}
-          style={[styles.input, { color: colors.text }, props.style]}
+          style={[
+            styles.input,
+            isMultiline && styles.inputMultiline,
+            { color: colors.text },
+            props.style,
+          ]}
         />
         {rightSlot}
       </View>
@@ -70,12 +83,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
+  inputWrapMultiline: {
+    height: undefined,
+    minHeight: 110,
+    alignItems: "flex-start",
+  },
   input: {
     flex: 1,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.md,
+  },
+  inputMultiline: {
+    minHeight: 100,
+    paddingTop: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.sm,
   },
   error: {
     fontFamily: "DMSans",

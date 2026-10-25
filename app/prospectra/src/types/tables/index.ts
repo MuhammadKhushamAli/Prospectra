@@ -17,4 +17,5 @@ export interface DatabaseTables {
   search_progress_industries: TableName;
   target_industries: TableName;
   user_target_industries: TableName;
+  projects: TableName;
 }

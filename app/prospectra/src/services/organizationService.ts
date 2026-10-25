@@ -53,18 +53,5 @@ export async function registerOrganizationWithSupabase(
 
   if (memberErr) throw memberErr;
 
-  // Store user profile with full name provided during signup
-  const signupFullName =
-    user.user_metadata?.full_name ||
-    user.user_metadata?.name ||
-    null;
-
-  await supabase.from(TABLES.USER_PROFILES).upsert({
-    [DB_KEYS.ORG_ID]: orgData.id,
-    [DB_KEYS.USER_ID]: user.id,
-    [DB_KEYS.FULL_NAME]: signupFullName,
-    [DB_KEYS.EMAIL]: user.email || null,
-  });
-
   return orgData as Organization;
 }

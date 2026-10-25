@@ -35,7 +35,7 @@ async def fetch_user_profile(
     try:
         response = await (
             supabase.table(USER_PROFILES_TABLE)
-            .select("full_name, email")
+            .select("full_name, email, github_url, linkedin_url")
             .eq("user_id", user_id)
             .eq("org_id", org_id)
             .single()
@@ -160,6 +160,8 @@ def build_user_context(
         org_id=org_id,
         full_name=profile.get("full_name", ""),
         email=profile.get("email", ""),
+        github_url=profile.get("github_url"),
+        linkedin_url=profile.get("linkedin_url"),
         skills=skills,
         target_industries=target_industries if target_industries else None,
     )

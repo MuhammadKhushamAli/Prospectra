@@ -1,12 +1,9 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
 import { DB_KEYS } from "../constants/dbKeys";
-import type {
-  UpdateProfileParams,
-  UserProfileData,
-} from "../types/profile";
+import type { UpdateProfileParams, UserProfileData } from "../types/profile";
 
-export type { UpdateProfileParams, UserProfileData };
+import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
 
 /**
  * Validate and sanitize the professional headline.
@@ -16,11 +13,6 @@ export function validateHeadline(headline: string): string {
   if (!trimmed) throw new Error("Professional headline is required.");
   return trimmed;
 }
-
-import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
-import { fetchUserHeadline } from "./onboarding/fetchUserHeadline";
-
-export { fetchUserHeadline };
 
 /**
  * Resolve user's active organization ID from member table or owned organization.
@@ -63,18 +55,24 @@ export async function upsertProfileRecord(
   record: {
     orgId: string;
     userId: string;
-    fullName: string | null;
+    fullName: string;
     headline: string;
-    email: string | null;
+    email: string;
+    githubUrl?: string | null;
+    linkedinUrl?: string | null;
   },
 ): Promise<void> {
-  const { error: profileErr } = await supabase.from(TABLES.USER_PROFILES).upsert({
-    [DB_KEYS.ORG_ID]: record.orgId,
-    [DB_KEYS.USER_ID]: record.userId,
-    [DB_KEYS.FULL_NAME]: record.fullName,
-    [DB_KEYS.HEADLINE]: record.headline,
-    [DB_KEYS.EMAIL]: record.email,
-  });
+  const { error: profileErr } = await supabase
+    .from(TABLES.USER_PROFILES)
+    .upsert({
+      [DB_KEYS.ORG_ID]: record.orgId,
+      [DB_KEYS.USER_ID]: record.userId,
+      [DB_KEYS.FULL_NAME]: record.fullName,
+      [DB_KEYS.HEADLINE]: record.headline,
+      [DB_KEYS.EMAIL]: record.email,
+      [DB_KEYS.GITHUB_URL]: record.githubUrl || null,
+      [DB_KEYS.LINKEDIN_URL]: record.linkedinUrl || null,
+    });
 
   if (profileErr) throw profileErr;
 }
@@ -200,32 +198,49 @@ export async function updateProfileWithSupabase(
   const trimmedHeadline = validateHeadline(params.headline);
   const skills = params.skills || [];
   const orgId = await resolveProfileOrgId(supabase, user.id);
+  const githubUrl = params.githubUrl?.trim() || null;
+  const linkedinUrl = params.linkedinUrl?.trim() || null;
 
   const existingFullName = await fetchExistingProfileFullName(
     supabase,
     orgId,
     user.id,
   );
-  const fullName = params.fullName?.trim() || existingFullName || "";
+  const metadataName =
+    (user.user_metadata?.display_name as string | undefined) ||
+    (user.user_metadata?.full_name as string | undefined) ||
+    "";
+  const fullName =
+    params.fullName?.trim() || existingFullName?.trim() || metadataName.trim() || "";
+
+  if (!fullName) {
+    throw new Error("Full name is required.");
+  }
+
+  const email = user.email || "";
+  if (!email) {
+    throw new Error("User email is required.");
+  }
 
   await upsertProfileRecord(supabase, {
     orgId,
     userId: user.id,
     fullName,
     headline: trimmedHeadline,
-    email: user.email || null,
+    email,
+    githubUrl,
+    linkedinUrl,
   });
 
   await syncUserSkillsList(supabase, orgId, user.id, skills);
 
-  return {
-    userId: user.id,
-    fullName,
-    email: user.email || "",
-    headline: trimmedHeadline,
-    skills,
-    orgId,
-  };
+  // Refetch fresh profile data from DB after update
+  const updatedProfile = await getProfileFromSupabase();
+  if (!updatedProfile) {
+    throw new Error("Failed to refetch updated profile from database.");
+  }
+
+  return updatedProfile;
 }
 
 /**
@@ -240,7 +255,9 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
 
   const { data: profileRow } = await supabase
     .from(TABLES.USER_PROFILES)
-    .select(`${DB_KEYS.ORG_ID}, ${DB_KEYS.HEADLINE}, ${DB_KEYS.FULL_NAME}, ${DB_KEYS.EMAIL}`)
+    .select(
+      `${DB_KEYS.ORG_ID}, ${DB_KEYS.HEADLINE}, ${DB_KEYS.FULL_NAME}, ${DB_KEYS.EMAIL}, ${DB_KEYS.GITHUB_URL}, ${DB_KEYS.LINKEDIN_URL}`,
+    )
     .eq(DB_KEYS.USER_ID, user.id)
     .limit(1)
     .maybeSingle();
@@ -250,11 +267,13 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
   if (profileRow) {
     return {
       userId: user.id,
-      fullName: profileRow.full_name || "",
-      email: profileRow.email || user.email || "",
-      headline: profileRow.headline || "",
+      fullName: profileRow.full_name,
+      email: profileRow.email,
+      headline: profileRow.headline,
       skills,
       orgId: profileRow.org_id,
+      githubUrl: profileRow.github_url || null,
+      linkedinUrl: profileRow.linkedin_url || null,
     };
   }
 

@@ -1,4 +1,4 @@
-import type { TextInputProps } from "react-native";
+import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import { buttonVariants, notificationVariants } from "../../constants/ui";
 
 type ButtonVariant = (typeof buttonVariants)[number];
@@ -15,6 +15,7 @@ interface TextFieldProps extends TextInputProps {
   label?: string;
   rightSlot?: React.ReactNode;
   error?: string | null;
+  inputWrapStyle?: StyleProp<ViewStyle>;
 }
 
 interface PasswordFieldProps extends TextInputProps {

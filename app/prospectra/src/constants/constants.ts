@@ -108,17 +108,32 @@ const organizationValidationMessages = {
 
 const profileSetupCopy = {
   title: "Complete your profile",
-  subtitle: "Set up your headline and skills to unlock outreach and workspace operations.",
+  subtitle: "Set up your headline, social profiles, and skills to unlock outreach and workspace operations.",
   fields: {
     fullName: "Full name",
     headline: "Professional headline",
+    githubUrl: "GitHub Profile",
+    linkedinUrl: "LinkedIn Profile",
   },
   placeholders: {
     fullName: "e.g. Alex Mercer",
     headline: "e.g. Lead Consultant & Founder",
+    githubUrl: "https://github.com/username",
+    linkedinUrl: "https://linkedin.com/in/username",
+  },
+  githubConnect: {
+    button: "Connect GitHub",
+    connecting: "Connecting to GitHub...",
+    connected: "GitHub Connected",
+    orManual: "or enter GitHub profile URL manually",
+    modalTitle: "Connect GitHub",
+    modalSubtitle: "Enter your GitHub username to automatically fetch and verify your profile URL.",
+    modalInputPlaceholder: "e.g. torvalds",
+    modalSubmit: "Fetch & Connect",
+    modalCancel: "Cancel",
   },
   actions: {
-    submit: "Continue to target industries",
+    submit: "Continue to projects",
     submitting: "Saving profile...",
     backToDashboard: "Back to Dashboard",
     backToLogin: "Sign out",
@@ -127,9 +142,15 @@ const profileSetupCopy = {
 } as const;
 
 const profileValidationMessages = {
+  missingFullName: "Full name is required.",
+  fullNameTooShort: "Full name must be at least 2 characters.",
   missingHeadline: "Enter your professional headline.",
   headlineTooShort: "Headline must be at least 2 characters.",
   headlineTooLong: "Headline must be less than 120 characters.",
+  missingGithubUrl: "GitHub profile URL is required.",
+  invalidGithubUrl: "Enter a valid GitHub profile URL (e.g. https://github.com/username).",
+  missingLinkedinUrl: "LinkedIn profile URL is required.",
+  invalidLinkedinUrl: "Enter a valid LinkedIn profile URL (e.g. https://linkedin.com/in/username).",
 } as const;
 
 const skillsCopy = {

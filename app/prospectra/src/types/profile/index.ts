@@ -3,16 +3,20 @@ import type { ProfileSkillItem } from "../skills";
 interface UserProfile {
   org_id: string;
   user_id: string;
-  full_name?: string | null;
-  headline?: string | null;
-  email?: string | null;
-  created_at?: string;
+  full_name: string;
+  headline: string;
+  email: string;
+  github_url?: string | null;
+  linkedin_url?: string | null;
+  created_at: string;
 }
 
 interface UpdateProfileParams {
   headline: string;
   skills?: string[];
-  fullName?: string;
+  fullName: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
 }
 
 interface UserProfileData {
@@ -22,6 +26,8 @@ interface UserProfileData {
   headline: string;
   skills?: string[];
   orgId?: string | null;
+  githubUrl?: string | null;
+  linkedinUrl?: string | null;
 }
 
 interface ProfileSetupHeaderProps {
@@ -29,9 +35,18 @@ interface ProfileSetupHeaderProps {
 }
 
 interface ProfileSetupFormProps {
+  initialFullName?: string;
   initialHeadline?: string;
   initialSkills?: string[];
-  onSubmit?: (params: { headline: string; skills: string[] }) => void;
+  initialGithubUrl?: string;
+  initialLinkedinUrl?: string;
+  onSubmit?: (params: {
+    fullName: string;
+    headline: string;
+    skills: string[];
+    githubUrl?: string;
+    linkedinUrl?: string;
+  }) => void;
   isLoading?: boolean;
 }
 

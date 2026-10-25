@@ -24,7 +24,12 @@ export async function signupWithSupabase(
   const { data, error } = await getSupabaseClient().auth.signUp({
     email: credentials.email,
     password: credentials.password,
-    options: { data: { full_name: credentials.fullName } },
+    options: {
+      data: {
+        display_name: credentials.fullName,
+        full_name: credentials.fullName,
+      },
+    },
   });
   if (error) throw error;
   if (!data.user) throw new Error("Supabase did not return a created user.");
