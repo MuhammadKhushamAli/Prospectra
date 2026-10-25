@@ -1,5 +1,6 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
+import { DB_KEYS } from "../constants/dbKeys";
 import type {
   Organization,
   RegisterOrganizationParams,
@@ -31,9 +32,9 @@ export async function registerOrganizationWithSupabase(
   const { data: orgData, error: orgErr } = await supabase
     .from(TABLES.ORGANIZATIONS)
     .insert({
-      name: trimmedName,
-      owner_id: user.id,
-      pending_threshold: threshold,
+      [DB_KEYS.NAME]: trimmedName,
+      [DB_KEYS.OWNER_ID]: user.id,
+      [DB_KEYS.PENDING_THRESHOLD]: threshold,
     })
     .select()
     .single();
@@ -45,9 +46,9 @@ export async function registerOrganizationWithSupabase(
   const { error: memberErr } = await supabase
     .from(TABLES.ORGANIZATION_MEMBERS)
     .insert({
-      org_id: orgData.id,
-      user_id: user.id,
-      role: "founder",
+      [DB_KEYS.ORG_ID]: orgData.id,
+      [DB_KEYS.USER_ID]: user.id,
+      [DB_KEYS.ROLE]: "founder",
     });
 
   if (memberErr) throw memberErr;
@@ -59,10 +60,10 @@ export async function registerOrganizationWithSupabase(
     null;
 
   await supabase.from(TABLES.USER_PROFILES).upsert({
-    org_id: orgData.id,
-    user_id: user.id,
-    full_name: signupFullName,
-    email: user.email || null,
+    [DB_KEYS.ORG_ID]: orgData.id,
+    [DB_KEYS.USER_ID]: user.id,
+    [DB_KEYS.FULL_NAME]: signupFullName,
+    [DB_KEYS.EMAIL]: user.email || null,
   });
 
   return orgData as Organization;

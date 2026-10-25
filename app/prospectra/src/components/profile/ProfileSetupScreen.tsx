@@ -44,8 +44,12 @@ export default function ProfileSetupScreen() {
         try {
           const status = await checkUserOnboardingStatus();
           if (!isMounted) return;
-          if (!status.isAuthenticated && status.targetRoute !== "/profile-setup") {
-            router.replace(status.targetRoute);
+          if (
+            status.targetRoute === "/auth" ||
+            status.targetRoute === "/organization-registration" ||
+            status.targetRoute === "/domain-verification"
+          ) {
+            router.replace(status.targetRoute as any);
             return;
           }
 

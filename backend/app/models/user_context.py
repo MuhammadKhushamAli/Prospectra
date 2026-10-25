@@ -1,9 +1,8 @@
 """User context models."""
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, Optional
 from .skills import Skill
-
 
 
 @dataclass
@@ -13,4 +12,5 @@ class UserContext:
     org_id: str
     full_name: str
     email: str
-    skills: Optional[list[Skill]] = None
+    skills: Optional[List[Skill]] = None
+    target_industries: Optional[List[str]] = None

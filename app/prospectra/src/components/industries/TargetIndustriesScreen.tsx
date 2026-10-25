@@ -44,21 +44,16 @@ export default function TargetIndustriesScreen() {
         try {
           const status = await checkUserOnboardingStatus();
           if (!isMounted) return;
-          if (!status.isAuthenticated && status.targetRoute !== "/profile-setup") {
+          if (
+            status.targetRoute !== "/profile-setup"
+          ) {
             router.replace(status.targetRoute as any);
             return;
           }
           // Fetch current target industries
           const existing = await fetchTargetIndustries();
-          if (isMounted) {
-            if (existing && existing.length > 0) {
-              setInitialIndustries(existing);
-            } else if (
-              status.targetIndustries &&
-              status.targetIndustries.length > 0
-            ) {
-              setInitialIndustries(status.targetIndustries);
-            }
+          if (isMounted && existing && existing.length > 0) {
+            setInitialIndustries(existing);
           }
 
           // Fetch user display name

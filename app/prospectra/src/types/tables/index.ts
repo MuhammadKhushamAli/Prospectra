@@ -13,5 +13,8 @@ export interface DatabaseTables {
   companies: TableName;
   emails: TableName;
   search_progress: TableName;
+  search_progress_skills: TableName;
+  search_progress_industries: TableName;
   target_industries: TableName;
+  user_target_industries: TableName;
 }

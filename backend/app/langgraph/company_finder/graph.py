@@ -1,6 +1,6 @@
 """LangGraph definition for the Prospectra workflow."""
 
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 
 from langgraph.graph import StateGraph, START, END
 
@@ -51,11 +51,13 @@ app_graph = workflow.compile()
 async def run_prospect_workflow(
     user_id: str,
     org_id: str,
+    target_industries: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Execute the full Prospectra pipeline async."""
     initial_state = {
         "user_id": user_id,
         "org_id": org_id,
+        "target_industries": target_industries or [],
         "errors": []
     }
     

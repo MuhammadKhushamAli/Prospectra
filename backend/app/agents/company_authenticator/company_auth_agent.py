@@ -1,6 +1,6 @@
 """Company-authentication agent.
 
-Takes the user's target skills, target companies, and the searched companies
+Takes the user's target skills, target organizations, and the searched companies
 returned by Apollo/Tavily and scores each searched company for authenticity.
 """
 
@@ -19,18 +19,18 @@ SYSTEM_PROMPT = """
 You are Prospectra's company-authentication agent.
 
 You receive:
-1. The user's context - the profile and skills of the user.
+1. The user's context - the profile, skills, and target organizations/industries of the user.
 2. A searched company - a single company record returned from a search.
 
-Your job is to evaluate how well the searched company matches the user's
-profile and return:
+Your job is to evaluate how well the searched company matches BOTH the user's skills AND their target organizations/industries, and return:
 - A score from 0 to 100 indicating how authentic and relevant the match is.
-- If the score is below 70, you MUST provide feedback explaining why the
-- company scored low.
+- If the score is below 70, you MUST provide feedback explaining why the company scored low.
 
 CRITICAL RULES
+- Evaluate relevance against BOTH user skills and target organizations.
+- If target organizations are present in user context, confirm that the company fits into those target organizations/industries.
 - Base your score strictly on the data provided. Do not invent or assume facts.
-- A score of 100 means a perfect match across skills and company profile.
+- A score of 100 means a perfect match across skills and target organization profile.
 - A score of 0 means no relevance at all.
 - Feedback is mandatory when score < 70.
 """
@@ -45,7 +45,7 @@ async def authenticate_company(
     Parameters
     ----------
     user_context:
-        The context and skills of the user seeking prospects.
+        The context, skills, and target organizations of the user seeking prospects.
     searched_company:
         A single company record returned from Apollo / Tavily search.
 

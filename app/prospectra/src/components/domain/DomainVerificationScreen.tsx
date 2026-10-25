@@ -18,7 +18,9 @@ import type { DnsInstructions } from "../../types/domain";
 import type { NotificationVariant } from "../../types/ui";
 import { getSupabaseClient } from "../../config/supabaseClient";
 import { TABLES } from "../../constants/tables";
+import { DB_KEYS } from "../../constants/dbKeys";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
+import { resolveUserOrgId } from "../../services/domainService";
 import NotificationBanner from "../ui/NotificationBanner";
 import Button from "../ui/Button";
 import DomainVerificationHeader from "./DomainVerificationHeader";
@@ -60,12 +62,13 @@ export default function DomainVerificationScreen() {
           router.replace(status.targetRoute as any);
           return;
         }
-        if (status.orgId) {
+        const orgId = await resolveUserOrgId().catch(() => null);
+        if (orgId) {
           const supabase = getSupabaseClient();
           const { data: rec } = await supabase
             .from(TABLES.DOMAIN_VERIFICATIONS)
-            .select("domain, verification_status, dns_records")
-            .eq("org_id", status.orgId)
+            .select(`${DB_KEYS.DOMAIN}, ${DB_KEYS.VERIFICATION_STATUS}, ${DB_KEYS.DNS_RECORDS}`)
+            .eq(DB_KEYS.ORG_ID, orgId)
             .maybeSingle();
 
           if (!isMounted) return;

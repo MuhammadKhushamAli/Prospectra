@@ -18,3 +18,16 @@ export interface TargetIndustriesData {
   orgId: string;
   industries: string[];
 }
+
+export interface TargetIndustry {
+  id: string;
+  org_id: string;
+  target_industries: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserTargetIndustry {
+  user_id: string;
+  target_industry_id: string;
+}

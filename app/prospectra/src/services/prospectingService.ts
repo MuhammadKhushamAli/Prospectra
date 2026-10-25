@@ -1,5 +1,7 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
+import { DB_KEYS } from "../constants/dbKeys";
+import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
 import type {
   CompanyProspect,
   EmailProspect,
@@ -163,46 +165,11 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
 
   const currentUserId = user.id;
 
-  // 1. Determine user membership and role from organization_members
-  const { data: member } = await supabase
-    .from(TABLES.ORGANIZATION_MEMBERS)
-    .select("org_id, role")
-    .eq("user_id", currentUserId)
-    .limit(1)
-    .maybeSingle();
-
-  let orgId = member?.org_id ?? null;
-  let role: ProspectingRole = member?.role;
-  let orgName: string | null = null;
-
-  // 2. Check if the user is owner in organizations table
-  if (!orgId || role !== "founder") {
-    const { data: ownerOrg } = await supabase
-      .from(TABLES.ORGANIZATIONS)
-      .select("id, name, owner_id")
-      .eq("owner_id", currentUserId)
-      .limit(1)
-      .maybeSingle();
-
-    if (ownerOrg?.id) {
-      orgId = orgId || ownerOrg.id;
-      orgName = ownerOrg.name;
-      role = "founder";
-    }
-  }
-
-  // Resolve organization name if not yet loaded
-  if (orgId && !orgName) {
-    const { data: orgRow } = await supabase
-      .from(TABLES.ORGANIZATIONS)
-      .select("name")
-      .eq("id", orgId)
-      .limit(1)
-      .maybeSingle();
-    if (orgRow?.name) {
-      orgName = orgRow.name;
-    }
-  }
+  // 1. Resolve organization membership, company name, and role using shared helper
+  const membership = await resolveUserOrgMembership(supabase, currentUserId);
+  const orgId = membership.orgId;
+  const orgName = membership.orgName;
+  const role: ProspectingRole = membership.isMember ? "member" : "founder";
 
   if (!orgId) {
     return {
@@ -220,14 +187,14 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
     const { data: compRows } = await supabase
       .from(TABLES.COMPANIES)
       .select("*")
-      .eq("org_id", orgId)
-      .order("created_at", { ascending: false });
+      .eq(DB_KEYS.ORG_ID, orgId)
+      .order(DB_KEYS.CREATED_AT, { ascending: false });
 
     const { data: emailRows } = await supabase
       .from(TABLES.EMAILS)
       .select("*, companies(name, domain)")
-      .eq("sent_by_org_id", orgId)
-      .order("created_at", { ascending: false });
+      .eq(DB_KEYS.SENT_BY_ORG_ID, orgId)
+      .order(DB_KEYS.CREATED_AT, { ascending: false });
 
     const companies: CompanyProspect[] = (compRows || []).map(mapCompanyRow);
     const companyMap = new Map(companies.map((c) => [c.id, c]));
@@ -249,9 +216,9 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
   const { data: memberEmailRows } = await supabase
     .from(TABLES.EMAILS)
     .select("*, companies(name, domain)")
-    .eq("sent_by_org_id", orgId)
-    .eq("sent_by_user_id", currentUserId)
-    .order("created_at", { ascending: false });
+    .eq(DB_KEYS.SENT_BY_ORG_ID, orgId)
+    .eq(DB_KEYS.SENT_BY_USER_ID, currentUserId)
+    .order(DB_KEYS.CREATED_AT, { ascending: false });
 
   let memberCompRows: any[] | null = null;
 
@@ -259,9 +226,9 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
     const directQuery = await supabase
       .from(TABLES.COMPANIES)
       .select("*")
-      .eq("org_id", orgId)
-      .eq("user_id", currentUserId)
-      .order("created_at", { ascending: false });
+      .eq(DB_KEYS.ORG_ID, orgId)
+      .eq(DB_KEYS.USER_ID, currentUserId)
+      .order(DB_KEYS.CREATED_AT, { ascending: false });
 
     if (!directQuery.error && directQuery.data) {
       memberCompRows = directQuery.data;
@@ -279,9 +246,9 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
       const { data: linkedComps } = await supabase
         .from(TABLES.COMPANIES)
         .select("*")
-        .eq("org_id", orgId)
-        .in("id", emailCompanyIds)
-        .order("created_at", { ascending: false });
+        .eq(DB_KEYS.ORG_ID, orgId)
+        .in(DB_KEYS.ID, emailCompanyIds)
+        .order(DB_KEYS.CREATED_AT, { ascending: false });
 
       if (linkedComps) {
         memberCompRows = linkedComps;
@@ -316,8 +283,8 @@ export async function updateCompanyStatusInDb(
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from(TABLES.COMPANIES)
-      .update({ status })
-      .eq("id", companyId);
+      .update({ [DB_KEYS.STATUS]: status })
+      .eq(DB_KEYS.ID, companyId);
 
     if (error) {
       console.warn("Could not update company status in DB:", error.message);
@@ -341,8 +308,8 @@ export async function updateEmailStatusInDb(
     const supabase = getSupabaseClient();
     const { error } = await supabase
       .from(TABLES.EMAILS)
-      .update({ status })
-      .eq("id", emailId);
+      .update({ [DB_KEYS.STATUS]: status })
+      .eq(DB_KEYS.ID, emailId);
 
     if (error) {
       console.warn("Could not update email status in DB:", error.message);
@@ -366,7 +333,10 @@ export async function updateEmailContentInDb(
 ): Promise<boolean> {
   try {
     const supabase = getSupabaseClient();
-    const payload: Record<string, any> = { subject, body };
+    const payload: Record<string, any> = {
+      [DB_KEYS.SUBJECT]: subject,
+      [DB_KEYS.BODY]: body,
+    };
     if (reviewScore !== undefined) {
       payload.review_score = reviewScore;
     }
@@ -374,7 +344,7 @@ export async function updateEmailContentInDb(
     const { error } = await supabase
       .from(TABLES.EMAILS)
       .update(payload)
-      .eq("id", emailId);
+      .eq(DB_KEYS.ID, emailId);
 
     if (error) {
       console.warn("Could not update email content in DB:", error.message);

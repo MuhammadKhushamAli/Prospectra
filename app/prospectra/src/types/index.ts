@@ -10,3 +10,4 @@ export * from "./api";
 export * from "./skills";
 export * from "./prospecting";
 export * from "./tables";
+export * from "./searchProgress";

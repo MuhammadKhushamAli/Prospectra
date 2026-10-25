@@ -15,8 +15,14 @@ import { AlertCircle, CheckCircle2, Lock } from "lucide-react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { getSupabaseClient } from "../../config/supabaseClient";
-import { checkUserOnboardingStatus } from "../../services/onboardingService";
-import type { UserOnboardingStatus } from "../../types/onboarding";
+import { TABLES } from "../../constants/tables";
+import { DB_KEYS } from "../../constants/dbKeys";
+import {
+  checkUserOnboardingStatus,
+  resolveUserOrgMembership,
+} from "../../services/onboardingService";
+import { getProfileFromSupabase } from "../../services/profileService";
+import { getTargetIndustries } from "../../services/targetIndustryService";
 import {
   appName,
   buttonVariant,
@@ -27,9 +33,66 @@ import type { NotificationVariant } from "../../types/ui";
 import Button from "../../components/ui/Button";
 import NotificationBanner from "../../components/ui/NotificationBanner";
 
+import type { UserOnboardingStatus } from "../../types/onboarding";
+
+interface HomeDashboardData {
+  headline: string | null;
+  hasProfile: boolean;
+  hasTargetIndustries: boolean;
+  orgId: string | null;
+  orgName: string | null;
+  domain: string | null;
+}
+
+async function fetchHomeDashboardData(
+  userId: string,
+  onboarding: UserOnboardingStatus,
+): Promise<HomeDashboardData> {
+  const supabase = getSupabaseClient();
+
+  // 1. Reuse headline and company name (orgName) from onboarding
+  const headline = onboarding.headline ?? null;
+  const orgName = onboarding.orgName ?? null;
+
+  // 2. Fetch target industries fresh from DB
+  const targetIndustries = await getTargetIndustries().catch(() => []);
+  const hasTargetIndustries = targetIndustries.length > 0;
+
+  // 3. Resolve organization ID fresh from DB using shared membership resolver
+  const { orgId, orgName: resolvedOrgName } = await resolveUserOrgMembership(
+    supabase,
+    userId,
+  );
+  const activeOrgName = resolvedOrgName || orgName;
+
+  // 4. Fetch domain fresh from DB
+  let domain: string | null = null;
+  if (orgId) {
+    const { data: domainRec } = await supabase
+      .from(TABLES.DOMAIN_VERIFICATIONS)
+      .select(DB_KEYS.DOMAIN)
+      .eq(DB_KEYS.ORG_ID, orgId)
+      .limit(1)
+      .maybeSingle();
+    domain = domainRec?.domain ?? null;
+  }
+
+  const hasProfile = Boolean(headline) && hasTargetIndustries;
+
+  return {
+    headline,
+    hasProfile,
+    hasTargetIndustries,
+    orgId,
+    orgName: activeOrgName,
+    domain,
+  };
+}
+
 export default function HomeRoute() {
   const colors = useTheme();
-  const [status, setStatus] = useState<UserOnboardingStatus | null>(null);
+  const [dashboardData, setDashboardData] =
+    useState<HomeDashboardData | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState<{
@@ -49,12 +112,21 @@ export default function HomeRoute() {
             return;
           }
 
-          setStatus(onboarding);
-
           const supabase = getSupabaseClient();
           const { data: sessionData } = await supabase.auth.getSession();
+          const user = sessionData?.session?.user;
+          if (!user) {
+            router.replace("/auth");
+            return;
+          }
+
           if (isMounted) {
-            setUserEmail(sessionData?.session?.user?.email ?? null);
+            setUserEmail(user.email ?? null);
+          }
+
+          const dashboard = await fetchHomeDashboardData(user.id, onboarding);
+          if (isMounted) {
+            setDashboardData(dashboard);
           }
         } catch {
           if (isMounted) {
@@ -85,14 +157,14 @@ export default function HomeRoute() {
   };
 
   const handleCompleteProfile = () => {
-    if (status?.headline && !status?.hasTargetIndustries) {
+    if (dashboardData?.headline && !dashboardData?.hasTargetIndustries) {
       router.push("/target-industries" as any);
     } else {
       router.push("/profile-setup");
     }
   };
 
-  const hasProfile = Boolean(status?.hasProfile);
+  const hasProfile = Boolean(dashboardData?.hasProfile);
 
   const handlePerformOperation = (operationName: string) => {
     if (!hasProfile) {
@@ -177,11 +249,11 @@ export default function HomeRoute() {
               </Text>
             </Text>
           ) : null}
-          {hasProfile && status?.headline ? (
+          {hasProfile && dashboardData?.headline ? (
             <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
               Headline:{" "}
               <Text style={{ color: colors.text, fontFamily: "DMSansMedium" }}>
-                {status.headline}
+                {dashboardData.headline}
               </Text>
             </Text>
           ) : null}
@@ -279,7 +351,7 @@ export default function HomeRoute() {
                 </View>
               </View>
               <Text style={[styles.cardMainValue, { color: colors.text }]}>
-                {status?.headline || "Profile Configured"}
+                {dashboardData?.headline || "Profile Configured"}
               </Text>
               <View style={styles.actionRow}>
                 <Button
@@ -322,11 +394,11 @@ export default function HomeRoute() {
               </View>
             </View>
             <Text style={[styles.cardMainValue, { color: colors.text }]}>
-              {status?.orgName || "Primary Workspace"}
+              {dashboardData?.orgName || "Primary Workspace"}
             </Text>
             <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
               Workspace ID:{" "}
-              {status?.orgId ? `${status.orgId.slice(0, 8)}...` : ""}
+              {dashboardData?.orgId ? `${dashboardData.orgId.slice(0, 8)}...` : ""}
             </Text>
           </View>
 
@@ -361,7 +433,7 @@ export default function HomeRoute() {
               </View>
             </View>
             <Text style={[styles.cardMainValue, { color: colors.text }]}>
-              {status?.domain || "Authenticated Domain"}
+              {dashboardData?.domain || "Authenticated Domain"}
             </Text>
             <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
               DNS records verified & synced.

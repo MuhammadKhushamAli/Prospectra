@@ -2,7 +2,8 @@ import axios from "axios";
 
 import { getSupabaseClient } from "../config/supabaseClient";
 import { backendApiPath } from "../constants/api";
-import { TABLES } from "../constants/tables";
+import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
+import { isDomainVerified } from "./onboarding/isDomainVerified";
 import type {
   DnsInstructions,
   DnsRecordInfo,
@@ -17,6 +18,8 @@ export type {
   VerifyDomainResponse,
 };
 
+export { isDomainVerified };
+
 export async function resolveUserOrgId(): Promise<string> {
   const supabase = getSupabaseClient();
   const { data: sessionData, error: sessionErr } =
@@ -25,25 +28,8 @@ export async function resolveUserOrgId(): Promise<string> {
   const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("No authenticated session found.");
 
-  // 1. Check organization_members
-  const { data: member } = await supabase
-    .from(TABLES.ORGANIZATION_MEMBERS)
-    .select("org_id")
-    .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-
-  if (member?.org_id) return member.org_id;
-
-  // 2. Check organizations where user is owner
-  const { data: org } = await supabase
-    .from(TABLES.ORGANIZATIONS)
-    .select("id")
-    .eq("owner_id", userId)
-    .limit(1)
-    .maybeSingle();
-
-  if (org?.id) return org.id;
+  const { orgId } = await resolveUserOrgMembership(supabase, userId);
+  if (orgId) return orgId;
 
   throw new Error("Could not find your organization.");
 }
