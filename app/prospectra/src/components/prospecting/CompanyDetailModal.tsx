@@ -115,6 +115,8 @@ export default function CompanyDetailModal({
   const statusColor = getStatusColor();
   const authScore = company.company_auth?.score;
   const authFeedback = company.company_auth?.feedback;
+  const userSkills = company.company_auth?.user_skills || [];
+  const targetIndustries = company.company_auth?.target_industries || [];
 
   const formattedDate = company.created_at
     ? new Date(company.created_at).toLocaleDateString(undefined, {
@@ -345,6 +347,90 @@ export default function CompanyDetailModal({
                   >
                     High compatibility detected with your organization's skills and outreach parameters.
                   </Text>
+                )}
+
+                {userSkills.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text
+                      style={{
+                        fontFamily: "DMSansMedium",
+                        fontSize: tokens.fontSize.xs,
+                        color: colors.textSecondary,
+                        marginBottom: 6,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      Matching Skills
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {userSkills.map((skill, idx) => (
+                        <View
+                          key={idx}
+                          style={{
+                            backgroundColor: `${colors.primary}18`,
+                            borderColor: `${colors.primary}40`,
+                            borderWidth: 1,
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: colors.primary,
+                              fontWeight: "500",
+                            }}
+                          >
+                            {skill}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {targetIndustries.length > 0 && (
+                  <View style={{ marginTop: 12 }}>
+                    <Text
+                      style={{
+                        fontFamily: "DMSansMedium",
+                        fontSize: tokens.fontSize.xs,
+                        color: colors.textSecondary,
+                        marginBottom: 6,
+                        textTransform: "uppercase",
+                        letterSpacing: 0.5,
+                      }}
+                    >
+                      Matching Target Industries
+                    </Text>
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                      {targetIndustries.map((ind, idx) => (
+                        <View
+                          key={idx}
+                          style={{
+                            backgroundColor: `${colors.secondary}18`,
+                            borderColor: `${colors.secondary}40`,
+                            borderWidth: 1,
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              color: colors.secondary,
+                              fontWeight: "500",
+                            }}
+                          >
+                            {ind}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
                 )}
               </View>
             ) : null}

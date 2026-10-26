@@ -6,10 +6,12 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class CompanyAuth(BaseModel):
-    """Company authenticity score with conditional feedback.
+    """Company authenticity score with conditional feedback and matched criteria.
 
     The score is always required. If the score falls below 70, feedback
     explaining the low score is mandatory.
+    User skills and target industries identify which user capabilities
+    and target industries the agent feels make the company authentic and relevant.
     """
 
     score: int = Field(
@@ -21,6 +23,14 @@ class CompanyAuth(BaseModel):
     feedback: str | None = Field(
         default=None,
         description="Explanation required when the score is below 70.",
+    )
+    user_skills: list[str] = Field(
+        default_factory=list,
+        description="Specific user skills that make this company authentic and relevant.",
+    )
+    target_industries: list[str] = Field(
+        default_factory=list,
+        description="Specific target industries that make this company authentic and relevant.",
     )
 
     @model_validator(mode="after")

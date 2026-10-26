@@ -32,6 +32,8 @@ export function mapCompanyRow(r: any): CompanyProspect {
       ? {
           score: r.raw_signals.auth_score,
           feedback: r.raw_signals.auth_feedback || null,
+          user_skills: r.raw_signals.user_skills || [],
+          target_industries: r.raw_signals.target_industries || [],
         }
       : null,
     emails: Array.isArray(r.emails) ? r.emails : undefined,

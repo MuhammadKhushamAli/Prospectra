@@ -24,6 +24,8 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
                 company.raw_signals = {}
             company.raw_signals["auth_score"] = auth_info.score
             company.raw_signals["auth_feedback"] = auth_info.feedback
+            company.raw_signals["user_skills"] = auth_info.user_skills
+            company.raw_signals["target_industries"] = auth_info.target_industries
 
             if auth_info.score >= 70:
                 accepted_companies.append(company)

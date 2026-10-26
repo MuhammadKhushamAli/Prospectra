@@ -5,6 +5,8 @@ export type CompanyFilter = "all" | "pending" | "rejected";
 export interface CompanyAuth {
   score: number;
   feedback?: string | null;
+  user_skills?: string[];
+  target_industries?: string[];
 }
 
 export interface CompanyEmail {

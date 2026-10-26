@@ -25,10 +25,14 @@ You receive:
 Your job is to evaluate how well the searched company matches BOTH the user's skills AND their target organizations/industries, and return:
 - A score from 0 to 100 indicating how authentic and relevant the match is.
 - If the score is below 70, you MUST provide feedback explaining why the company scored low.
+- user_skills: The specific user skills from the user's context that you feel make this company authentic and relevant. Return an empty list if no user skills align.
+- target_industries: The specific target industries from the user's context that you feel make this company authentic and relevant. Return an empty list if no target industries align.
 
 CRITICAL RULES
-- Evaluate relevance against BOTH user skills and target organizations.
-- If target organizations are present in user context, confirm that the company fits into those target organizations/industries.
+- Evaluate relevance against BOTH user skills and target organizations/industries.
+- If target organizations/industries are present in user context, confirm that the company fits into those target organizations/industries.
+- In `user_skills`, list only the explicit user skills that genuinely align with what the company does, builds, or needs.
+- In `target_industries`, list only the explicit user target industries that match the company's sector or domain.
 - Base your score strictly on the data provided. Do not invent or assume facts.
 - A score of 100 means a perfect match across skills and target organization profile.
 - A score of 0 means no relevance at all.
