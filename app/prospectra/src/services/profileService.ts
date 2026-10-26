@@ -183,6 +183,63 @@ export async function fetchUserSkillNames(
 }
 
 /**
+ * Fetch user full name from user_profiles table in DB.
+ */
+export async function fetchProfileFullNameFromDb(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string,
+): Promise<string | null> {
+  const { data: profileRow } = await supabase
+    .from(TABLES.USER_PROFILES)
+    .select(DB_KEYS.FULL_NAME)
+    .eq(DB_KEYS.USER_ID, userId)
+    .limit(1)
+    .maybeSingle();
+
+  return profileRow?.full_name || null;
+}
+
+/**
+ * In profile setup: store full name from metadata to DB table user_profiles,
+ * then return the profile fetched directly from the DB.
+ */
+export async function initializeProfileFromMetadata(): Promise<UserProfileData | null> {
+  const supabase = getSupabaseClient();
+  const { data: sessionData, error } = await supabase.auth.getSession();
+  if (error || !sessionData.session?.user) return null;
+
+  const user = sessionData.session.user;
+
+  // 1. Check if profile already exists in DB
+  const existingProfile = await getProfileFromSupabase();
+  if (existingProfile) {
+    return existingProfile;
+  }
+
+  // 2. Resolve active organization ID
+  const orgId = await resolveProfileOrgId(supabase, user.id).catch(() => null);
+  if (!orgId) return null;
+
+  // 3. Store full name from metadata to DB table user_profiles
+  const fullName = (user.user_metadata?.full_name ||
+    user.user_metadata?.display_name) as string;
+  const email = user.email || "";
+
+  await upsertProfileRecord(supabase, {
+    orgId,
+    userId: user.id,
+    fullName,
+    headline: "",
+    email,
+    githubUrl: null,
+    linkedinUrl: null,
+  });
+
+  // 4. Fetch and return fresh profile from DB
+  return await getProfileFromSupabase();
+}
+
+/**
  * Update user profile and skills in Supabase.
  */
 export async function updateProfileWithSupabase(
@@ -201,21 +258,16 @@ export async function updateProfileWithSupabase(
   const githubUrl = params.githubUrl?.trim() || null;
   const linkedinUrl = params.linkedinUrl?.trim() || null;
 
+  // In profile setup: fetch existing full name from DB, fallback to metadata if initial
   const existingFullName = await fetchExistingProfileFullName(
     supabase,
     orgId,
     user.id,
   );
-  const metadataName =
-    (user.user_metadata?.display_name as string | undefined) ||
-    (user.user_metadata?.full_name as string | undefined) ||
-    "";
   const fullName =
-    params.fullName?.trim() || existingFullName?.trim() || metadataName.trim() || "";
-
-  if (!fullName) {
-    throw new Error("Full name is required.");
-  }
+    existingFullName ||
+    ((user.user_metadata?.full_name ||
+      user.user_metadata?.display_name) as string);
 
   const email = user.email || "";
   if (!email) {
@@ -262,20 +314,18 @@ export async function getProfileFromSupabase(): Promise<UserProfileData | null> 
     .limit(1)
     .maybeSingle();
 
+  if (!profileRow) return null;
+
   const skills = await fetchUserSkillNames(supabase, user.id);
 
-  if (profileRow) {
-    return {
-      userId: user.id,
-      fullName: profileRow.full_name,
-      email: profileRow.email,
-      headline: profileRow.headline,
-      skills,
-      orgId: profileRow.org_id,
-      githubUrl: profileRow.github_url || null,
-      linkedinUrl: profileRow.linkedin_url || null,
-    };
-  }
-
-  return null;
+  return {
+    userId: user.id,
+    fullName: profileRow.full_name,
+    email: profileRow.email,
+    headline: profileRow.headline,
+    skills,
+    orgId: profileRow.org_id,
+    githubUrl: profileRow.github_url || null,
+    linkedinUrl: profileRow.linkedin_url || null,
+  };
 }

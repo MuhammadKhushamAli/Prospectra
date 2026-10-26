@@ -22,8 +22,7 @@ export default function ProfileSetupHeader({ userName }: ProfileSetupHeaderProps
           {profileSetupCopy.title}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {userName ? `Welcome, ${userName}! ` : ""}
-          {profileSetupCopy.subtitle}
+          Welcome, {userName}! {profileSetupCopy.subtitle}
         </Text>
       </View>
     </View>

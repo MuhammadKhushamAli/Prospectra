@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import {
   getProfileFromSupabase,
+  initializeProfileFromMetadata,
   updateProfileWithSupabase,
 } from "../services/profileService";
 import type {
@@ -33,5 +34,14 @@ export function useProfile() {
     }
   }, []);
 
-  return { updateProfile, getProfile, isLoading };
+  const initializeProfile = useCallback(async (): Promise<UserProfileData | null> => {
+    setIsLoading(true);
+    try {
+      return await initializeProfileFromMetadata();
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  return { updateProfile, getProfile, initializeProfile, isLoading };
 }

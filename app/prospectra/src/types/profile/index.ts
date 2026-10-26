@@ -14,7 +14,6 @@ interface UserProfile {
 interface UpdateProfileParams {
   headline: string;
   skills?: string[];
-  fullName: string;
   githubUrl?: string;
   linkedinUrl?: string;
 }
@@ -31,17 +30,15 @@ interface UserProfileData {
 }
 
 interface ProfileSetupHeaderProps {
-  userName?: string;
+  userName: string;
 }
 
 interface ProfileSetupFormProps {
-  initialFullName?: string;
   initialHeadline?: string;
   initialSkills?: string[];
   initialGithubUrl?: string;
   initialLinkedinUrl?: string;
   onSubmit?: (params: {
-    fullName: string;
     headline: string;
     skills: string[];
     githubUrl?: string;

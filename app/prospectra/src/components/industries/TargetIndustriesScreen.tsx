@@ -13,10 +13,9 @@ import { router, useFocusEffect } from "expo-router";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useTargetIndustries } from "../../hooks/useTargetIndustries";
-import { getSupabaseClient } from "../../config/supabaseClient";
-import { TABLES } from "../../constants/tables";
-import { DB_KEYS } from "../../constants/dbKeys";
+import { getSupabaseClient } from "../../config/supabaseClient";                      
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
+import { fetchProfileFullNameFromDb } from "../../services/profileService";
 import NotificationBanner from "../ui/NotificationBanner";
 import TargetIndustriesHeader from "./TargetIndustriesHeader";
 import TargetIndustriesForm from "./TargetIndustriesForm";
@@ -60,19 +59,17 @@ export default function TargetIndustriesScreen() {
             setInitialIndustries(existing);
           }
 
-          // Fetch user full name from user_profiles database table
+          // Fetch user full name directly from user_profiles table in DB
           const supabase = getSupabaseClient();
           const { data: sessionData } = await supabase.auth.getSession();
           const currentUserId = sessionData?.session?.user?.id;
           if (isMounted && currentUserId) {
-            const { data: profileRow } = await supabase
-              .from(TABLES.USER_PROFILES)
-              .select(DB_KEYS.FULL_NAME)
-              .eq(DB_KEYS.USER_ID, currentUserId)
-              .limit(1)
-              .maybeSingle();
-            if (isMounted && profileRow?.full_name) {
-              setUserName(profileRow.full_name);
+            const dbFullName = await fetchProfileFullNameFromDb(
+              supabase,
+              currentUserId,
+            );
+            if (isMounted && dbFullName) {
+              setUserName(dbFullName);
             }
           }
         } catch {

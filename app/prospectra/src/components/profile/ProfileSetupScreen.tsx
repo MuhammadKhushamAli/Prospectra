@@ -27,7 +27,7 @@ import {
 
 export default function ProfileSetupScreen() {
   const colors = useTheme();
-  const { updateProfile, getProfile, isLoading } = useProfile();
+  const { updateProfile, initializeProfile, isLoading } = useProfile();
   const [userName, setUserName] = useState<string>("");
   const [initialHeadline, setInitialHeadline] = useState<string>("");
   const [initialSkills, setInitialSkills] = useState<string[]>([]);
@@ -55,9 +55,9 @@ export default function ProfileSetupScreen() {
             return;
           }
 
-          // Load profile directly from database tables
-          const profile = await getProfile();
-          if (isMounted && profile?.fullName) {
+          // In profile setup: store full name from metadata to DB table user_profiles, then fetch from DB
+          const profile = await initializeProfile();
+          if (isMounted && profile) {
             setUserName(profile.fullName);
             setInitialHeadline(profile.headline || "");
             setInitialSkills(profile.skills || []);
@@ -80,11 +80,10 @@ export default function ProfileSetupScreen() {
       return () => {
         isMounted = false;
       };
-    }, [getProfile]),
+    }, [initializeProfile]),
   );
 
   const handleSaveProfile = async (params: {
-    fullName: string;
     headline: string;
     skills: string[];
     githubUrl?: string;
@@ -93,7 +92,6 @@ export default function ProfileSetupScreen() {
     setNotification(null);
     try {
       await updateProfile(params);
-      setUserName(params.fullName);
       setNotification({
         variant: notificationVariant.success,
         message: profileSetupCopy.success,
@@ -148,7 +146,6 @@ export default function ProfileSetupScreen() {
         >
           <ProfileSetupHeader userName={userName} />
           <ProfileSetupForm
-            initialFullName={userName}
             initialHeadline={initialHeadline}
             initialSkills={initialSkills}
             initialGithubUrl={initialGithubUrl}

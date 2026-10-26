@@ -17,7 +17,6 @@ import { profileSetupCopy } from "../../constants/constants";
 import {
   validateGithubUrl,
   validateLinkedinUrl,
-  validateProfileFullName,
   validateProfileHeadline,
 } from "../../validation/profileValidation";
 import { fetchGitHubProfileByUsername } from "../../services/githubAuthService";
@@ -27,7 +26,6 @@ import ProfileSkillsSection from "./ProfileSkillsSection";
 export type { ProfileSetupFormProps };
 
 export default function ProfileSetupForm({
-  initialFullName = "",
   initialHeadline = "",
   initialSkills = [],
   initialGithubUrl = "",
@@ -37,7 +35,6 @@ export default function ProfileSetupForm({
 }: ProfileSetupFormProps) {
   const colors = useTheme();
 
-  const [fullName, setFullName] = useState(initialFullName);
   const [headline, setHeadline] = useState(initialHeadline);
   const [skills, setSkills] = useState<string[]>(initialSkills);
   const [githubUrl, setGithubUrl] = useState(initialGithubUrl);
@@ -46,7 +43,6 @@ export default function ProfileSetupForm({
   );
 
   // Field validation errors
-  const [fullNameError, setFullNameError] = useState<string | null>(null);
   const [headlineError, setHeadlineError] = useState<string | null>(null);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
@@ -56,12 +52,6 @@ export default function ProfileSetupForm({
   const [githubUsernameInput, setGithubUsernameInput] = useState("");
   const [githubModalError, setGithubModalError] = useState<string | null>(null);
   const [isFetchingUsername, setIsFetchingUsername] = useState(false);
-
-  useEffect(() => {
-    if (initialFullName) {
-      setFullName(initialFullName);
-    }
-  }, [initialFullName]);
 
   useEffect(() => {
     setHeadline(initialHeadline);
@@ -82,11 +72,6 @@ export default function ProfileSetupForm({
       setLinkedinUrl(initialLinkedinUrl);
     }
   }, [initialLinkedinUrl]);
-
-  const handleFullNameChange = (text: string) => {
-    setFullName(text);
-    if (fullNameError) setFullNameError(null);
-  };
 
   const handleHeadlineChange = (text: string) => {
     setHeadline(text);
@@ -142,20 +127,17 @@ export default function ProfileSetupForm({
   };
 
   const handleSubmit = () => {
-    const nameErr = validateProfileFullName(fullName);
     const headErr = validateProfileHeadline(headline);
     const ghErr = validateGithubUrl(githubUrl);
     const inErr = validateLinkedinUrl(linkedinUrl);
 
-    if (nameErr || headErr || ghErr || inErr) {
-      setFullNameError(nameErr);
+    if (headErr || ghErr || inErr) {
       setHeadlineError(headErr);
       setGithubError(ghErr);
       setLinkedinError(inErr);
       return;
     }
 
-    setFullNameError(null);
     setHeadlineError(null);
     setGithubError(null);
     setLinkedinError(null);
@@ -185,7 +167,6 @@ export default function ProfileSetupForm({
     }
 
     onSubmit?.({
-      fullName: fullName.trim(),
       headline: headline.trim(),
       skills,
       githubUrl: finalGithubUrl || undefined,
@@ -199,18 +180,6 @@ export default function ProfileSetupForm({
 
   return (
     <View style={styles.form}>
-      {/* 1. Full Name */}
-      <TextField
-        label={`${profileSetupCopy.fields.fullName} *`}
-        placeholder={profileSetupCopy.placeholders.fullName}
-        keyboardType="default"
-        autoCapitalize="words"
-        autoCorrect={false}
-        value={fullName}
-        onChangeText={handleFullNameChange}
-        editable={!isLoading}
-        error={fullNameError}
-      />
 
       {/* 2. Professional Headline */}
       <TextField
