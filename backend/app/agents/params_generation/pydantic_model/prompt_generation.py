@@ -1,12 +1,9 @@
 """Combined prompt-generation output schema."""
 
 from pydantic import BaseModel
-
-from .apollo import ApolloPrompt
-from .tavily import TavilyPrompt
+from .searxng import SearxngPrompt
 
 
 class PromptGenerationResponse(BaseModel):
-    """Prompt-generation output for Apollo and Tavily."""
-    apollo: ApolloPrompt
-    tavily: TavilyPrompt
+    """Prompt-generation output containing SearXNG queries."""
+    searxng: SearxngPrompt

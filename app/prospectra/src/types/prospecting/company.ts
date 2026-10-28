@@ -28,6 +28,16 @@ export interface Company {
   source: string;
   website?: string | null;
   linkedin_url?: string | null;
+  about_text?: string | null;
+  need_hypothesis?: string | null;
+  needed_skills?: string[];
+  needed_services?: string[];
+  need_signals?: string[];
+  proposed_solution?: string | null;
+  services_offered?: string[];
+  digital_features?: string[];
+  auth_score?: number | null;
+  auth_feedback?: string | null;
   raw_signals?: Record<string, any> | null;
   status:
     | "active"

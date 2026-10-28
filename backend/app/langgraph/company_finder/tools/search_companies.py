@@ -1,23 +1,36 @@
-"""Tools and sub-routines for searching target companies via Apollo and Tavily."""
+"""Tools and sub-routines for searching candidate companies via SearXNG."""
 
+import asyncio
 import os
+import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import httpx
 
 from ..state.state import GraphState
 from app.models.company import Company
 from app.models.search_progress import SearchProgress, SearchProgressSource
-from app.services.apollo_companies import find_apollo_companies
-from app.services.tavily import filter_and_clean_tavily_results, search_tavily
+from app.services.domain_filters import (
+    extract_company_info_from_url,
+    extract_registered_domain,
+    is_blocked_url,
+    is_job_posting,
+    is_listicle_title,
+)
+from app.services.searxng import search_searxng
 from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
 from app.services.supabase import get_supabase_client
 
 SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
+COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
+PAGES_PER_QUERY = int(os.environ.get("SEARXNG_PAGES_PER_QUERY", "2"))
+MAX_CANDIDATES = int(os.environ.get("SEARXNG_MAX_CANDIDATES", "40"))
 
 
 def is_valid_uuid(val: Any) -> bool:
-    """Validate whether a value is a non-empty, valid UUID string or UUID object."""
+    """Validate whether a value is a valid UUID."""
     if not val or not isinstance(val, (str, uuid.UUID)):
         return False
     try:
@@ -27,240 +40,241 @@ def is_valid_uuid(val: Any) -> bool:
         return False
 
 
-def extract_user_skill_ids(user_context: Any) -> List[str]:
-    """Extract a list of valid skill UUID strings from the user context."""
-    skill_ids: List[str] = []
-    if not user_context:
-        return skill_ids
+def clean_company_name(title: str, domain: str) -> str:
+    """Extract clean company name from page title or domain."""
+    if not title:
+        parts = domain.split(".")
+        return parts[0].capitalize()
 
-    skills_data = getattr(user_context, "skills", None)
-    if skills_data is None and isinstance(user_context, dict):
-        skills_data = user_context.get("skills")
+    # Common separators in page titles: "Acme Dental | Family Care in Austin"
+    delimiters = [r"\s*\|\s*", r"\s*–\s*", r"\s*-\s*", r"\s*:\s*", r"\s*—\s*"]
+    split_pattern = "|".join(delimiters)
+    segments = [s.strip() for s in re.split(split_pattern, title) if s.strip()]
 
-    if skills_data:
-        for s in skills_data:
-            sid = getattr(s, "id", None) or (s.get("id") if isinstance(s, dict) else None)
-            if sid and is_valid_uuid(sid):
-                skill_ids.append(str(sid))
+    domain_core = domain.split(".")[0].lower()
+    for seg in segments:
+        clean_seg = re.sub(r"[^a-zA-Z0-9\s]", "", seg).lower()
+        if domain_core in clean_seg or any(w in clean_seg for w in domain_core.split("-")):
+            return seg[:60]
 
-    return skill_ids
+    # Return shortest segment if none directly matched domain
+    if segments:
+        return min(segments, key=len)[:60]
+    return title[:60]
 
 
-async def fetch_last_search_pages(
+async def fetch_last_search_page(
     supabase: Any,
     org_id: str,
-    user_id: Optional[str] = None,
-) -> Tuple[int, int]:
-    """Query search_progress to retrieve the last fetched page numbers for Apollo and Tavily."""
-    last_page_apollo = 0
-    last_page_tavily = 0
-
-    if not is_valid_uuid(org_id):
-        return last_page_apollo, last_page_tavily
+    user_id: str,
+) -> int:
+    """Query search_progress to retrieve last fetched page for SearXNG."""
+    if not (is_valid_uuid(org_id) and is_valid_uuid(user_id)):
+        return 0
 
     try:
         query = (
             supabase.table(SEARCH_PROGRESS_TABLE)
-            .select("source, last_page_fetched")
+            .select("last_page_fetched")
             .eq("org_id", str(org_id))
+            .eq("user_id", str(user_id))
+            .eq("source", SearchProgressSource.SEARXNG.value)
+            .limit(1)
         )
-        if user_id and is_valid_uuid(user_id):
-            query = query.eq("user_id", str(user_id))
-
         response = await query.execute()
-
-        for record in response.data or []:
-            src = record.get("source")
-            page_val = record.get("last_page_fetched", 0)
-            if src == SearchProgressSource.APOLLO.value:
-                last_page_apollo = page_val
-            elif src == SearchProgressSource.TAVILY.value:
-                last_page_tavily = page_val
+        if response.data and len(response.data) > 0:
+            return response.data[0].get("last_page_fetched", 0)
     except Exception as e:
-        print(f"Warning: Failed to fetch search progress: {str(e)}")
+        print(f"Warning: Failed to fetch SearXNG search progress: {str(e)}")
 
-    return last_page_apollo, last_page_tavily
-
-
-def parse_apollo_company(org: Dict[str, Any], org_id: str) -> Company:
-    """Map a raw Apollo organization result to a domain Company object."""
-    raw_domain = org.get("primary_domain") or ""
-    website_url = org.get("website_url") or ""
-
-    return Company(
-        id=str(uuid.uuid4()),
-        org_id=str(org_id),
-        name=org.get("name", "Unknown"),
-        domain=raw_domain.lower() if raw_domain else "",
-        website=website_url if website_url else (f"https://{raw_domain}" if raw_domain else None),
-        linkedin_url=org.get("linkedin_url"),
-        industry=org.get("industry", ""),
-        size=str(org.get("estimated_num_employees", "")) if org.get("estimated_num_employees") else "",
-        source=SearchProgressSource.APOLLO.value,
-        raw_signals=org,
-    )
+    return 0
 
 
-async def execute_apollo_search(
-    apollo_prompt: Any,
+async def fetch_existing_org_domains(
+    supabase: Any,
     org_id: str,
-    user_id: Optional[str],
-    last_page: int,
-    skill_ids: List[str],
-) -> Tuple[List[Company], Optional[SearchProgress], Optional[str]]:
-    """Execute search against Apollo API and return discovered companies and progress."""
-    companies: List[Company] = []
-    progress: Optional[SearchProgress] = None
-    error: Optional[str] = None
+    domains: List[str],
+) -> Set[str]:
+    """Check Supabase for candidate domains already stored for this organization."""
+    if not is_valid_uuid(org_id) or not domains:
+        return set()
 
     try:
-        current_page = last_page + 1
-        apollo_prompt.page = current_page
-
-        data = await find_apollo_companies(apollo_prompt)
-        organizations = data.get("organizations", [])
-
-        for org in organizations:
-            companies.append(parse_apollo_company(org, org_id))
-
-        progress = SearchProgress(
-            user_id=str(user_id) if is_valid_uuid(user_id) else None,
-            org_id=str(org_id),
-            last_page_fetched=current_page,
-            last_fetched_at=datetime.now(timezone.utc),
-            source=SearchProgressSource.APOLLO,
-            skill_ids=skill_ids,
+        response = (
+            await supabase.table(COMPANIES_TABLE)
+            .select("domain")
+            .eq("org_id", str(org_id))
+            .in_("domain", domains)
+            .execute()
         )
+        return {r["domain"].lower() for r in (response.data or []) if r.get("domain")}
     except Exception as e:
-        error = f"Apollo API error: {str(e)}"
-        print(error)
-
-    return companies, progress, error
-
-
-def parse_tavily_company(item: Dict[str, Any], org_id: str) -> Company:
-    """Map a cleaned Tavily result item to a domain Company object."""
-    return Company(
-        id=str(uuid.uuid4()),
-        org_id=str(org_id),
-        name=item.get("name", "Unknown"),
-        domain=item.get("domain", ""),
-        website=item.get("website"),
-        industry="",
-        size="",
-        source=SearchProgressSource.TAVILY.value,
-        raw_signals=item.get("raw_signals"),
-    )
-
-
-async def execute_tavily_search(
-    tavily_prompt: Any,
-    org_id: str,
-    user_id: Optional[str],
-    last_page: int,
-    skill_ids: List[str],
-) -> Tuple[List[Company], Optional[SearchProgress], Optional[str]]:
-    """Execute search against Tavily API and return discovered companies and progress."""
-    companies: List[Company] = []
-    progress: Optional[SearchProgress] = None
-    error: Optional[str] = None
-
-    try:
-        current_page = last_page + 1
-
-        data = await search_tavily(tavily_prompt)
-        results = data.get("results", [])
-        cleaned_companies = filter_and_clean_tavily_results(results)
-
-        for item in cleaned_companies:
-            companies.append(parse_tavily_company(item, org_id))
-
-        progress = SearchProgress(
-            user_id=str(user_id) if is_valid_uuid(user_id) else None,
-            org_id=str(org_id),
-            last_page_fetched=current_page,
-            last_fetched_at=datetime.now(timezone.utc),
-            source=SearchProgressSource.TAVILY,
-            skill_ids=skill_ids,
-        )
-    except Exception as e:
-        error = f"Tavily API error: {str(e)}"
-        print(error)
-
-    return companies, progress, error
+        print(f"Warning: Failed to check existing company domains: {str(e)}")
+        return set()
 
 
 async def search_companies_node(state: GraphState) -> Dict[str, Any]:
-    """Node that executes Apollo and Tavily searches and parses results into Company objects."""
+    """Node that executes SearXNG searches and outputs deduplicated Company objects."""
     search_prompt = state.get("search_prompt")
     user_context = state.get("user_context")
-    if not search_prompt:
-        raise ValueError("search_prompt is missing from the state.")
+    if not search_prompt or not search_prompt.searxng:
+        raise ValueError("SearXNG search prompt is missing from state.")
 
     org_id = (
         getattr(user_context, "org_id", "")
         if user_context and not isinstance(user_context, dict)
         else (user_context or {}).get("org_id", "")
-    )
-    if not org_id:
-        org_id = state.get("org_id", "")
+    ) or state.get("org_id", "")
 
     user_id = (
         getattr(user_context, "user_id", "")
         if user_context and not isinstance(user_context, dict)
         else (user_context or {}).get("user_id", "")
-    )
-    if not user_id:
-        user_id = state.get("user_id", "")
+    ) or state.get("user_id", "")
 
-    apollo_prompt = search_prompt.apollo
-    tavily_prompt = search_prompt.tavily
-
-    searched_companies: List[Company] = []
-    search_progress: List[SearchProgress] = []
+    queries = search_prompt.searxng.queries
+    seen_domains: Set[str] = set(state.get("seen_domains", []))
     errors: List[str] = list(state.get("errors", []))
 
     supabase = await get_supabase_client()
-    skill_ids = extract_user_skill_ids(user_context)
+    last_page = await fetch_last_search_page(supabase, str(org_id), str(user_id))
+    start_page = (last_page % 5) + 1  # Cycle across pages 1..5
 
-    # Fetch last fetched pages for tracking pagination
-    last_page_apollo, last_page_tavily = await fetch_last_search_pages(supabase, str(org_id), user_id)
+    print(f"\n========================================================")
+    print(f"[PHASE 2: SEARXNG SEARCH] Executing {len(queries)} queries across {PAGES_PER_QUERY} pages (start_page: {start_page})")
+    print(f"========================================================")
 
-    # 1. Execute Apollo search
-    if apollo_prompt:
-        apollo_companies, apollo_progress, apollo_err = await execute_apollo_search(
-            apollo_prompt=apollo_prompt,
-            org_id=str(org_id),
-            user_id=user_id,
-            last_page=last_page_apollo,
-            skill_ids=skill_ids,
+    searxng_tasks = []
+    async with httpx.AsyncClient() as http_client:
+        for q in queries:
+            for p in range(start_page, start_page + PAGES_PER_QUERY):
+                searxng_tasks.append((q, p, search_searxng(http_client, q.query, page=p)))
+
+        # Gather results with error resilience
+        raw_results = await asyncio.gather(
+            *[t[2] for t in searxng_tasks],
+            return_exceptions=True,
         )
-        searched_companies.extend(apollo_companies)
-        if apollo_progress and is_valid_uuid(org_id):
-            search_progress.append(apollo_progress)
-        if apollo_err:
-            errors.append(apollo_err)
 
-    # 2. Execute Tavily search
-    if tavily_prompt:
-        tavily_companies, tavily_progress, tavily_err = await execute_tavily_search(
-            tavily_prompt=tavily_prompt,
+    candidate_results: List[Tuple[Any, Dict[str, Any]]] = []
+    for idx, res in enumerate(raw_results):
+        if isinstance(res, Exception):
+            err_msg = f"SearXNG query error: {str(res)}"
+            print(f"  [ERROR] {err_msg}")
+            if err_msg not in errors:
+                errors.append(err_msg)
+            continue
+        query_obj = searxng_tasks[idx][0]
+        page_num = searxng_tasks[idx][1]
+        print(f"  SearXNG query [{query_obj.target_industry}] (page {page_num}) -> {len(res)} raw results")
+        for item in res:
+            candidate_results.append((query_obj, item))
+            # Log incoming item data sample
+            if len(candidate_results) <= 5 or len(candidate_results) % 10 == 0:
+                print(f"    -> Incoming result: Title='{item.get('title', '')[:50]}' | URL={item.get('url', '')}")
+                if item.get("content"):
+                    print(f"       Snippet: {item.get('content')[:120]}...")
+
+    # Process and filter candidates
+    discovered_companies: List[Company] = []
+    unique_domains_in_batch: Dict[str, Tuple[Any, Dict[str, Any], str, Optional[str]]] = {}
+    blocked_count = 0
+    jobs_count = 0
+
+    for query_obj, item in candidate_results:
+        url = item.get("url", "")
+        title = item.get("title", "")
+        snippet = item.get("content", "")
+
+        # 1. Strictly reject job postings, openings, and hiring vacancy listings
+        if is_job_posting(title=title, url=url, snippet=snippet):
+            jobs_count += 1
+            print(f"  [JOB REJECTED] Discarding job vacancy: '{title[:55]}' | URL={url}")
+            continue
+
+        # 2. Block general directories, search engines, job boards, and listicles
+        if not url or is_blocked_url(url) or is_listicle_title(title):
+            blocked_count += 1
+            continue
+
+        # 3. Extract distinct registered domain / platform company info
+        domain, website, linkedin_url = extract_company_info_from_url(url, title, snippet)
+        if not domain or domain in seen_domains:
+            continue
+
+        if domain not in unique_domains_in_batch:
+            unique_domains_in_batch[domain] = (query_obj, item, website, linkedin_url)
+
+    # Check for existing companies in DB
+    batch_domains = list(unique_domains_in_batch.keys())
+    existing_db_domains = await fetch_existing_org_domains(supabase, str(org_id), batch_domains)
+    if existing_db_domains:
+        print(f"  [DB DEDUP] Skipping {len(existing_db_domains)} already existing domain(s) in DB: {list(existing_db_domains)[:5]}...")
+
+    for domain, (query_obj, item, website, linkedin_url) in unique_domains_in_batch.items():
+        if domain in existing_db_domains:
+            continue
+
+        url = item.get("url", "")
+        title = item.get("title", "")
+        snippet = item.get("content", "")
+        company_name = clean_company_name(title, domain)
+
+        comp = Company(
+            id=str(uuid.uuid4()),
             org_id=str(org_id),
-            user_id=user_id,
-            last_page=last_page_tavily,
-            skill_ids=skill_ids,
+            name=company_name,
+            domain=domain,
+            website=website,
+            linkedin_url=linkedin_url,
+            industry=query_obj.target_industry,
+            source=SearchProgressSource.SEARXNG.value,
+            search_snippet=snippet,
+            search_query=query_obj.query,
+            raw_signals={
+                "search_title": title,
+                "search_snippet": snippet,
+                "search_query": query_obj.query,
+            },
         )
-        searched_companies.extend(tavily_companies)
-        if tavily_progress and is_valid_uuid(org_id):
-            search_progress.append(tavily_progress)
-        if tavily_err:
-            errors.append(tavily_err)
+        discovered_companies.append(comp)
+        seen_domains.add(domain)
 
-    # 3. Persist search progress in Supabase
-    if search_progress:
-        await store_search_progress(search_progress)
+        if len(discovered_companies) >= MAX_CANDIDATES:
+            break
+
+    print(f"\n[PHASE 2: SEARXNG SEARCH] Summary:")
+    print(f"  Raw hits received: {len(candidate_results)}")
+    print(f"  Jobs rejected: {jobs_count}")
+    print(f"  Blocked (directory/listicle/job board): {blocked_count}")
+    print(f"  DB duplicates skipped: {len(existing_db_domains)}")
+    print(f"  Unique new candidate companies: {len(discovered_companies)}")
+    for idx, c in enumerate(discovered_companies, 1):
+        print(f"    [{idx}] Name: {c.name}")
+        print(f"        Domain: {c.domain} | URL: {c.website} | LinkedIn: {c.linkedin_url} | Industry: {c.industry}")
+        print(f"        Search Snippet: {c.search_snippet[:120]}...")
+
+    # Persist search progress
+    new_last_page = start_page + PAGES_PER_QUERY - 1
+    if is_valid_uuid(org_id):
+        progress = SearchProgress(
+            user_id=str(user_id) if is_valid_uuid(user_id) else None,
+            org_id=str(org_id),
+            last_page_fetched=new_last_page,
+            last_fetched_at=datetime.now(timezone.utc),
+            source=SearchProgressSource.SEARXNG,
+        )
+        await store_search_progress([progress])
 
     return {
-        "searched_companies": searched_companies,
+        "searched_companies": discovered_companies,
+        "seen_domains": list(seen_domains),
         "errors": errors,
+        "pipeline_stats": {
+            "searched": len(candidate_results),
+            "jobs_rejected": jobs_count,
+            "blocked": blocked_count,
+            "db_duplicates": len(existing_db_domains),
+            "candidates": len(discovered_companies),
+        },
     }

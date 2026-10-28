@@ -1,1 +1,1 @@
-CREATE TYPE search_progress_source AS ENUM ('apollo', 'tavily');
+CREATE TYPE search_progress_source AS ENUM ('searxng', 'apollo', 'tavily');

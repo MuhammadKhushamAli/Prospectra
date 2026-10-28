@@ -8,11 +8,13 @@ from typing import List, Literal, Optional, Union
 
 class SearchProgressSource(str, Enum):
     """Supported search providers for company discovery."""
+    SEARXNG = "searxng"
+    # Legacy enum values for database backwards compatibility
     APOLLO = "apollo"
     TAVILY = "tavily"
 
 
-SearchProgressSourceType = Literal["apollo", "tavily"]
+SearchProgressSourceType = Literal["searxng"]
 
 
 @dataclass

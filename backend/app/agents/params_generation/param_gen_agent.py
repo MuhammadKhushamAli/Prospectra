@@ -1,83 +1,130 @@
 """Parameter-generation agent.
 
-Takes a natural-language prospect description from the user and produces
-structured Apollo + Tavily search parameters via the OpenAI Responses API.
+Converts user skills and target industries into high-precision SearXNG search queries
+specifically designed to discover client businesses that lack an in-house tech workforce.
 """
 
 import json
 import os
+import re
 from dataclasses import asdict
-from typing import List
+from typing import List, Optional
 
 from openai import AsyncOpenAI
 
 from app.core.llms.open_ai_llm import parse_structured_response
-from app.core.skill_match import get_apollo_tech_uids_for_user
-from app.models.company import Company
 from app.models.user_context import UserContext
-from .pydantic_model import PromptGenerationResponse
+from .pydantic_model import PromptGenerationResponse, SearxngPrompt, SearxngQuery
 
 SYSTEM_PROMPT = """
 You are Prospectra's parameter-generation agent.
 
-Your job is to convert a user's skills and target organizations (target industries / sectors) into two sets of structured search parameters: Apollo parameters and Tavily parameters.
+Your job is to convert a user's skills and target industries into high-precision search queries for SearXNG.
 
-MANDATORY OBJECTIVE: TARGET BOTH USER SKILLS AND TARGET ORGANIZATIONS
-You MUST ensure that the generated parameters target BOTH:
-1. User Skills: The technical skills, technologies, and services the user provides.
-2. Target Organizations: The types of client companies, businesses, or industries the user wants to target.
+MANDATORY MISSION: TARGET OPERATING CLIENT BUSINESSES THAT NEED THE USER'S TECHNICAL SKILLS AND LACK AN IN-HOUSE DEV WORKFORCE SO WE CAN PROPOSE A SOLUTION TO THEM!
 
-CRITICAL RULES FOR TARGET ORGANIZATIONS (TARGET ORGS):
-- RULE 1: IF TARGET ORGANIZATIONS ARE PRESENT:
-  * You MUST STRICTLY target ONLY the provided target organizations / industries.
-  * DO NOT assume, guess, substitute, or add ANY other target organizations or industries. Respect the user's explicit target organizations exactly.
-  * In Apollo parameters, set `target_organizations_catagories` to match the exact provided target organizations.
-  * In Tavily parameters, formulate the search prompt focused on those exact target organizations.
+1. TARGET NON-TECHNICAL CLIENT BUSINESSES:
+   - Target operating businesses in the user's TARGET INDUSTRIES (e.g., healthcare clinics, dental practices, logistics operators, retail brands, commercial real estate, accounting & legal firms, manufacturing, fitness clubs).
+   - Core domain MUST NOT be software engineering. These businesses need digital solutions, customer portals, mobile apps, or automation to run and scale their core business.
+   - Because they DO NOT have an in-house engineering workforce, they are the ideal clients to hire external specialists and approve our proposed solutions!
 
-- RULE 2: IF TARGET ORGANIZATIONS ARE NOT PRESENT (None, empty, or 'NOT SPECIFIED'):
-  * You MUST determine and select the SINGLE BEST SUITABLE target organizations/industries for the user based strictly on their skills and expertise (e.g., for React Native + Node.js -> industries which needs mobile apps for their work like online platforms, stores.).
-  * Use these deduced best suitable organizations for `target_organizations_catagories` and Tavily search prompt.
+2. ABSOLUTELY DO NOT TARGET SOFTWARE AGENCIES OR DEV SHOPS:
+   - NEVER target software development agencies, IT consultancies, dev shops, or software engineering vendors.
+   - A dev shop already sells software services—they will NEVER buy a solution we pitch to them!
 
-SEARCH PARAMETERS TO GENERATE:
-1. Apollo parameters (Apollo organization-search API):
-   - `target_organizations_catagories`: Categories/industries of the target organizations (use the exact provided target orgs if present; or the deduced best suitable ones if not present).
-   - `q_organization_keyword_tags`: Keywords that combine BOTH the user skills/technologies AND relevant domain keywords of the target organizations.
-   - `target_organizations_required_skills`: Skills associated with the target organizations matching the user's skills.
-   - Standard filters like `organization_locations`, `organization_num_employees_ranges` when appropriate.
+3. SEARCH QUERIES MUST BE NEED-BASED, NOT TECH-NAME PROMOTIONAL:
+   - Do NOT just search the tech stack name (e.g., searching "React Native developer" returns software agencies selling React Native).
+   - Instead, search for the target business type and their operational intent (e.g., "family dental practice" "book appointment online" official site, "freight logistics company" "client portal" official website).
+   - High-Intent Query Patterns:
+     * "<business type / industry> official website contact"
+     * "<target industry> services platform official site"
+     * "independent <target industry> company portal official website"
 
-2. Tavily parameters (Web search prompt for target prospect companies):
-   - MUST construct a concise, high-intent search query discovering actual target prospect companies, software agencies, SaaS businesses, consultancies, or client enterprises that match BOTH the target organizations AND the user's skills.
-   - Pattern: "top <target organizations> companies utilizing <user skills>" or "<target organizations> firms in need of <user skills> solutions".
-   - CRITICAL REQUIREMENT: NEVER search for jobs, job boards, hiring ads, career vacancies, or freelance job postings! NEVER use words like "jobs", "hiring", "careers", "apply", "job openings", or "vacancies". Discover COMPANY HOMEPAGES and BUSINESS PROFILES only.
+4. STRICT JOB EXCLUSIONS (MANDATORY - NEVER ADD JOBS):
+   - You MUST NEVER search for or return job postings, employment vacancies, recruitment listings, or career pages.
+   - We are discovering operating client businesses to sell software solutions to, NOT job listings to apply for!
+   - Every query MUST include negative job operators: -jobs -careers -hiring -vacancies -employment.
 
-CRITICAL RULES:
-- Target actual COMPANIES and ORGANIZATIONS, never job boards or employment listings.
-- ALWAYS target BOTH user skills and target organizations.
-- If target organizations are present, NEVER assume or substitute other target organizations.
-- If target organizations are missing, deduce the best suitable target organizations for the user.
+5. TARGET INDUSTRIES RULES:
+   - IF TARGET INDUSTRIES ARE PROVIDED: You MUST STRICTLY target ONLY the provided target industries. Generate queries covering these industries.
+   - IF TARGET INDUSTRIES ARE NOT PROVIDED: Select the top 2-3 most suitable non-technical industries for the user's skills.
+
+6. GEOGRAPHIC SCOPE & MARKET TARGETING:
+   - Unless specific regions are requested by the user, default to US/North American or Global English-speaking commercial markets.
+   - Never allow queries to be so generic that search engines fall back to local IP geolocation. Use high-intent anchors or region terms (e.g. "USA", "US", "North America", or major regional hubs) where appropriate to ensure established international companies are discovered.
 """
+
+DEFAULT_EXCLUSIONS = '-agency -"software development" -jobs -careers -hiring -vacancies -employment -directory -clutch -upwork'
+
+
+def _enforce_query_rules(
+    prompt_resp: PromptGenerationResponse,
+    target_industries: List[str],
+    skills_list: List[str],
+) -> PromptGenerationResponse:
+    """Apply deterministic guardrails to generated SearXNG queries."""
+    clean_queries: List[SearxngQuery] = []
+    seen_queries = set()
+
+    for q in prompt_resp.searxng.queries:
+        text = q.query.strip()
+        # Remove any stray newlines or multiple spaces
+        text = re.sub(r"\s+", " ", text)
+
+        # Ensure baseline exclusions are present using word boundaries
+        if not re.search(r"(?i)\b-agency\b", text):
+            text = f"{text} -agency"
+        if not re.search(r"(?i)\b-jobs\b", text):
+            text = f"{text} -jobs -careers -hiring -vacancies"
+        if not re.search(r"(?i)\b-directory\b", text):
+            text = f"{text} -directory"
+
+        # Cap length to safely fit within schema limit (max 500)
+        if len(text) > 450:
+            text = text[:450].rsplit(" ", 1)[0]
+
+        if text.lower() not in seen_queries:
+            seen_queries.add(text.lower())
+            clean_queries.append(
+                SearxngQuery(
+                    query=text,
+                    target_industry=q.target_industry,
+                )
+            )
+
+    # Ensure every explicit target industry has at least one query
+    if target_industries:
+        covered_industries = {q.target_industry.lower() for q in clean_queries}
+        for ind in target_industries:
+            if ind.lower() not in covered_industries and len(clean_queries) < 6:
+                clean_queries.append(
+                    SearxngQuery(
+                        query=f'"{ind}" business official website contact {DEFAULT_EXCLUSIONS}',
+                        target_industry=ind,
+                    )
+                )
+
+    if not clean_queries:
+        clean_queries.append(
+            SearxngQuery(
+                query=f' independent business official website needs these skills {skills_list} {DEFAULT_EXCLUSIONS}',
+                target_industry=None,
+            )
+        )
+
+    prompt_resp.searxng.queries = clean_queries[:6]
+    return prompt_resp
 
 
 async def generate_params(
     user_context: UserContext,
-    search_feedback: str | None = None,
-    previous_prompt: PromptGenerationResponse | None = None,
+    search_feedback: Optional[str] = None,
+    previous_prompt: Optional[PromptGenerationResponse] = None,
 ) -> PromptGenerationResponse:
-    """Convert user skills and target organizations into search parameters.
-
-    Parameters
-    ----------
-    user_context:
-        The context, skills, and target organizations of the user seeking prospects.
-
-    Returns
-    -------
-    PromptGenerationResponse
-        Structured Apollo and Tavily search parameters.
-    """
+    """Generate high-intent SearXNG search parameters from user profile."""
     client = AsyncOpenAI(
-        api_key=os.getenv("PARAM_GEN_API_KEY"),
-        base_url=os.getenv("PARAM_GEN_BASE_URL"),
+        api_key=os.getenv("PARAM_GEN_API_KEY", os.getenv("OPENAI_API_KEY")),
+        base_url=os.getenv("PARAM_GEN_BASE_URL", "https://api.openai.com/v1"),
     )
     model_name = os.getenv("PARAM_GEN_MODEL", "gpt-4o")
 
@@ -92,68 +139,39 @@ async def generate_params(
     ]
 
     if target_industries:
-        target_industry_instruction = (
-            f"EXPLICIT TARGET INDUSTRIES PROVIDED:\n"
-            f"{json.dumps(target_industries, indent=2)}\n"
-            f"MANDATE: You MUST target ONLY these provided target industries. DO NOT assume, invent, or add ANY other target industries!"
+        industry_instruction = (
+            f"EXPLICIT TARGET INDUSTRIES:\n{json.dumps(target_industries, indent=2)}\n"
+            f"MANDATE: Strictly target ONLY these industries. Every query must target one of these."
         )
     else:
-        target_industry_instruction = (
-            "NO TARGET INDUSTRIES PROVIDED (NOT SPECIFIED).\n"
-            "MANDATE: Target industries are not present. You MUST deduce and generate the BEST SUITABLE target industries for the user based strictly on their skills!"
+        industry_instruction = (
+            "NO TARGET INDUSTRIES SPECIFIED.\n"
+            "MANDATE: Deduce the 2-3 best non-technical industries that need solutions built with user's skills."
         )
 
-    input_str = (
+    user_input = (
         f"=== USER PROFILE & SKILLS ===\n"
         f"Full Name: {user_context.full_name}\n"
-        f"User Skills: {', '.join(skills_list) if skills_list else 'Not specified'}\n\n"
-        f"=== TARGET INDUSTRIES STATUS ===\n"
-        f"{target_industry_instruction}\n\n"
-        f"=== DETAILED USER CONTEXT ===\n"
-        f"{json.dumps(asdict(user_context), indent=2, default=str)}\n\n"
-        f"Generate Apollo and Tavily search parameters targeting BOTH user skills and target industries."
+        f"User Skills: {', '.join(skills_list) if skills_list else 'Full stack development'}\n\n"
+        f"=== TARGET INDUSTRIES INSTRUCTION ===\n"
+        f"{industry_instruction}\n\n"
+        f"Generate 3 to 5 high-precision SearXNG queries targeting client businesses that need these solutions."
     )
 
     if search_feedback and previous_prompt:
-        input_str += (
-            f"\n\nPREVIOUS PROMPT GENERATED:\n{previous_prompt.model_dump_json(indent=2)}\n\n"
-            f"FEEDBACK ON PREVIOUS PROMPT:\n{search_feedback}\n\n"
-            f"Please adjust the search parameters based on the feedback above while maintaining the target industry rules."
+        user_input += (
+            f"\n\n=== FEEDBACK FROM PREVIOUS SEARCH RUN ===\n"
+            f"{search_feedback}\n\n"
+            f"PREVIOUS QUERIES:\n{previous_prompt.model_dump_json(indent=2)}\n\n"
+            f"Adjust search angles, try different business sub-niches, or alter operational keywords to avoid previously rejected domains."
         )
 
     response = await parse_structured_response(
         client=client,
         model_name=model_name,
-        input=input_str,
+        input=user_input,
         system_prompt=SYSTEM_PROMPT,
         pydantic_model=PromptGenerationResponse,
     )
 
-    if response.apollo:
-        # If target industries are explicitly present, strictly enforce them
-        if target_industries:
-            response.apollo.target_organizations_catagories = list(target_industries)
-
-        matched_uids = get_apollo_tech_uids_for_user(user_context)
-        # Apollo free tier returns 422 on currently_using_any_of_technology_uids.
-        # Map tech names to q_organization_keyword_tags to find relevant companies on free tier.
-        if matched_uids:
-            existing_tags = response.apollo.q_organization_keyword_tags or []
-            for uid in matched_uids:
-                clean_tag = uid.replace("_", " ")
-                if clean_tag not in existing_tags:
-                    existing_tags.append(clean_tag)
-            response.apollo.q_organization_keyword_tags = existing_tags[:6]
-
-    if response.tavily and target_industries:
-        # Enforce that Tavily search prompt explicitly includes the target industries if provided
-        prompt_lower = response.tavily.prompt.lower()
-        has_any_target_industry = any(ind.lower() in prompt_lower for ind in target_industries)
-        has_any_skill = any(skill.lower() in prompt_lower for skill in skills_list)
-
-        if not has_any_target_industry or not has_any_skill:
-            industries_str = ", ".join(target_industries[:3])
-            skills_str = ", ".join(skills_list[:3]) if skills_list else "software development"
-            response.tavily.prompt = f"top {industries_str} companies and agencies utilizing {skills_str}"
-
-    return response
+    return _enforce_query_rules(response, target_industries, skills_list)

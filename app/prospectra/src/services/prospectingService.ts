@@ -25,7 +25,7 @@ export function mapCompanyRow(r: any): CompanyProspect {
     linkedin_url: r.linkedin_url,
     industry: r.industry || "General Industry",
     size: r.size || "10-50 employees",
-    source: Array.isArray(r.source) ? r.source.join(", ") : r.source || "apollo",
+    source: Array.isArray(r.source) ? r.source.join(", ") : r.source || "searxng",
     raw_signals: r.raw_signals,
     status: r.status,
     company_auth: r.raw_signals?.auth_score

@@ -27,9 +27,10 @@ def is_valid_uuid(val: Any) -> bool:
 def format_source_value(source: Any) -> str:
     """Normalize source into a valid SearchProgressSource string value."""
     source_val = source.value if hasattr(source, "value") else str(source)
-    if source_val not in (SearchProgressSource.APOLLO.value, SearchProgressSource.TAVILY.value):
-        return SearchProgressSource.APOLLO.value
-    return source_val
+    valid_sources = {s.value for s in SearchProgressSource}
+    if source_val in valid_sources:
+        return source_val
+    return SearchProgressSource.SEARXNG.value
 
 
 def format_timestamp(timestamp: Any) -> str:
@@ -149,7 +150,7 @@ async def save_single_search_progress(
 
 
 async def store_search_progress(search_progress: List[SearchProgress]) -> None:
-    """Store the search progress for Apollo and Tavily to the database."""
+    """Store the search progress to the database."""
     if not search_progress:
         return
 
