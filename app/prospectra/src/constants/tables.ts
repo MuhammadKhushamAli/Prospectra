@@ -9,6 +9,7 @@ export const TABLES = {
   USER_SKILLS: (process.env.EXPO_PUBLIC_USER_SKILLS_TABLE || "user_skills") as string,
   DOMAIN_VERIFICATIONS: (process.env.EXPO_PUBLIC_DOMAIN_VERIFICATIONS_TABLE || "domain_verifications") as string,
   COMPANIES: (process.env.EXPO_PUBLIC_COMPANIES_TABLE || "companies") as string,
+  CONTACTS: (process.env.EXPO_PUBLIC_CONTACTS_TABLE || "contacts") as string,
   EMAILS: (process.env.EXPO_PUBLIC_EMAILS_TABLE || "emails") as string,
   SEARCH_PROGRESS: (process.env.EXPO_PUBLIC_SEARCH_PROGRESS_TABLE || "search_progress") as string,
   SEARCH_PROGRESS_SKILLS: (process.env.EXPO_PUBLIC_SEARCH_PROGRESS_SKILLS_TABLE || "search_progress_skills") as string,

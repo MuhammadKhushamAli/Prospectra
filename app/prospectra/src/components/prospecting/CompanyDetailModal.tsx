@@ -14,17 +14,26 @@ import {
   Briefcase,
   Building2,
   Check,
+  CheckCircle2,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   Clock,
   Copy,
+  Cpu,
   ExternalLink,
+  FileText,
   Globe,
+  Layers,
+  Lightbulb,
   Mail,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Target,
   Users,
   X,
+  Zap,
 } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
@@ -46,6 +55,7 @@ export default function CompanyDetailModal({
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   if (!company) return null;
 
@@ -113,10 +123,23 @@ export default function CompanyDetailModal({
   };
 
   const statusColor = getStatusColor();
-  const authScore = company.company_auth?.score;
-  const authFeedback = company.company_auth?.feedback;
+  const authScore = company.auth_score ?? company.company_auth?.score;
+  const authFeedback = company.auth_feedback || company.company_auth?.feedback;
   const userSkills = company.company_auth?.user_skills || [];
   const targetIndustries = company.company_auth?.target_industries || [];
+
+  const needHypothesis = company.need_hypothesis;
+  const neededSkills =
+    company.needed_skills && company.needed_skills.length > 0
+      ? company.needed_skills
+      : userSkills;
+  const neededServices = company.needed_services || [];
+  const needSignals = company.need_signals || [];
+  const proposedSolution = company.proposed_solution;
+  const servicesOffered = company.services_offered || [];
+  const digitalFeatures = company.digital_features || [];
+  const aboutText = company.about_text;
+  const emails = company.emails || [];
 
   const formattedDate = company.created_at
     ? new Date(company.created_at).toLocaleDateString(undefined, {
@@ -244,194 +267,47 @@ export default function CompanyDetailModal({
               ) : null}
             </View>
 
-            {/* AI Authenticity & Match Evaluation Card */}
+            {/* Match Score Quick Banner */}
             {authScore !== undefined ? (
               <View
                 style={[
-                  styles.card,
+                  styles.scoreQuickBanner,
                   {
                     backgroundColor: colors.surfaceElevated,
-                    borderColor:
-                      authScore >= 70 ? colors.border : `${colors.warning}60`,
+                    borderColor: colors.border,
                   },
                 ]}
               >
-                <View style={styles.cardHeader}>
-                  <View style={styles.cardHeaderLeft}>
-                    {authScore >= 70 ? (
-                      <ShieldCheck size={16} color={colors.success} />
-                    ) : (
-                      <ShieldAlert size={16} color={colors.warning} />
-                    )}
-                    <Text
-                      style={[
-                        styles.cardSectionTitle,
-                        { color: colors.text },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      AI Match & Authenticity
-                    </Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.scorePill,
-                      {
-                        backgroundColor:
-                          authScore >= 70
-                            ? `${colors.success}20`
-                            : `${colors.warning}20`,
-                        borderColor:
-                          authScore >= 70 ? colors.success : colors.warning,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.scorePillText,
-                        {
-                          color:
-                            authScore >= 70 ? colors.success : colors.warning,
-                        },
-                      ]}
-                    >
-                      {authScore}% Match
-                    </Text>
-                  </View>
+                <View style={styles.scoreQuickLeft}>
+                  <ShieldCheck size={16} color={authScore >= 70 ? colors.success : colors.warning} />
+                  <Text style={[styles.scoreQuickLabel, { color: colors.text }]}>
+                    AI Buyer Match Score
+                  </Text>
                 </View>
-
-                {/* Score Progress Bar */}
                 <View
                   style={[
-                    styles.progressTrack,
-                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    styles.scorePill,
+                    {
+                      backgroundColor:
+                        authScore >= 70
+                          ? `${colors.success}20`
+                          : `${colors.warning}20`,
+                      borderColor:
+                        authScore >= 70 ? colors.success : colors.warning,
+                    },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.progressBar,
-                      {
-                        width: `${Math.min(Math.max(authScore, 5), 100)}%`,
-                        backgroundColor:
-                          authScore >= 70 ? colors.success : colors.warning,
-                      },
-                    ]}
-                  />
-                </View>
-
-                {authFeedback ? (
-                  <View
-                    style={[
-                      styles.feedbackBox,
-                      {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.feedbackText,
-                        { color: colors.textSecondary },
-                      ]}
-                    >
-                      {authFeedback}
-                    </Text>
-                  </View>
-                ) : (
                   <Text
                     style={[
-                      styles.feedbackNotice,
-                      { color: colors.textSecondary },
+                      styles.scorePillText,
+                      {
+                        color: authScore >= 70 ? colors.success : colors.warning,
+                      },
                     ]}
                   >
-                    High compatibility detected with your organization's skills and outreach parameters.
+                    {authScore}% Match
                   </Text>
-                )}
-
-                {userSkills.length > 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <Text
-                      style={{
-                        fontFamily: "DMSansMedium",
-                        fontSize: tokens.fontSize.xs,
-                        color: colors.textSecondary,
-                        marginBottom: 6,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      Matching Skills
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {userSkills.map((skill, idx) => (
-                        <View
-                          key={idx}
-                          style={{
-                            backgroundColor: `${colors.primary}18`,
-                            borderColor: `${colors.primary}40`,
-                            borderWidth: 1,
-                            borderRadius: 6,
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: colors.primary,
-                              fontWeight: "500",
-                            }}
-                          >
-                            {skill}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {targetIndustries.length > 0 && (
-                  <View style={{ marginTop: 12 }}>
-                    <Text
-                      style={{
-                        fontFamily: "DMSansMedium",
-                        fontSize: tokens.fontSize.xs,
-                        color: colors.textSecondary,
-                        marginBottom: 6,
-                        textTransform: "uppercase",
-                        letterSpacing: 0.5,
-                      }}
-                    >
-                      Matching Target Industries
-                    </Text>
-                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                      {targetIndustries.map((ind, idx) => (
-                        <View
-                          key={idx}
-                          style={{
-                            backgroundColor: `${colors.secondary}18`,
-                            borderColor: `${colors.secondary}40`,
-                            borderWidth: 1,
-                            borderRadius: 6,
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              color: colors.secondary,
-                              fontWeight: "500",
-                            }}
-                          >
-                            {ind}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
+                </View>
               </View>
             ) : null}
 
@@ -598,7 +474,7 @@ export default function CompanyDetailModal({
               ) : null}
             </View>
 
-            {/* Overview Attributes Grid */}
+            {/* Company Basic Overview Card */}
             <View
               style={[
                 styles.card,
@@ -702,73 +578,565 @@ export default function CompanyDetailModal({
               </View>
             </View>
 
-            {/* Target Contacts & Emails */}
-            {company.emails && company.emails.length > 0 ? (
+            {/* ======================================================== */}
+            {/* SHOW DETAILS ACTION BUTTON */}
+            {/* ======================================================== */}
+            <Pressable
+              onPress={() => setShowDetails((prev) => !prev)}
+              style={({ pressed }) => [
+                styles.showDetailsBtn,
+                {
+                  backgroundColor: showDetails
+                    ? `${colors.primary}18`
+                    : colors.surfaceElevated,
+                  borderColor: showDetails ? colors.primary : `${colors.primary}50`,
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <View style={styles.showDetailsBtnLeft}>
+                <View
+                  style={[
+                    styles.showDetailsIconWrap,
+                    {
+                      backgroundColor: `${colors.primary}20`,
+                      borderColor: `${colors.primary}40`,
+                    },
+                  ]}
+                >
+                  <Sparkles size={16} color={colors.primary} />
+                </View>
+                <View style={styles.showDetailsTextWrap}>
+                  <Text
+                    style={[
+                      styles.showDetailsBtnTitle,
+                      { color: colors.primary },
+                    ]}
+                  >
+                    {showDetails ? "Hide Detailed Intelligence" : "Show Details & AI Intelligence"}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.showDetailsBtnSubtitle,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {showDetails
+                      ? "Collapse deep company signals, hypothesis & tech gaps"
+                      : "Click to view why company needs you, needed skills, gaps & contacts"}
+                  </Text>
+                </View>
+              </View>
               <View
                 style={[
-                  styles.card,
+                  styles.chevronCircle,
                   {
-                    backgroundColor: colors.surfaceElevated,
-                    borderColor: colors.border,
+                    backgroundColor: showDetails
+                      ? colors.primary
+                      : `${colors.primary}18`,
                   },
                 ]}
               >
-                <Text style={[styles.cardSectionTitle, { color: colors.text }]}>
-                  Identified Contacts ({company.emails.length})
-                </Text>
+                {showDetails ? (
+                  <ChevronUp size={15} color={colors.onPrimary} />
+                ) : (
+                  <ChevronDown size={15} color={colors.primary} />
+                )}
+              </View>
+            </Pressable>
 
-                <View style={styles.contactList}>
-                  {company.emails.map((contact, idx) => (
+            {/* ======================================================== */}
+            {/* DETAILED INTELLIGENCE SECTIONS (Revealed on click) */}
+            {/* ======================================================== */}
+            {showDetails ? (
+              <View style={styles.detailsContainer}>
+                {/* 1. WHY THIS COMPANY NEEDS YOU (NEED HYPOTHESIS) */}
+                <View
+                  style={[
+                    styles.card,
+                    {
+                      backgroundColor: colors.surfaceElevated,
+                      borderColor: `${colors.primary}45`,
+                    },
+                  ]}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.cardHeaderLeft}>
+                      <Lightbulb size={16} color={colors.primary} />
+                      <Text
+                        style={[styles.cardSectionTitle, { color: colors.text }]}
+                      >
+                        Why This Company Needs You
+                      </Text>
+                    </View>
                     <View
-                      key={idx}
                       style={[
-                        styles.contactItem,
+                        styles.aiPill,
+                        {
+                          backgroundColor: `${colors.primary}18`,
+                          borderColor: colors.primary,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.aiPillText, { color: colors.primary }]}>
+                        AI Conclusion
+                      </Text>
+                    </View>
+                  </View>
+
+                  {needHypothesis ? (
+                    <View
+                      style={[
+                        styles.hypothesisBox,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: `${colors.primary}30`,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.hypothesisText, { color: colors.text }]}>
+                        {needHypothesis}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[
+                        styles.emptyDetailText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Target prospect business has high compatibility with your digital service capabilities.
+                    </Text>
+                  )}
+
+                  {proposedSolution ? (
+                    <View style={{ marginTop: 8 }}>
+                      <Text
+                        style={[
+                          styles.subSectionTitle,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Proposed Outreach Angle & Pitch:
+                      </Text>
+                      <Text style={[styles.solutionText, { color: colors.text }]}>
+                        {proposedSolution}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* 2. NEEDED SKILLS & RECOMMENDED SERVICES */}
+                {(neededSkills.length > 0 || neededServices.length > 0) && (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Zap size={16} color={colors.warning} />
+                        <Text
+                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                        >
+                          Skill & Service Opportunities
+                        </Text>
+                      </View>
+                    </View>
+
+                    {neededSkills.length > 0 && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text
+                          style={[
+                            styles.subSectionTitle,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          User Skills Required by Company:
+                        </Text>
+                        <View style={styles.tagWrap}>
+                          {neededSkills.map((skill, idx) => (
+                            <View
+                              key={idx}
+                              style={[
+                                styles.skillTag,
+                                {
+                                  backgroundColor: `${colors.primary}18`,
+                                  borderColor: `${colors.primary}40`,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[styles.skillTagText, { color: colors.primary }]}
+                              >
+                                {skill}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {neededServices.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text
+                          style={[
+                            styles.subSectionTitle,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Specific Digital Services to Pitch:
+                        </Text>
+                        <View style={styles.bulletList}>
+                          {neededServices.map((service, idx) => (
+                            <View key={idx} style={styles.bulletItem}>
+                              <CheckCircle2 size={13} color={colors.success} />
+                              <Text
+                                style={[styles.bulletText, { color: colors.text }]}
+                              >
+                                {service}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* 3. NEED SIGNALS & DIGITAL GAPS DETECTED */}
+                {(needSignals.length > 0 || digitalFeatures.length > 0) && (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Target size={16} color={colors.secondary} />
+                        <Text
+                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                        >
+                          Website Evidence & Digital Gaps
+                        </Text>
+                      </View>
+                    </View>
+
+                    {needSignals.length > 0 && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text
+                          style={[
+                            styles.subSectionTitle,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Concrete Website Signals:
+                        </Text>
+                        <View style={styles.bulletList}>
+                          {needSignals.map((signal, idx) => (
+                            <View key={idx} style={styles.bulletItem}>
+                              <View
+                                style={[
+                                  styles.dotBullet,
+                                  { backgroundColor: colors.secondary },
+                                ]}
+                              />
+                              <Text
+                                style={[styles.bulletText, { color: colors.text }]}
+                              >
+                                {signal}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {digitalFeatures.length > 0 && (
+                      <View style={{ marginTop: 10 }}>
+                        <Text
+                          style={[
+                            styles.subSectionTitle,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          Detected Stack Features & Deficiencies:
+                        </Text>
+                        <View style={styles.tagWrap}>
+                          {digitalFeatures.map((feat, idx) => (
+                            <View
+                              key={idx}
+                              style={[
+                                styles.featureTag,
+                                {
+                                  backgroundColor: colors.surface,
+                                  borderColor: colors.border,
+                                },
+                              ]}
+                            >
+                              <Cpu size={11} color={colors.textSecondary} />
+                              <Text
+                                style={[
+                                  styles.featureTagText,
+                                  { color: colors.textSecondary },
+                                ]}
+                              >
+                                {feat}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {/* 4. SERVICES OFFERED BY CLIENT COMPANY */}
+                {servicesOffered.length > 0 && (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Layers size={16} color={colors.textSecondary} />
+                        <Text
+                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                        >
+                          Services Offered by Company
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.subSectionTitle,
+                        { color: colors.textSecondary, marginTop: 4 },
+                      ]}
+                    >
+                      Scraped from company /services page:
+                    </Text>
+                    <View style={styles.tagWrap}>
+                      {servicesOffered.map((srv, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.servicePill,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.servicePillText,
+                              { color: colors.text },
+                            ]}
+                          >
+                            {srv}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* 5. SCRAPED ABOUT TEXT */}
+                {aboutText ? (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <FileText size={16} color={colors.textSecondary} />
+                        <Text
+                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                        >
+                          About the Company
+                        </Text>
+                      </View>
+                    </View>
+                    <Text
+                      style={[
+                        styles.aboutText,
+                        { color: colors.textSecondary, marginTop: 4 },
+                      ]}
+                    >
+                      {aboutText}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* 6. AI AUTHENTICITY & QUALIFICATION */}
+                {authScore !== undefined ? (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor:
+                          authScore >= 70 ? colors.border : `${colors.warning}60`,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        {authScore >= 70 ? (
+                          <ShieldCheck size={16} color={colors.success} />
+                        ) : (
+                          <ShieldAlert size={16} color={colors.warning} />
+                        )}
+                        <Text
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
+                        >
+                          Buyer Qualification & Fit
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Progress Bar */}
+                    <View
+                      style={[
+                        styles.progressTrack,
                         {
                           backgroundColor: colors.surface,
                           borderColor: colors.border,
                         },
                       ]}
                     >
-                      <View style={styles.contactHeader}>
-                        <Text
-                          style={[styles.contactName, { color: colors.text }]}
-                        >
-                          {contact.first_name || contact.last_name
-                            ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
-                            : contact.email_of || "Prospect Contact"}
-                        </Text>
-                        {contact.is_verified ? (
-                          <View
-                            style={[
-                              styles.verifiedContactBadge,
-                              {
-                                backgroundColor: `${colors.success}18`,
-                                borderColor: colors.success,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.verifiedContactText,
-                                { color: colors.success },
-                              ]}
-                            >
-                              Verified
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text
+                      <View
                         style={[
-                          styles.contactEmail,
-                          { color: colors.textSecondary },
+                          styles.progressBar,
+                          {
+                            width: `${Math.min(Math.max(authScore, 5), 100)}%`,
+                            backgroundColor:
+                              authScore >= 70 ? colors.success : colors.warning,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    {authFeedback ? (
+                      <View
+                        style={[
+                          styles.feedbackBox,
+                          {
+                            backgroundColor: colors.surface,
+                            borderColor: colors.border,
+                          },
                         ]}
                       >
-                        {contact.email}
-                      </Text>
+                        <Text
+                          style={[
+                            styles.feedbackText,
+                            { color: colors.textSecondary },
+                          ]}
+                        >
+                          {authFeedback}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* 7. REACHER-VERIFIED CONTACTS */}
+                {emails.length > 0 ? (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.surfaceElevated,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <View style={styles.cardHeader}>
+                      <View style={styles.cardHeaderLeft}>
+                        <Mail size={16} color={colors.primary} />
+                        <Text
+                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                        >
+                          Reacher-Verified Contacts ({emails.length})
+                        </Text>
+                      </View>
                     </View>
-                  ))}
-                </View>
+
+                    <View style={styles.contactList}>
+                      {emails.map((contact, idx) => (
+                        <View
+                          key={idx}
+                          style={[
+                            styles.contactItem,
+                            {
+                              backgroundColor: colors.surface,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <View style={styles.contactHeader}>
+                            <Text
+                              style={[styles.contactName, { color: colors.text }]}
+                            >
+                              {contact.first_name || contact.last_name
+                                ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
+                                : contact.email_of || "Prospect Contact"}
+                            </Text>
+                            <View
+                              style={[
+                                styles.verifiedContactBadge,
+                                {
+                                  backgroundColor: `${colors.success}18`,
+                                  borderColor: colors.success,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.verifiedContactText,
+                                  { color: colors.success },
+                                ]}
+                              >
+                                {contact.is_verified || contact.is_reachable === "safe"
+                                  ? "Reachable"
+                                  : "Verified"}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text
+                            style={[
+                              styles.contactEmail,
+                              { color: colors.textSecondary },
+                            ]}
+                          >
+                            {contact.email}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </ScrollView>
@@ -1095,5 +1463,170 @@ const styles = StyleSheet.create({
   decisionBtnText: {
     fontFamily: "DMSansBold",
     fontSize: tokens.fontSize.xs,
+  },
+  scoreQuickBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 10,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  scoreQuickLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  scoreQuickLabel: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.xs,
+  },
+  showDetailsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 12,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1.5,
+  },
+  showDetailsBtnLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+    flex: 1,
+    marginRight: tokens.spacing.sm,
+  },
+  showDetailsIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  showDetailsTextWrap: {
+    flex: 1,
+  },
+  showDetailsBtnTitle: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.sm,
+  },
+  showDetailsBtnSubtitle: {
+    fontFamily: "DMSans",
+    fontSize: 11,
+    marginTop: 1,
+  },
+  chevronCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: tokens.radius.full,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  detailsContainer: {
+    gap: tokens.spacing.md,
+    marginTop: tokens.spacing.xs,
+  },
+  aiPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+  },
+  aiPillText: {
+    fontFamily: "DMSansBold",
+    fontSize: 10,
+  },
+  hypothesisBox: {
+    padding: tokens.spacing.md,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  hypothesisText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+  },
+  emptyDetailText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    fontStyle: "italic",
+    marginTop: 4,
+  },
+  subSectionTitle: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    marginBottom: 6,
+  },
+  solutionText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 18,
+  },
+  tagWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  skillTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  skillTagText: {
+    fontFamily: "DMSansBold",
+    fontSize: 11,
+  },
+  bulletList: {
+    gap: 6,
+  },
+  bulletItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  dotBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: tokens.radius.full,
+    marginTop: 6,
+  },
+  bulletText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 18,
+    flex: 1,
+  },
+  featureTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  featureTagText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+  },
+  servicePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  servicePillText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+  },
+  aboutText: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 18,
   },
 });

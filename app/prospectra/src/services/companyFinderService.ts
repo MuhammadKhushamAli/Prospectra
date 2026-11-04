@@ -44,7 +44,16 @@ export async function initiateCompanyFinder(
       );
       return data;
     } catch (err: any) {
+      if (err?.response?.data) {
+        return err.response.data as SearchCompanyResponse;
+      }
       console.warn("Backend /search-company request failed, falling back:", err?.message || err);
+      return {
+        status: "error",
+        pending: 0,
+        threshold: 10,
+        message: err?.message || "Failed to reach company finder service.",
+      };
     }
   }
 

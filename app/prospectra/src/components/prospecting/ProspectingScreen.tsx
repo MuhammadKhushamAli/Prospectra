@@ -66,8 +66,18 @@ export default function ProspectingScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [isFindingCompanies, setIsFindingCompanies] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
   const [finderFeedback, setFinderFeedback] = useState<string | null>(null);
   const [processingCompanyId, setProcessingCompanyId] = useState<string | null>(null);
+
+  // Anti-spam cooldown countdown timer
+  useEffect(() => {
+    if (cooldownRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownRemaining((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownRemaining]);
 
   const [selectedCompany, setSelectedCompany] = useState<CompanyProspect | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<EmailProspect | null>(null);
@@ -162,17 +172,42 @@ export default function ProspectingScreen() {
   };
 
   const handleInitiateCompanyFinder = async () => {
-    if (isFindingCompanies) return;
+    if (isFindingCompanies || cooldownRemaining > 0) return;
     try {
       setIsFindingCompanies(true);
       setFinderFeedback("Initiating autonomous prospect search...");
       const res = await initiateCompanyFinder(undefined, orgId || undefined);
+
       if (res.status === "threshold_met") {
         setFinderFeedback("Threshold met! Target pending prospects are already available.");
         setIsFindingCompanies(false);
         setTimeout(() => setFinderFeedback(null), 4000);
+      } else if (res.status === "already_running") {
+        setFinderFeedback(res.message || "A company search is already in progress.");
+        setCooldownRemaining(res.cooldown_remaining || 15);
+        // Active discovery poll safeguard
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          try {
+            const freshData = await fetchProspectingData();
+            setCompanies(freshData.companies);
+            setEmails(freshData.emails);
+          } catch {}
+          if (pollCount >= 7) {
+            clearInterval(pollInterval);
+            setIsFindingCompanies(false);
+            setFinderFeedback(null);
+          }
+        }, 4000);
+      } else if (res.status === "cooldown") {
+        setFinderFeedback(res.message || "Search is on cooldown. Please wait a moment.");
+        setCooldownRemaining(res.cooldown_remaining || 30);
+        setIsFindingCompanies(false);
+        setTimeout(() => setFinderFeedback(null), 4000);
       } else {
         setFinderFeedback("Company finder active! Discovered prospects will appear in real time.");
+        setCooldownRemaining(res.cooldown_seconds || 30);
         // Active discovery poll safeguard: checks every 4s for up to 28s while agent is discovering
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
@@ -181,9 +216,7 @@ export default function ProspectingScreen() {
             const freshData = await fetchProspectingData();
             setCompanies(freshData.companies);
             setEmails(freshData.emails);
-          } catch {
-            // silent catch during active poll
-          }
+          } catch {}
           if (pollCount >= 7) {
             clearInterval(pollInterval);
             setIsFindingCompanies(false);
@@ -193,6 +226,7 @@ export default function ProspectingScreen() {
       }
     } catch {
       setFinderFeedback("Company finder started. Monitoring real-time updates...");
+      setCooldownRemaining(30);
       setIsFindingCompanies(false);
       setTimeout(() => setFinderFeedback(null), 4000);
     }
@@ -464,6 +498,49 @@ export default function ProspectingScreen() {
           </View>
         </View>
 
+        {/* Need Hypothesis preview banner */}
+        {item.need_hypothesis ? (
+          <View
+            style={[
+              styles.cardNeedBanner,
+              {
+                backgroundColor: `${colors.primary}0D`,
+                borderColor: `${colors.primary}25`,
+              },
+            ]}
+          >
+            <Sparkles size={12} color={colors.primary} />
+            <Text
+              style={[styles.cardNeedText, { color: colors.text }]}
+              numberOfLines={2}
+            >
+              {item.need_hypothesis}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Needed skills tags */}
+        {item.needed_skills && item.needed_skills.length > 0 ? (
+          <View style={styles.cardSkillsWrap}>
+            {item.needed_skills.slice(0, 3).map((skill, idx) => (
+              <View
+                key={idx}
+                style={[
+                  styles.cardSkillTag,
+                  {
+                    backgroundColor: `${colors.primary}12`,
+                    borderColor: `${colors.primary}30`,
+                  },
+                ]}
+              >
+                <Text style={[styles.cardSkillTagText, { color: colors.primary }]}>
+                  {skill}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
         <View style={styles.cardMetaRow}>
           <Text
             style={[styles.cardMetaText, { color: colors.textSecondary }]}
@@ -472,32 +549,50 @@ export default function ProspectingScreen() {
             {[item.industry, item.size].filter(Boolean).join(" • ")}
           </Text>
 
-          {authScore !== undefined ? (
+          <View style={styles.cardMetaRightGroup}>
+            {authScore !== undefined ? (
+              <View
+                style={[
+                  styles.miniMatchBadge,
+                  {
+                    backgroundColor:
+                      authScore >= 70
+                        ? `${colors.success}15`
+                        : `${colors.warning}15`,
+                    borderColor:
+                      authScore >= 70
+                        ? `${colors.success}40`
+                        : `${colors.warning}40`,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.miniMatchText,
+                    { color: authScore >= 70 ? colors.success : colors.warning },
+                  ]}
+                >
+                  {authScore}% Match
+                </Text>
+              </View>
+            ) : null}
+
+            {/* Show Details Button */}
             <View
               style={[
-                styles.miniMatchBadge,
+                styles.cardShowDetailBtn,
                 {
-                  backgroundColor:
-                    authScore >= 70
-                      ? `${colors.success}15`
-                      : `${colors.warning}15`,
-                  borderColor:
-                    authScore >= 70
-                      ? `${colors.success}40`
-                      : `${colors.warning}40`,
+                  backgroundColor: `${colors.primary}12`,
+                  borderColor: `${colors.primary}30`,
                 },
               ]}
             >
-              <Text
-                style={[
-                  styles.miniMatchText,
-                  { color: authScore >= 70 ? colors.success : colors.warning },
-                ]}
-              >
-                {authScore}% Match
+              <Text style={[styles.cardShowDetailText, { color: colors.primary }]}>
+                Show Details
               </Text>
+              <ChevronRight size={12} color={colors.primary} />
             </View>
-          ) : null}
+          </View>
         </View>
       </Pressable>
     );
@@ -1042,17 +1137,47 @@ export default function ProspectingScreen() {
               {/* Initiate Company Finder Button */}
               <Pressable
                 onPress={handleInitiateCompanyFinder}
-                disabled={isFindingCompanies}
+                disabled={isFindingCompanies || cooldownRemaining > 0}
                 style={({ pressed }) => [
                   styles.initiateFinderBtn,
                   {
-                    backgroundColor: colors.primary,
-                    opacity: pressed || isFindingCompanies ? 0.8 : 1,
+                    backgroundColor:
+                      isFindingCompanies || cooldownRemaining > 0
+                        ? colors.surfaceElevated
+                        : colors.primary,
+                    borderColor:
+                      isFindingCompanies || cooldownRemaining > 0
+                        ? colors.border
+                        : colors.primary,
+                    borderWidth: 1,
+                    opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
                 {isFindingCompanies ? (
-                  <ActivityIndicator size="small" color={colors.onPrimary} />
+                  <>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text
+                      style={[
+                        styles.initiateFinderBtnText,
+                        { color: colors.primary },
+                      ]}
+                    >
+                      Searching for Prospects...
+                    </Text>
+                  </>
+                ) : cooldownRemaining > 0 ? (
+                  <>
+                    <Clock size={16} color={colors.textSecondary} />
+                    <Text
+                      style={[
+                        styles.initiateFinderBtnText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Cooldown ({cooldownRemaining}s)
+                    </Text>
+                  </>
                 ) : (
                   <>
                     <Sparkles size={16} color={colors.onPrimary} />
@@ -1635,6 +1760,56 @@ const styles = StyleSheet.create({
     fontSize: tokens.fontSize.xs,
     textAlign: "center",
     flexShrink: 1,
+  },
+  cardNeedBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: 6,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  cardNeedText: {
+    fontFamily: "DMSans",
+    fontSize: 11,
+    lineHeight: 16,
+    flex: 1,
+  },
+  cardSkillsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 6,
+  },
+  cardSkillTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  cardSkillTagText: {
+    fontFamily: "DMSansBold",
+    fontSize: 10,
+  },
+  cardMetaRightGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+  },
+  cardShowDetailBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+  },
+  cardShowDetailText: {
+    fontFamily: "DMSansBold",
+    fontSize: 10,
   },
 });
 

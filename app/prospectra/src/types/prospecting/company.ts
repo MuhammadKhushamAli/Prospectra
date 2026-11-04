@@ -15,6 +15,8 @@ export interface CompanyEmail {
   is_verified?: boolean;
   first_name?: string | null;
   last_name?: string | null;
+  is_reachable?: string | null;
+  is_role_account?: boolean | null;
 }
 
 export interface Company {

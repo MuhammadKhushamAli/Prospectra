@@ -14,7 +14,35 @@ export {
 } from "./companyFinderService";
 
 
-export function mapCompanyRow(r: any): CompanyProspect {
+export function mapCompanyRow(r: any, contactsMap?: Map<string, any[]>): CompanyProspect {
+  const authScore = r.auth_score ?? r.raw_signals?.auth_score;
+  const authFeedback = r.auth_feedback || r.raw_signals?.auth_feedback;
+  const neededSkills =
+    r.needed_skills && r.needed_skills.length > 0
+      ? r.needed_skills
+      : r.raw_signals?.needed_skills || r.raw_signals?.user_skills || [];
+  const neededServices =
+    r.needed_services && r.needed_services.length > 0
+      ? r.needed_services
+      : r.raw_signals?.needed_services || [];
+  const needSignals =
+    r.need_signals && r.need_signals.length > 0
+      ? r.need_signals
+      : r.raw_signals?.need_signals || [];
+  const needHypothesis = r.need_hypothesis || r.raw_signals?.need_hypothesis || null;
+  const proposedSolution = r.proposed_solution || r.raw_signals?.proposed_solution || null;
+  const servicesOffered =
+    r.services_offered && r.services_offered.length > 0
+      ? r.services_offered
+      : r.raw_signals?.services_offered || [];
+  const digitalFeatures =
+    r.digital_features && r.digital_features.length > 0
+      ? r.digital_features
+      : r.raw_signals?.digital_features || [];
+  const aboutText = r.about_text || r.raw_signals?.about_text || null;
+
+  const contacts = contactsMap?.get(r.id) || (Array.isArray(r.emails) ? r.emails : undefined);
+
   return {
     id: r.id,
     org_id: r.org_id,
@@ -26,17 +54,28 @@ export function mapCompanyRow(r: any): CompanyProspect {
     industry: r.industry || "General Industry",
     size: r.size || "10-50 employees",
     source: Array.isArray(r.source) ? r.source.join(", ") : r.source || "searxng",
+    about_text: aboutText,
+    need_hypothesis: needHypothesis,
+    needed_skills: neededSkills,
+    needed_services: neededServices,
+    need_signals: needSignals,
+    proposed_solution: proposedSolution,
+    services_offered: servicesOffered,
+    digital_features: digitalFeatures,
+    auth_score: authScore,
+    auth_feedback: authFeedback,
     raw_signals: r.raw_signals,
     status: r.status,
-    company_auth: r.raw_signals?.auth_score
-      ? {
-          score: r.raw_signals.auth_score,
-          feedback: r.raw_signals.auth_feedback || null,
-          user_skills: r.raw_signals.user_skills || [],
-          target_industries: r.raw_signals.target_industries || [],
-        }
-      : null,
-    emails: Array.isArray(r.emails) ? r.emails : undefined,
+    company_auth:
+      authScore !== undefined && authScore !== null
+        ? {
+            score: authScore,
+            feedback: authFeedback || null,
+            user_skills: neededSkills,
+            target_industries: r.raw_signals?.target_industries || (r.industry ? [r.industry] : []),
+          }
+        : null,
+    emails: contacts,
     created_at: r.created_at,
   };
 }
@@ -148,6 +187,42 @@ export function subscribeToProspectingRealtime(
   };
 }
 
+async function fetchContactsMap(
+  supabase: any,
+  companyIds: string[],
+): Promise<Map<string, any[]>> {
+  const map = new Map<string, any[]>();
+  if (!companyIds || companyIds.length === 0) return map;
+
+  try {
+    const { data } = await supabase
+      .from(TABLES.CONTACTS)
+      .select("*")
+      .in("company_id", companyIds);
+
+    if (data) {
+      for (const row of data) {
+        const cId = row.company_id;
+        if (!map.has(cId)) {
+          map.set(cId, []);
+        }
+        map.get(cId)!.push({
+          email: row.email,
+          email_of: row.role || "Contact",
+          is_verified: row.is_reachable === "safe" || row.is_reachable === "valid",
+          first_name: row.name ? row.name.split(" ")[0] : null,
+          last_name: row.name ? row.name.split(" ").slice(1).join(" ") : null,
+          is_reachable: row.is_reachable,
+        });
+      }
+    }
+  } catch {
+    // Non-fatal if contacts table query is restricted
+  }
+
+  return map;
+}
+
 export async function fetchProspectingData(): Promise<ProspectingData> {
   const supabase = getSupabaseClient();
 
@@ -198,7 +273,12 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
       .eq(DB_KEYS.SENT_BY_ORG_ID, orgId)
       .order(DB_KEYS.CREATED_AT, { ascending: false });
 
-    const companies: CompanyProspect[] = (compRows || []).map(mapCompanyRow);
+    const compIds = (compRows || []).map((c: any) => c.id).filter(Boolean);
+    const contactsMap = await fetchContactsMap(supabase, compIds);
+
+    const companies: CompanyProspect[] = (compRows || []).map((r: any) =>
+      mapCompanyRow(r, contactsMap),
+    );
     const companyMap = new Map(companies.map((c) => [c.id, c]));
     const emails: EmailProspect[] = (emailRows || []).map((r: any) =>
       mapEmailRow(r, companyMap),
@@ -258,7 +338,12 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
     }
   }
 
-  const companies: CompanyProspect[] = (memberCompRows || []).map(mapCompanyRow);
+  const memberCompIds = (memberCompRows || []).map((c: any) => c.id).filter(Boolean);
+  const memberContactsMap = await fetchContactsMap(supabase, memberCompIds);
+
+  const companies: CompanyProspect[] = (memberCompRows || []).map((r: any) =>
+    mapCompanyRow(r, memberContactsMap),
+  );
   const companyMap = new Map(companies.map((c) => [c.id, c]));
   const emails: EmailProspect[] = (memberEmailRows || []).map((r: any) =>
     mapEmailRow(r, companyMap),

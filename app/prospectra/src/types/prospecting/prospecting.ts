@@ -20,9 +20,11 @@ export interface SearchCompanyRequest {
 }
 
 export interface SearchCompanyResponse {
-  status: "started" | "threshold_met" | "error";
+  status: "started" | "threshold_met" | "already_running" | "cooldown" | "error";
   pending: number;
   threshold: number;
   message?: string;
+  cooldown_remaining?: number;
+  cooldown_seconds?: number;
 }
 
