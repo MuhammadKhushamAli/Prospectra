@@ -67,7 +67,9 @@ export default function DomainVerificationScreen() {
           const supabase = getSupabaseClient();
           const { data: rec } = await supabase
             .from(TABLES.DOMAIN_VERIFICATIONS)
-            .select(`${DB_KEYS.DOMAIN}, ${DB_KEYS.VERIFICATION_STATUS}, ${DB_KEYS.DNS_RECORDS}`)
+            .select(
+              `${DB_KEYS.DOMAIN}, ${DB_KEYS.VERIFICATION_STATUS}, ${DB_KEYS.DNS_RECORDS}`,
+            )
             .eq(DB_KEYS.ORG_ID, orgId)
             .maybeSingle();
 
@@ -83,7 +85,8 @@ export default function DomainVerificationScreen() {
               title: "Add this DNS record to your domain provider:",
               type: dns?.type || "TXT",
               host:
-                dns?.name || `_prospectra${rec.domain ? `.${rec.domain}` : ""}`,
+                dns?.name ||
+                `_prospectra${rec.domain ? `.${rec.domain}` : ""}`,
               value: dns?.value || "",
             });
           }
@@ -226,6 +229,7 @@ export default function DomainVerificationScreen() {
   };
 
   const isVerified = currentStatus === "verified";
+  const isFailed = currentStatus === "failed";
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
@@ -243,6 +247,7 @@ export default function DomainVerificationScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <DomainVerificationHeader />
           <DomainVerificationForm
@@ -256,7 +261,7 @@ export default function DomainVerificationScreen() {
                 styles.tokenContainer,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: isVerified ? colors.success : colors.border,
+                  borderColor: isVerified ? colors.successBorder : colors.border,
                 },
               ]}
             >
@@ -268,19 +273,41 @@ export default function DomainVerificationScreen() {
                   style={[
                     styles.statusBadge,
                     {
-                      backgroundColor:
-                        currentStatus === "verified"
-                          ? colors.success
-                          : currentStatus === "failed"
-                            ? colors.error
-                            : colors.warning,
+                      backgroundColor: isVerified
+                        ? colors.successSoft
+                        : isFailed
+                          ? colors.errorSoft
+                          : colors.warningSoft,
+                      borderColor: isVerified
+                        ? colors.successBorder
+                        : isFailed
+                          ? colors.errorBorder
+                          : colors.warningBorder,
                     },
                   ]}
                 >
+                  <View
+                    style={[
+                      styles.statusDot,
+                      {
+                        backgroundColor: isVerified
+                          ? colors.success
+                          : isFailed
+                            ? colors.error
+                            : colors.warning,
+                      },
+                    ]}
+                  />
                   <Text
                     style={[
                       styles.statusBadgeText,
-                      { color: colors.surfaceElevated },
+                      {
+                        color: isVerified
+                          ? colors.success
+                          : isFailed
+                            ? colors.error
+                            : colors.warning,
+                      },
                     ]}
                   >
                     {currentStatus ? currentStatus.toUpperCase() : "PENDING"}
@@ -295,8 +322,16 @@ export default function DomainVerificationScreen() {
                   "Add this DNS record to your domain provider:"}
               </Text>
 
-              <View style={styles.recordRow}>
-                <View style={styles.recordField}>
+              <View
+                style={[
+                  styles.recordRow,
+                  {
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.recordFieldType}>
                   <Text
                     style={[styles.fieldLabel, { color: colors.textSecondary }]}
                   >
@@ -306,14 +341,24 @@ export default function DomainVerificationScreen() {
                     {dnsInstructions?.type || "TXT"}
                   </Text>
                 </View>
-                <View style={styles.recordField}>
+                <View
+                  style={[
+                    styles.recordDivider,
+                    { backgroundColor: colors.border },
+                  ]}
+                />
+                <View style={styles.recordFieldHost}>
                   <View style={styles.fieldLabelRow}>
                     <Text
-                      style={[styles.fieldLabel, { color: colors.textSecondary }]}
+                      style={[
+                        styles.fieldLabel,
+                        { color: colors.textSecondary },
+                      ]}
                     >
                       Host / Name
                     </Text>
                     <Pressable
+                      accessibilityRole="button"
                       onPress={handleCopyHost}
                       style={({ pressed }) => [
                         styles.inlineCopyBtn,
@@ -321,14 +366,26 @@ export default function DomainVerificationScreen() {
                       ]}
                     >
                       {copiedHost ? (
-                        <Check size={12} color={colors.success} />
+                        <Check
+                          size={12}
+                          color={colors.success}
+                          strokeWidth={1.75}
+                        />
                       ) : (
-                        <Copy size={12} color={colors.textSecondary} />
+                        <Copy
+                          size={12}
+                          color={colors.textSecondary}
+                          strokeWidth={1.75}
+                        />
                       )}
                       <Text
                         style={[
                           styles.inlineCopyText,
-                          { color: copiedHost ? colors.success : colors.textSecondary },
+                          {
+                            color: copiedHost
+                              ? colors.success
+                              : colors.textSecondary,
+                          },
                         ]}
                       >
                         {copiedHost ? "Copied" : "Copy"}
@@ -366,30 +423,35 @@ export default function DomainVerificationScreen() {
                     </Text>
                   </View>
                   <Pressable
+                    accessibilityRole="button"
                     onPress={handleCopyToken}
                     style={({ pressed }) => [
                       styles.copyBtn,
                       {
                         backgroundColor: copied
-                          ? colors.success
-                          : colors.surfaceElevated,
-                        borderColor: copied ? colors.success : colors.border,
+                          ? colors.successSoft
+                          : colors.surface,
+                        borderColor: copied
+                          ? colors.successBorder
+                          : colors.border,
                         opacity: pressed ? 0.8 : 1,
                       },
                     ]}
                   >
                     {copied ? (
-                      <Check size={14} color={colors.surfaceElevated} />
+                      <Check
+                        size={14}
+                        color={colors.success}
+                        strokeWidth={1.75}
+                      />
                     ) : (
-                      <Copy size={14} color={colors.primary} />
+                      <Copy size={14} color={colors.text} strokeWidth={1.75} />
                     )}
                     <Text
                       style={[
                         styles.copyBtnText,
                         {
-                          color: copied
-                            ? colors.surfaceElevated
-                            : colors.primary,
+                          color: copied ? colors.success : colors.text,
                         },
                       ]}
                     >
@@ -432,23 +494,29 @@ export default function DomainVerificationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  flex: { flex: 1 },
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   content: {
     flexGrow: 1,
     width: "100%",
     maxWidth: 420,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
     paddingBottom: tokens.spacing.xl,
+    justifyContent: "center",
   },
   tokenContainer: {
-    marginTop: tokens.spacing.lg,
-    padding: tokens.spacing.md,
+    marginTop: tokens.spacing.md,
+    padding: tokens.spacing.lg,
     borderRadius: tokens.radius.lg,
     borderWidth: 1,
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.md,
+    ...tokens.shadow.sm,
   },
   tokenHeader: {
     flexDirection: "row",
@@ -458,86 +526,106 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    letterSpacing: -0.2,
   },
   statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 3,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
     borderRadius: tokens.radius.full,
   },
   statusBadgeText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    letterSpacing: 0.5,
+    lineHeight: 16,
   },
   instructions: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
-    lineHeight: 18,
+    lineHeight: 20,
   },
   recordRow: {
     flexDirection: "row",
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+    padding: tokens.spacing.sm + 4,
     gap: tokens.spacing.md,
-    marginTop: tokens.spacing.xs,
   },
-  recordField: {
+  recordFieldType: {
+    minWidth: 72,
+    gap: tokens.spacing.xs,
+  },
+  recordDivider: {
+    width: 1,
+  },
+  recordFieldHost: {
     flex: 1,
+    gap: tokens.spacing.xs,
   },
   fieldLabel: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    marginBottom: 2,
+    lineHeight: 16,
   },
   fieldValue: {
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   tokenValueBlock: {
-    marginTop: tokens.spacing.xs,
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
   },
   tokenBox: {
     borderWidth: 1,
     borderRadius: tokens.radius.md,
-    padding: tokens.spacing.sm,
+    padding: tokens.spacing.sm + 4,
   },
   tokenText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   fieldLabelRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 2,
   },
   inlineCopyBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.xs,
   },
   inlineCopyText: {
     fontFamily: "DMSansMedium",
-    fontSize: 11,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   copyBtn: {
+    height: 36,
     borderWidth: 1,
     borderRadius: tokens.radius.md,
-    paddingVertical: tokens.spacing.xs,
-    paddingHorizontal: tokens.spacing.sm,
+    paddingHorizontal: tokens.spacing.sm + 4,
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   copyBtnText: {
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   statusActionWrap: {
-    marginTop: tokens.spacing.sm,
+    marginTop: tokens.spacing.xs,
   },
   continueWrap: {
     marginTop: tokens.spacing.xs,

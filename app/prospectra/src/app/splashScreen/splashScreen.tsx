@@ -123,6 +123,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
 const styles = StyleSheet.create({
   screen: {
     ...StyleSheet.absoluteFill,
+    zIndex: 999,
     alignItems: "center",
     justifyContent: "center",
   },

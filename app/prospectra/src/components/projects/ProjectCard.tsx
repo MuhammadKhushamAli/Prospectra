@@ -35,18 +35,30 @@ export default function ProjectCard({
       {/* Header Row */}
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            numberOfLines={1}
+          >
             {project.title}
           </Text>
           {project.isImportedFromGithub ? (
             <View
               style={[
                 styles.githubPill,
-                { backgroundColor: colors.background, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                },
               ]}
             >
-              <Code2 size={11} color={colors.primary} />
-              <Text style={[styles.githubPillText, { color: colors.primary }]}>
+              <Code2
+                size={11}
+                color={colors.textSecondary}
+                strokeWidth={1.75}
+              />
+              <Text
+                style={[styles.githubPillText, { color: colors.textSecondary }]}
+              >
                 GitHub
               </Text>
             </View>
@@ -55,42 +67,46 @@ export default function ProjectCard({
 
         <View style={styles.actionsRow}>
           <Pressable
+            accessibilityRole="button"
             style={({ pressed }) => [
               styles.iconButton,
               {
-                backgroundColor: colors.background,
+                backgroundColor: colors.surfaceElevated,
                 borderColor: colors.border,
-                opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
+                opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
               },
             ]}
             onPress={() => onEdit(project)}
             disabled={disabled}
             accessibilityLabel={`Edit ${project.title}`}
           >
-            <Pencil size={14} color={colors.text} />
+            <Pencil size={13} color={colors.textSecondary} strokeWidth={1.75} />
           </Pressable>
 
           <Pressable
+            accessibilityRole="button"
             style={({ pressed }) => [
               styles.iconButton,
-              styles.deleteButton,
               {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                opacity: disabled ? 0.5 : pressed ? 0.7 : 1,
+                backgroundColor: colors.errorSoft,
+                borderColor: colors.errorBorder,
+                opacity: disabled ? 0.45 : pressed ? 0.7 : 1,
               },
             ]}
             onPress={() => onDelete(project.id)}
             disabled={disabled}
             accessibilityLabel={`Delete ${project.title}`}
           >
-            <Trash size={14} color={colors.error} />
+            <Trash size={13} color={colors.error} strokeWidth={1.75} />
           </Pressable>
         </View>
       </View>
 
       {/* Description */}
-      <Text style={[styles.description, { color: colors.placeholder }]} numberOfLines={3}>
+      <Text
+        style={[styles.description, { color: colors.textSecondary }]}
+        numberOfLines={3}
+      >
         {project.description}
       </Text>
 
@@ -102,7 +118,10 @@ export default function ProjectCard({
               key={`${project.id}_${tech}_${idx}`}
               style={[
                 styles.techChip,
-                { backgroundColor: colors.background, borderColor: colors.border },
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                },
               ]}
             >
               <Text style={[styles.techChipText, { color: colors.text }]}>
@@ -115,30 +134,52 @@ export default function ProjectCard({
 
       {/* Links Row */}
       {project.liveDemoUrl || project.repoUrl ? (
-        <View style={styles.linksRow}>
+        <View
+          style={[styles.linksRow, { borderTopColor: colors.border }]}
+        >
           {project.liveDemoUrl ? (
             <Pressable
-              style={styles.linkButton}
+              accessibilityRole="link"
+              style={({ pressed }) => [
+                styles.linkButton,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
               onPress={() => handleOpenUrl(project.liveDemoUrl)}
             >
-              <Globe size={13} color={colors.primary} />
+              <Globe size={13} color={colors.primary} strokeWidth={1.75} />
               <Text style={[styles.linkText, { color: colors.primary }]}>
                 Live Demo
               </Text>
-              <ExternalLink size={11} color={colors.primary} />
+              <ExternalLink
+                size={11}
+                color={colors.primary}
+                strokeWidth={1.75}
+              />
             </Pressable>
           ) : null}
 
           {project.repoUrl ? (
             <Pressable
-              style={styles.linkButton}
+              accessibilityRole="link"
+              style={({ pressed }) => [
+                styles.linkButton,
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
               onPress={() => handleOpenUrl(project.repoUrl)}
             >
-              <Code2 size={13} color={colors.placeholder} />
-              <Text style={[styles.linkText, { color: colors.placeholder }]}>
+              <Code2
+                size={13}
+                color={colors.textSecondary}
+                strokeWidth={1.75}
+              />
+              <Text style={[styles.linkText, { color: colors.textSecondary }]}>
                 Repository
               </Text>
-              <ExternalLink size={11} color={colors.placeholder} />
+              <ExternalLink
+                size={11}
+                color={colors.textSecondary}
+                strokeWidth={1.75}
+              />
             </Pressable>
           ) : null}
         </View>
@@ -152,8 +193,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: tokens.radius.lg,
     padding: tokens.spacing.md,
-    gap: tokens.spacing.sm,
-    marginBottom: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 2,
+    ...tokens.shadow.sm,
   },
   headerRow: {
     flexDirection: "row",
@@ -164,40 +205,42 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
     paddingRight: tokens.spacing.sm,
   },
   title: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   githubPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
-    paddingHorizontal: tokens.spacing.xs + 2,
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 2,
-    borderRadius: tokens.radius.full,
+    borderRadius: 6,
     borderWidth: 1,
   },
   githubPillText: {
     fontFamily: "DMSansMedium",
-    fontSize: 10,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   actionsRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: tokens.radius.md,
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
-  deleteButton: {},
   description: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
@@ -206,34 +249,35 @@ const styles = StyleSheet.create({
   techStackWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
     marginTop: 2,
   },
   techChip: {
     paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 3,
-    borderRadius: tokens.radius.sm,
+    borderRadius: 6,
     borderWidth: 1,
   },
   techChipText: {
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   linksRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.md,
-    paddingTop: tokens.spacing.xs,
+    paddingTop: tokens.spacing.sm + 2,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
   },
   linkButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: tokens.spacing.xs,
   },
   linkText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

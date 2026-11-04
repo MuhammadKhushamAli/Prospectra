@@ -15,23 +15,46 @@ export default function TargetIndustriesFooterLink({
   return (
     <View style={styles.container}>
       {onBackToProfile ? (
-        <Pressable onPress={onBackToProfile} style={styles.link}>
-          <Text style={[styles.profileText, { color: colors.primary }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBackToProfile}
+          style={({ pressed }) => [
+            styles.link,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={[styles.profileText, { color: colors.text }]}>
             ← {targetIndustriesCopy.actions.backToProfile}
           </Text>
         </Pressable>
       ) : null}
 
       {onBackToDashboard ? (
-        <Pressable onPress={onBackToDashboard} style={styles.link}>
-          <Text style={[styles.dashboardText, { color: colors.textSecondary }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBackToDashboard}
+          style={({ pressed }) => [
+            styles.link,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text
+            style={[styles.dashboardText, { color: colors.textSecondary }]}
+          >
             {targetIndustriesCopy.actions.backToDashboard}
           </Text>
         </Pressable>
       ) : null}
 
       {onSignOut ? (
-        <Pressable onPress={onSignOut} style={styles.link}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onSignOut}
+          style={({ pressed }) => [
+            styles.link,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
           <Text style={[styles.text, { color: colors.textSecondary }]}>
             Sign out
           </Text>
@@ -54,17 +77,20 @@ const styles = StyleSheet.create({
   },
   profileText: {
     textAlign: "center",
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   dashboardText: {
     textAlign: "center",
-    fontFamily: "DMSansMedium",
+    fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   text: {
     textAlign: "center",
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

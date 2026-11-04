@@ -15,7 +15,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#1E1B18",
         "foregroundImage": "./assets/app_icons/prospectra-foreground.png",
         "monochromeImage": "./assets/app_icons/prospectra-mono.png"
       },
@@ -32,7 +32,7 @@
         {
           "backgroundColor": "#F5F2EA",
           "dark": {
-            "backgroundColor": "#12130F"
+            "backgroundColor": "#0B0F14"
           }
         }
       ]

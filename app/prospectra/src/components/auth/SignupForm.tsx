@@ -5,7 +5,7 @@ import { tokens } from "../../constants/theme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
-import type { SignupCredentials, SignupFormProps } from "../../types/auth";
+import type { SignupFormProps } from "../../types/auth";
 import { authCopy } from "../../constants/constants";
 
 export type { SignupFormProps };
@@ -15,6 +15,7 @@ export default function SignupForm({ onSubmit }: SignupFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   return (
     <View style={styles.form}>
       <TextField
@@ -44,14 +45,23 @@ export default function SignupForm({ onSubmit }: SignupFormProps) {
         value={confirmPassword}
         onChangeText={setConfirmPassword}
       />
-      <Button
-        label={authCopy.actions.signup}
-        onPress={() =>
-          onSubmit?.({ fullName, email, password }, confirmPassword)
-        }
-      />
+      <View style={styles.submitWrap}>
+        <Button
+          label={authCopy.actions.signup}
+          onPress={() =>
+            onSubmit?.({ fullName, email, password }, confirmPassword)
+          }
+        />
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({ form: { gap: tokens.spacing.md } });
+const styles = StyleSheet.create({
+  form: {
+    gap: tokens.spacing.md,
+  },
+  submitWrap: {
+    marginTop: tokens.spacing.xs,
+  },
+});

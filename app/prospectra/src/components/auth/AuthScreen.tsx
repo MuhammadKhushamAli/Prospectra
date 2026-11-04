@@ -5,6 +5,7 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, {
@@ -62,7 +63,6 @@ export default function AuthScreen() {
     return () => sub.remove();
   }, []);
 
-  // When user opens auth screen with an existing matched session, redirect if not on /auth
   useEffect(() => {
     let isMounted = true;
     checkUserOnboardingStatus().then((status) => {
@@ -71,7 +71,7 @@ export default function AuthScreen() {
       }
     });
     return () => {
-      isMounted = false; 
+      isMounted = false;
     };
   }, []);
 
@@ -79,7 +79,7 @@ export default function AuthScreen() {
     setMode(next);
     setNotification(null);
     opacity.value = reducedMotion ? 1 : 0;
-    translateX.value = reducedMotion ? 0 : next === authMode.login ? -6 : 6;
+    translateX.value = reducedMotion ? 0 : next === authMode.login ? -4 : 4;
     opacity.value = reducedMotion
       ? 1
       : withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) });
@@ -144,6 +144,7 @@ export default function AuthScreen() {
     opacity: opacity.value,
     transform: [{ translateX: translateX.value }],
   }));
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       {notification ? (
@@ -160,20 +161,33 @@ export default function AuthScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <AuthHeader mode={mode} />
-          <AuthModeSwitch
-            mode={mode}
-            onChange={changeMode}
-            reducedMotion={reducedMotion}
-          />
-          <Animated.View style={animatedForm}>
-            {mode === authMode.login ? (
-              <LoginForm onSubmit={handleLogin} isLoading={isLoggingIn} />
-            ) : (
-              <SignupForm onSubmit={handleSignup} />
-            )}
-          </Animated.View>
+
+          <View
+            style={[
+              styles.authCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <AuthModeSwitch
+              mode={mode}
+              onChange={changeMode}
+              reducedMotion={reducedMotion}
+            />
+            <Animated.View style={animatedForm}>
+              {mode === authMode.login ? (
+                <LoginForm onSubmit={handleLogin} isLoading={isLoggingIn} />
+              ) : (
+                <SignupForm onSubmit={handleSignup} />
+              )}
+            </Animated.View>
+          </View>
+
           <AuthFooterLink
             mode={mode}
             onPress={() =>
@@ -189,15 +203,26 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  flex: { flex: 1 },
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   content: {
     flexGrow: 1,
     width: "100%",
     maxWidth: 420,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
     paddingBottom: tokens.spacing.xl,
+    justifyContent: "center",
+  },
+  authCard: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    ...tokens.shadow.sm,
   },
 });

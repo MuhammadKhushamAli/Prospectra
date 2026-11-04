@@ -1,4 +1,10 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Code2, RefreshCw } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
@@ -21,8 +27,9 @@ export default function ProjectsHeader({
         </Text>
       </View>
 
-      <Text style={[styles.subtitle, { color: colors.placeholder }]}>
-        Add or edit your featured portfolio projects. Prospectra matches these to client requirements during outreach.
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        Add or edit your featured portfolio projects. Prospectra matches these
+        to client requirements during outreach.
       </Text>
 
       {githubUsername ? (
@@ -30,29 +37,41 @@ export default function ProjectsHeader({
           <View
             style={[
               styles.githubBadge,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
             ]}
           >
-            <Code2 size={14} color={colors.primary} />
+            <Code2 size={14} color={colors.textSecondary} strokeWidth={1.75} />
             <Text style={[styles.githubBadgeText, { color: colors.text }]}>
               GitHub: @{githubUsername}
             </Text>
             {onRefreshFromGithub ? (
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Refresh from GitHub"
                 onPress={onRefreshFromGithub}
                 disabled={isRefreshing}
-                style={styles.refreshButton}
+                style={({ pressed }) => [
+                  styles.refreshButton,
+                  { opacity: pressed ? 0.65 : 1 },
+                ]}
               >
                 {isRefreshing ? (
                   <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <RefreshCw size={12} color={colors.placeholder} />
+                  <RefreshCw
+                    size={12}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 )}
               </Pressable>
             ) : null}
           </View>
 
-          <Text style={[styles.countText, { color: colors.placeholder }]}>
+          <Text style={[styles.countText, { color: colors.textSecondary }]}>
             {count} {count === 1 ? "project" : "projects"} listed
           </Text>
         </View>
@@ -64,7 +83,7 @@ export default function ProjectsHeader({
 const styles = StyleSheet.create({
   header: {
     gap: tokens.spacing.xs,
-    marginBottom: tokens.spacing.md,
+    marginBottom: tokens.spacing.lg,
   },
   titleRow: {
     flexDirection: "row",
@@ -72,40 +91,43 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   title: {
-    fontFamily: "FrauncesBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.xl,
-    lineHeight: 36,
+    lineHeight: 32,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
-    lineHeight: 22,
+    lineHeight: 20,
   },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: tokens.spacing.xs,
+    marginTop: tokens.spacing.sm,
   },
   githubBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: tokens.radius.full,
+    gap: tokens.spacing.xs + 2,
+    paddingHorizontal: tokens.spacing.sm + 2,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   githubBadgeText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   refreshButton: {
     padding: 2,
-    marginLeft: 4,
+    marginLeft: 2,
   },
   countText: {
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

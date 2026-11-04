@@ -16,13 +16,27 @@ export default function ProfileSetupFooterLink({
   return (
     <View style={styles.container}>
       {onBackToDashboard ? (
-        <Pressable onPress={onBackToDashboard} style={styles.link}>
-          <Text style={[styles.dashboardText, { color: colors.primary }]}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onBackToDashboard}
+          style={({ pressed }) => [
+            styles.link,
+            { opacity: pressed ? 0.7 : 1 },
+          ]}
+        >
+          <Text style={[styles.dashboardText, { color: colors.text }]}>
             {profileSetupCopy.actions.backToDashboard}
           </Text>
         </Pressable>
       ) : null}
-      <Pressable onPress={onSignOut ?? onPress} style={styles.link}>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onSignOut ?? onPress}
+        style={({ pressed }) => [
+          styles.link,
+          { opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
         <Text style={[styles.text, { color: colors.textSecondary }]}>
           {profileSetupCopy.actions.backToLogin}
         </Text>
@@ -34,7 +48,7 @@ export default function ProfileSetupFooterLink({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.xs,
     marginTop: tokens.spacing.lg,
   },
   link: {
@@ -43,12 +57,14 @@ const styles = StyleSheet.create({
   },
   dashboardText: {
     textAlign: "center",
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   text: {
     textAlign: "center",
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

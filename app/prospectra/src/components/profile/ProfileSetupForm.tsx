@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { Check, Code2, Globe, Link2, X } from "lucide-react-native";
+import { Check, Code2, Link2, X } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -98,7 +98,6 @@ export default function ProfileSetupForm({
     );
   };
 
-  // Option 1: Connect GitHub via username using GitHub public API
   const handleConnectGithub = () => {
     setGithubModalError(null);
     setGithubUsernameInput("");
@@ -160,7 +159,10 @@ export default function ProfileSetupForm({
       "linkedin.com/in",
       "www.linkedin.com/in",
     ];
-    if (!finalLinkedinUrl || emptyPrefixes.includes(finalLinkedinUrl.toLowerCase())) {
+    if (
+      !finalLinkedinUrl ||
+      emptyPrefixes.includes(finalLinkedinUrl.toLowerCase())
+    ) {
       finalLinkedinUrl = "";
     } else if (!/^https?:\/\//i.test(finalLinkedinUrl)) {
       finalLinkedinUrl = `https://${finalLinkedinUrl}`;
@@ -179,9 +181,16 @@ export default function ProfileSetupForm({
   );
 
   return (
-    <View style={styles.form}>
-
-      {/* 2. Professional Headline */}
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      {/* Professional Headline */}
       <TextField
         label={`${profileSetupCopy.fields.headline} *`}
         placeholder={profileSetupCopy.placeholders.headline}
@@ -194,51 +203,61 @@ export default function ProfileSetupForm({
         error={headlineError}
       />
 
-      {/* 2. GitHub Profile Section (Option 1: Connect GitHub Button, Option 2: Manual URL) */}
+      {/* GitHub Profile Section */}
       <View style={styles.sectionContainer}>
         <View style={styles.labelRow}>
           <Text style={[styles.fieldLabel, { color: colors.text }]}>
             {`${profileSetupCopy.fields.githubUrl} (Optional)`}
           </Text>
           {isGithubConnected ? (
-            <View style={[styles.connectedBadge, { backgroundColor: colors.surface }]}>
-              <Check size={12} color={colors.primary} />
-              <Text style={[styles.connectedText, { color: colors.primary }]}>
+            <View
+              style={[
+                styles.connectedBadge,
+                {
+                  backgroundColor: colors.successSoft,
+                  borderColor: colors.successBorder,
+                },
+              ]}
+            >
+              <Check size={12} color={colors.success} strokeWidth={1.75} />
+              <Text style={[styles.connectedText, { color: colors.success }]}>
                 {profileSetupCopy.githubConnect.connected}
               </Text>
             </View>
           ) : null}
         </View>
 
-        {/* Option 1: Connect GitHub Button */}
         <Pressable
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.githubButton,
             {
-              backgroundColor: colors.surface,
+              backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
-              opacity: isLoading ? 0.7 : pressed ? 0.85 : 1,
+              opacity: isLoading ? 0.6 : pressed ? 0.85 : 1,
             },
           ]}
           onPress={handleConnectGithub}
           disabled={isLoading}
         >
-          <Code2 size={18} color={colors.text} />
+          <Code2 size={16} color={colors.text} strokeWidth={1.75} />
           <Text style={[styles.githubButtonText, { color: colors.text }]}>
             {profileSetupCopy.githubConnect.button}
           </Text>
         </Pressable>
 
-        {/* Divider */}
         <View style={styles.dividerRow}>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[styles.dividerText, { color: colors.placeholder }]}>
+          <View
+            style={[styles.dividerLine, { backgroundColor: colors.border }]}
+          />
+          <Text style={[styles.dividerText, { color: colors.textSecondary }]}>
             {profileSetupCopy.githubConnect.orManual}
           </Text>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          <View
+            style={[styles.dividerLine, { backgroundColor: colors.border }]}
+          />
         </View>
 
-        {/* Option 2: GitHub URL Input */}
         <TextField
           placeholder={profileSetupCopy.placeholders.githubUrl}
           keyboardType="url"
@@ -250,13 +269,18 @@ export default function ProfileSetupForm({
           error={githubError}
           rightSlot={
             isGithubConnected ? (
-              <Check size={16} color={colors.primary} style={styles.inputRightIcon} />
+              <Check
+                size={16}
+                color={colors.success}
+                strokeWidth={1.75}
+                style={styles.inputRightIcon}
+              />
             ) : null
           }
         />
       </View>
 
-      {/* 3. LinkedIn Profile Section (Optional with prefix filled) */}
+      {/* LinkedIn Profile Section */}
       <View style={styles.sectionContainer}>
         <Text style={[styles.fieldLabel, { color: colors.text }]}>
           {`${profileSetupCopy.fields.linkedinUrl} (Optional)`}
@@ -271,12 +295,21 @@ export default function ProfileSetupForm({
           editable={!isLoading}
           error={linkedinError}
           rightSlot={
-            <Link2 size={16} color={colors.placeholder} style={styles.inputRightIcon} />
+            <Link2
+              size={16}
+              color={colors.textSecondary}
+              strokeWidth={1.75}
+              style={styles.inputRightIcon}
+            />
           }
         />
       </View>
 
-      {/* 4. Skills Section */}
+      <View
+        style={[styles.sectionDivider, { backgroundColor: colors.border }]}
+      />
+
+      {/* Skills Section */}
       <ProfileSkillsSection
         skills={skills}
         onAddSkill={handleAddSkill}
@@ -284,16 +317,18 @@ export default function ProfileSetupForm({
         editable={!isLoading}
       />
 
-      {/* 5. Submit Button */}
-      <Button
-        label={
-          isLoading
-            ? profileSetupCopy.actions.submitting
-            : profileSetupCopy.actions.submit
-        }
-        onPress={handleSubmit}
-        disabled={isLoading}
-      />
+      {/* Submit Button */}
+      <View style={styles.submitWrap}>
+        <Button
+          label={
+            isLoading
+              ? profileSetupCopy.actions.submitting
+              : profileSetupCopy.actions.submit
+          }
+          onPress={handleSubmit}
+          disabled={isLoading}
+        />
+      </View>
 
       {/* GitHub Username Connect Modal */}
       <Modal
@@ -302,7 +337,9 @@ export default function ProfileSetupForm({
         animationType="fade"
         onRequestClose={() => setShowGithubModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View
+          style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
+        >
           <View
             style={[
               styles.modalCard,
@@ -311,26 +348,32 @@ export default function ProfileSetupForm({
           >
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderTitleWrap}>
-                <Code2 size={20} color={colors.primary} />
+                <Code2 size={18} color={colors.text} strokeWidth={1.75} />
                 <Text style={[styles.modalTitle, { color: colors.text }]}>
                   {profileSetupCopy.githubConnect.modalTitle}
                 </Text>
               </View>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close"
                 onPress={() => setShowGithubModal(false)}
                 style={styles.closeButton}
               >
-                <X size={18} color={colors.placeholder} />
+                <X size={16} color={colors.textSecondary} strokeWidth={1.75} />
               </Pressable>
             </View>
 
-            <Text style={[styles.modalSubtitle, { color: colors.placeholder }]}>
+            <Text
+              style={[styles.modalSubtitle, { color: colors.textSecondary }]}
+            >
               {profileSetupCopy.githubConnect.modalSubtitle}
             </Text>
 
             <TextField
               label="GitHub Username"
-              placeholder={profileSetupCopy.githubConnect.modalInputPlaceholder}
+              placeholder={
+                profileSetupCopy.githubConnect.modalInputPlaceholder
+              }
               autoCapitalize="none"
               autoCorrect={false}
               value={githubUsernameInput}
@@ -343,7 +386,15 @@ export default function ProfileSetupForm({
 
             <View style={styles.modalActions}>
               <Pressable
-                style={[styles.modalCancelButton, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.modalCancelButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    opacity: pressed ? 0.8 : 1,
+                  },
+                ]}
                 onPress={() => setShowGithubModal(false)}
                 disabled={isFetchingUsername}
               >
@@ -353,18 +404,26 @@ export default function ProfileSetupForm({
               </Pressable>
 
               <Pressable
-                style={[
+                accessibilityRole="button"
+                style={({ pressed }) => [
                   styles.modalSubmitButton,
-                  { backgroundColor: colors.primary },
-                  isFetchingUsername && styles.buttonDisabled,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: isFetchingUsername ? 0.6 : pressed ? 0.88 : 1,
+                  },
                 ]}
                 onPress={handleFetchGithubUsername}
                 disabled={isFetchingUsername}
               >
                 {isFetchingUsername ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
                 ) : (
-                  <Text style={styles.modalSubmitText}>
+                  <Text
+                    style={[
+                      styles.modalSubmitText,
+                      { color: colors.onPrimary },
+                    ]}
+                  >
                     {profileSetupCopy.githubConnect.modalSubmit}
                   </Text>
                 )}
@@ -378,9 +437,15 @@ export default function ProfileSetupForm({
 }
 
 const styles = StyleSheet.create({
-  form: { gap: tokens.spacing.md },
+  card: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    gap: tokens.spacing.md,
+    ...tokens.shadow.sm,
+  },
   sectionContainer: {
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
   },
   labelRow: {
     flexDirection: "row",
@@ -389,24 +454,27 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   connectedBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 2,
-    borderRadius: tokens.radius.full,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
   },
   connectedText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   githubButton: {
-    height: 48,
+    height: 40,
     borderWidth: 1,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -416,12 +484,13 @@ const styles = StyleSheet.create({
   githubButtonText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
-    marginVertical: tokens.spacing.xs,
+    marginVertical: 2,
   },
   dividerLine: {
     flex: 1,
@@ -430,24 +499,33 @@ const styles = StyleSheet.create({
   dividerText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   inputRightIcon: {
-    marginRight: tokens.spacing.md,
+    marginRight: tokens.spacing.sm + 4,
+  },
+  sectionDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: tokens.spacing.xs,
+  },
+  submitWrap: {
+    marginTop: tokens.spacing.xs,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
     padding: tokens.spacing.lg,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 380,
+    maxWidth: 400,
     borderWidth: 1,
     borderRadius: tokens.radius.lg,
     padding: tokens.spacing.lg,
     gap: tokens.spacing.md,
+    ...tokens.shadow.md,
   },
   modalHeader: {
     flexDirection: "row",
@@ -460,16 +538,17 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.sm,
   },
   modalTitle: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    letterSpacing: -0.2,
   },
   closeButton: {
-    padding: 4,
+    padding: tokens.spacing.xs,
   },
   modalSubtitle: {
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.xs,
-    lineHeight: 18,
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   modalActions: {
     flexDirection: "row",
@@ -478,29 +557,29 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.xs,
   },
   modalCancelButton: {
-    paddingVertical: tokens.spacing.sm,
+    height: 36,
     paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalCancelText: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   modalSubmitButton: {
-    paddingVertical: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.lg,
-    borderRadius: tokens.radius.lg,
+    height: 36,
+    paddingHorizontal: tokens.spacing.md,
+    borderRadius: tokens.radius.md,
     justifyContent: "center",
     alignItems: "center",
     minWidth: 120,
   },
   modalSubmitText: {
-    color: "#FFFFFF",
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

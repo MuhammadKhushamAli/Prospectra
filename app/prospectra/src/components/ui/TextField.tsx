@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TextInputProps,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -35,19 +29,26 @@ export default function TextField({
           styles.inputWrap,
           isMultiline && styles.inputWrapMultiline,
           {
-            backgroundColor: colors.surface,
+            backgroundColor: error ? colors.errorSoft : colors.surface,
             borderColor: error
               ? colors.error
               : focused
                 ? colors.primary
                 : colors.border,
           },
+          focused && [
+            styles.focusedRing,
+            { shadowColor: error ? colors.error : colors.primary },
+          ],
           inputWrapStyle,
         ]}
       >
         <TextInput
           {...props}
-          textAlignVertical={props.textAlignVertical ?? (isMultiline ? "top" : "center")}
+          accessibilityLabel={props.accessibilityLabel ?? label}
+          textAlignVertical={
+            props.textAlignVertical ?? (isMultiline ? "top" : "center")
+          }
           onFocus={(event) => {
             setFocused(true);
             props.onFocus?.(event);
@@ -67,42 +68,60 @@ export default function TextField({
         {rightSlot}
       </View>
       {error ? (
-        <Text style={[styles.error, { color: colors.error }]}>{error}</Text>
+        <Text
+          accessibilityRole="alert"
+          style={[styles.error, { color: colors.error }]}
+        >
+          {error}
+        </Text>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { gap: tokens.spacing.xs },
-  label: { fontFamily: "DMSansMedium", fontSize: tokens.fontSize.sm },
+  wrapper: {
+    gap: tokens.spacing.xs,
+  },
+  label: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
   inputWrap: {
-    height: 48,
+    height: 40,
     borderWidth: 1,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     flexDirection: "row",
     alignItems: "center",
   },
+  focusedRing: {
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 1,
+  },
   inputWrapMultiline: {
     height: undefined,
-    minHeight: 110,
+    minHeight: 104,
     alignItems: "flex-start",
   },
   input: {
     flex: 1,
-    paddingHorizontal: tokens.spacing.md,
+    paddingHorizontal: tokens.spacing.sm + 4,
     paddingVertical: tokens.spacing.sm,
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.md,
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   inputMultiline: {
-    minHeight: 100,
+    minHeight: 96,
     paddingTop: tokens.spacing.sm,
     paddingBottom: tokens.spacing.sm,
   },
   error: {
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    marginTop: 2,
+    lineHeight: 16,
   },
 });

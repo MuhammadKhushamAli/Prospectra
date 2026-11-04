@@ -62,7 +62,9 @@ export default function ProfileSetupScreen() {
             setInitialHeadline(profile.headline || "");
             setInitialSkills(profile.skills || []);
             setInitialGithubUrl(profile.githubUrl || "");
-            setInitialLinkedinUrl(profile.linkedinUrl || "https://linkedin.com/in/");
+            setInitialLinkedinUrl(
+              profile.linkedinUrl || "https://linkedin.com/in/",
+            );
           }
         } catch {
           if (isMounted) {
@@ -143,6 +145,7 @@ export default function ProfileSetupScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <ProfileSetupHeader userName={userName} />
           <ProfileSetupForm
@@ -164,8 +167,12 @@ export default function ProfileSetupScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  flex: { flex: 1 },
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   loadingScreen: {
     flex: 1,
     justifyContent: "center",
@@ -174,10 +181,10 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 460,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
     paddingBottom: tokens.spacing.xl,
   },
 });

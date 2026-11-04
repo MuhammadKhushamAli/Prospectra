@@ -1,20 +1,37 @@
 import { Image, StyleSheet, Text, View } from "react-native";
+import { Target } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { appName, targetIndustriesCopy } from "../../constants/constants";
+import { formatDisplayName } from "../../services/profileService";
 import type { TargetIndustriesHeaderProps } from "../../types/industries";
 
 export default function TargetIndustriesHeader({
   userName,
 }: TargetIndustriesHeaderProps) {
   const colors = useTheme();
+  const displayName = formatDisplayName(userName);
 
   return (
     <View style={styles.container}>
       <View style={styles.brandRow}>
         <View style={styles.brand}>
-          <Image source={colors.icon} style={styles.logo} resizeMode="contain" />
+          <View
+            style={[
+              styles.logoWrap,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Image
+              source={colors.icon}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={[styles.brandName, { color: colors.text }]}>
             {appName}
           </Text>
@@ -28,8 +45,11 @@ export default function TargetIndustriesHeader({
             },
           ]}
         >
-          <Text style={[styles.stepBadgeText, { color: colors.primary }]}>
-            Step 2 of 2
+          <Target size={12} color={colors.textSecondary} strokeWidth={1.75} />
+          <Text
+            style={[styles.stepBadgeText, { color: colors.textSecondary }]}
+          >
+            Step 3 of 3
           </Text>
         </View>
       </View>
@@ -39,7 +59,7 @@ export default function TargetIndustriesHeader({
           {targetIndustriesCopy.title}
         </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {userName ? `${userName}, ` : ""}
+          {displayName ? `${displayName}, ` : ""}
           {targetIndustriesCopy.subtitle}
         </Text>
       </View>
@@ -61,37 +81,50 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: tokens.spacing.sm,
   },
+  logoWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   logo: {
-    width: 36,
-    height: 36,
+    width: 20,
+    height: 20,
   },
   brandName: {
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    letterSpacing: -0.3,
   },
   stepBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 4,
-    borderRadius: tokens.radius.full,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   stepBadgeText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    letterSpacing: 0.3,
+    lineHeight: 16,
   },
   titleBlock: {
-    marginTop: tokens.spacing.auth,
+    marginTop: tokens.spacing.lg,
   },
   title: {
     fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.authTitle,
-    lineHeight: tokens.fontSize.xl,
+    fontSize: tokens.fontSize.xl,
+    lineHeight: 32,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.authSubtitle,
-    lineHeight: tokens.fontSize.lg,
-    marginTop: tokens.spacing.sm,
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+    marginTop: tokens.spacing.xs,
   },
 });

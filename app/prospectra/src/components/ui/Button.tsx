@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text } from "react-native";
 import { tokens } from "../../constants/theme";
 import { buttonVariant } from "../../constants/constants";
 import { useTheme } from "../../hooks/useTheme";
-import type { ButtonProps, ButtonVariant } from "../../types/ui";
+import type { ButtonProps } from "../../types/ui";
 
 export type { ButtonProps };
 
@@ -15,16 +15,34 @@ export default function Button({
 }: ButtonProps) {
   const colors = useTheme();
   const primary = variant === buttonVariant.primary;
+
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.button,
         primary
-          ? { backgroundColor: colors.primary, borderColor: colors.primary }
-          : { borderColor: colors.border },
-        { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
+          ? [
+              styles.primaryShadow,
+              {
+                backgroundColor: colors.primary,
+                borderColor: colors.primary,
+              },
+            ]
+          : [
+              styles.secondaryShadow,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ],
+        {
+          opacity: disabled ? 0.45 : pressed ? 0.88 : 1,
+        },
       ]}
     >
       <Text
@@ -41,11 +59,23 @@ export default function Button({
 
 const styles = StyleSheet.create({
   button: {
-    height: 48,
+    height: 40,
     borderWidth: 1,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: tokens.spacing.md,
   },
-  label: { fontFamily: "DMSansSemiBold", fontSize: tokens.fontSize.md },
+  primaryShadow: {
+    ...tokens.shadow.sm,
+  },
+  secondaryShadow: {
+    ...tokens.shadow.sm,
+  },
+  label: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+    letterSpacing: -0.1,
+  },
 });

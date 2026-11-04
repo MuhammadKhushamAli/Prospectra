@@ -93,6 +93,7 @@ export default function OrganizationRegistrationScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <OrganizationRegistrationHeader />
           <OrganizationRegistrationForm
@@ -107,15 +108,20 @@ export default function OrganizationRegistrationScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  flex: { flex: 1 },
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   content: {
     flexGrow: 1,
     width: "100%",
     maxWidth: 420,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
     paddingBottom: tokens.spacing.xl,
+    justifyContent: "center",
   },
 });

@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Check, Plus, Sparkles, X } from "lucide-react-native";
+import { Check, Layers, Plus, X } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -85,7 +85,7 @@ export default function ProfileSkillsSection({
               },
             ]}
           >
-            <Text style={[styles.counterText, { color: colors.primary }]}>
+            <Text style={[styles.counterText, { color: colors.text }]}>
               {skills.length}
             </Text>
           </View>
@@ -110,7 +110,7 @@ export default function ProfileSkillsSection({
           <TextInput
             style={[styles.input, { color: colors.text }]}
             placeholder={skillsCopy.placeholder}
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={colors.placeholder}
             value={skillInput}
             onChangeText={handleInputChange}
             onSubmitEditing={handleAddCustomSkill}
@@ -122,6 +122,7 @@ export default function ProfileSkillsSection({
             autoCorrect={false}
           />
           <Pressable
+            accessibilityRole="button"
             onPress={handleAddCustomSkill}
             disabled={!editable || !skillInput.trim()}
             style={({ pressed }) => [
@@ -131,13 +132,19 @@ export default function ProfileSkillsSection({
                   skillInput.trim().length > 0
                     ? colors.primary
                     : colors.surfaceElevated,
-                borderColor: colors.border,
-                opacity: pressed ? 0.7 : skillInput.trim().length > 0 ? 1 : 0.5,
+                borderColor:
+                  skillInput.trim().length > 0 ? colors.primary : colors.border,
+                opacity: pressed
+                  ? 0.75
+                  : skillInput.trim().length > 0
+                    ? 1
+                    : 0.5,
               },
             ]}
           >
             <Plus
               size={14}
+              strokeWidth={1.75}
               color={
                 skillInput.trim().length > 0
                   ? colors.onPrimary
@@ -186,6 +193,8 @@ export default function ProfileSkillsSection({
               </Text>
               {editable ? (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${skill}`}
                   onPress={() => onRemoveSkill(skill)}
                   hitSlop={6}
                   style={({ pressed }) => [
@@ -193,7 +202,11 @@ export default function ProfileSkillsSection({
                     { opacity: pressed ? 0.6 : 1 },
                   ]}
                 >
-                  <X size={12} color={colors.textSecondary} />
+                  <X
+                    size={12}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -204,7 +217,7 @@ export default function ProfileSkillsSection({
           style={[
             styles.emptyWrap,
             {
-              backgroundColor: colors.surface,
+              backgroundColor: colors.surfaceElevated,
               borderColor: colors.border,
             },
           ]}
@@ -218,7 +231,7 @@ export default function ProfileSkillsSection({
       {/* Suggested Skills */}
       <View style={styles.suggestionsWrap}>
         <View style={styles.suggestionsHeader}>
-          <Sparkles size={13} color={colors.primary} />
+          <Layers size={12} color={colors.textSecondary} strokeWidth={1.75} />
           <Text
             style={[styles.suggestionsTitle, { color: colors.textSecondary }]}
           >
@@ -232,6 +245,8 @@ export default function ProfileSkillsSection({
             );
             return (
               <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
                 key={suggestion}
                 onPress={() => handleToggleSuggestion(suggestion)}
                 disabled={!editable}
@@ -239,25 +254,34 @@ export default function ProfileSkillsSection({
                   styles.suggestionChip,
                   {
                     backgroundColor: isSelected
-                      ? colors.primary
-                      : colors.surfaceElevated,
-                    borderColor: isSelected ? colors.primary : colors.border,
+                      ? colors.primarySoft
+                      : colors.surface,
+                    borderColor: isSelected
+                      ? colors.primaryBorder
+                      : colors.border,
                     opacity: pressed ? 0.8 : 1,
                   },
                 ]}
               >
                 {isSelected ? (
-                  <Check size={11} color={colors.onPrimary} />
+                  <Check
+                    size={12}
+                    color={colors.primary}
+                    strokeWidth={1.75}
+                  />
                 ) : (
-                  <Plus size={11} color={colors.textSecondary} />
+                  <Plus
+                    size={12}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 )}
                 <Text
                   style={[
                     styles.suggestionText,
                     {
-                      color: isSelected
-                        ? colors.onPrimary
-                        : colors.textSecondary,
+                      color: isSelected ? colors.primary : colors.textSecondary,
+                      fontFamily: isSelected ? "DMSansMedium" : "DMSans",
                     },
                   ]}
                 >
@@ -274,7 +298,7 @@ export default function ProfileSkillsSection({
 
 const styles = StyleSheet.create({
   container: {
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 4,
     marginTop: tokens.spacing.xs,
   },
   headerRow: {
@@ -288,8 +312,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   sectionTitle: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.sm,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   sectionSubtitle: {
     fontFamily: "DMSans",
@@ -299,113 +324,118 @@ const styles = StyleSheet.create({
   counterBadge: {
     paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 2,
-    borderRadius: tokens.radius.full,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   counterText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   inputSection: {
-    gap: 4,
+    gap: tokens.spacing.xs,
   },
   inputRow: {
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 4,
+    paddingLeft: tokens.spacing.sm + 4,
+    paddingRight: tokens.spacing.xs,
     gap: tokens.spacing.xs,
   },
   input: {
     flex: 1,
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
     paddingVertical: tokens.spacing.xs,
   },
   addBtn: {
+    height: 30,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
-    borderRadius: tokens.radius.sm,
+    borderRadius: 6,
     borderWidth: 1,
   },
   addBtnText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   errorText: {
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    marginTop: 2,
+    lineHeight: 16,
   },
   chipsContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
-    minHeight: 32,
+    gap: tokens.spacing.xs + 2,
     alignItems: "center",
   },
   skillChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 5,
+    gap: tokens.spacing.xs + 2,
+    paddingVertical: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
-    borderRadius: tokens.radius.full,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   skillChipText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   removeBtn: {
-    padding: 1,
+    padding: 2,
   },
   emptyWrap: {
-    padding: tokens.spacing.sm,
+    padding: tokens.spacing.sm + 4,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
-    borderStyle: "dashed",
     alignItems: "center",
   },
   emptyText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
     textAlign: "center",
   },
   suggestionsWrap: {
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
     marginTop: tokens.spacing.xs,
   },
   suggestionsHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: tokens.spacing.xs,
   },
   suggestionsTitle: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   suggestionsChips: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
   },
   suggestionChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingVertical: 4,
+    gap: tokens.spacing.xs,
+    paddingVertical: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
-    borderRadius: tokens.radius.full,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   suggestionText: {
-    fontFamily: "DMSans",
-    fontSize: 11,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

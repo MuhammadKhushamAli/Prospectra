@@ -13,7 +13,7 @@ import { router, useFocusEffect } from "expo-router";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { useTargetIndustries } from "../../hooks/useTargetIndustries";
-import { getSupabaseClient } from "../../config/supabaseClient";                      
+import { getSupabaseClient } from "../../config/supabaseClient";
 import { checkUserOnboardingStatus } from "../../services/onboardingService";
 import { fetchProfileFullNameFromDb } from "../../services/profileService";
 import NotificationBanner from "../ui/NotificationBanner";
@@ -155,6 +155,7 @@ export default function TargetIndustriesScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           <TargetIndustriesHeader userName={userName} />
           <TargetIndustriesForm
@@ -183,10 +184,10 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     width: "100%",
-    maxWidth: 420,
+    maxWidth: 460,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
   },
   loadingScreen: {
     flex: 1,

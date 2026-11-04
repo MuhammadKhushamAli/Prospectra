@@ -58,7 +58,15 @@ export default function OrganizationRegistrationForm({
   };
 
   return (
-    <View style={styles.form}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+      ]}
+    >
       <TextField
         label={organizationRegistrationCopy.fields.name}
         placeholder={organizationRegistrationCopy.placeholders.name}
@@ -88,28 +96,38 @@ export default function OrganizationRegistrationForm({
         </Text>
       </View>
 
-      <Button
-        label={
-          isLoading
-            ? organizationRegistrationCopy.actions.submitting
-            : organizationRegistrationCopy.actions.submit
-        }
-        onPress={handleSubmit}
-        disabled={isLoading}
-      />
+      <View style={styles.submitWrap}>
+        <Button
+          label={
+            isLoading
+              ? organizationRegistrationCopy.actions.submitting
+              : organizationRegistrationCopy.actions.submit
+          }
+          onPress={handleSubmit}
+          disabled={isLoading}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: tokens.spacing.md },
+  card: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    gap: tokens.spacing.md,
+    ...tokens.shadow.sm,
+  },
   thresholdBlock: {
-    gap: 4,
+    gap: tokens.spacing.xs,
   },
   helperText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
     lineHeight: 16,
-    paddingHorizontal: 2,
+  },
+  submitWrap: {
+    marginTop: tokens.spacing.xs,
   },
 });

@@ -19,18 +19,19 @@ export default function ProjectsFooterActions({
     <View style={styles.container}>
       {/* Add Project Action Button */}
       <Pressable
+        accessibilityRole="button"
         style={({ pressed }) => [
           styles.outlineAddButton,
           {
             backgroundColor: colors.surface,
             borderColor: colors.border,
-            opacity: isLoading ? 0.6 : pressed ? 0.8 : 1,
+            opacity: isLoading ? 0.45 : pressed ? 0.8 : 1,
           },
         ]}
         onPress={onAddProject}
         disabled={isLoading}
       >
-        <Plus size={16} color={colors.text} />
+        <Plus size={15} color={colors.text} strokeWidth={1.75} />
         <Text style={[styles.outlineAddButtonText, { color: colors.text }]}>
           Add Project
         </Text>
@@ -38,7 +39,9 @@ export default function ProjectsFooterActions({
 
       {/* Primary Submit Button */}
       <Button
-        label={isLoading ? "Saving projects..." : "Continue to target industries"}
+        label={
+          isLoading ? "Saving projects..." : "Continue to target industries"
+        }
         onPress={onSubmit}
         disabled={isLoading || !canSubmit}
       />
@@ -46,6 +49,7 @@ export default function ProjectsFooterActions({
       {/* Skip Option */}
       {onSkip ? (
         <Pressable
+          accessibilityRole="button"
           style={({ pressed }) => [
             styles.skipButton,
             { opacity: pressed ? 0.7 : 1 },
@@ -53,7 +57,7 @@ export default function ProjectsFooterActions({
           onPress={onSkip}
           disabled={isLoading}
         >
-          <Text style={[styles.skipText, { color: colors.placeholder }]}>
+          <Text style={[styles.skipText, { color: colors.textSecondary }]}>
             Skip this step for now
           </Text>
         </Pressable>
@@ -65,29 +69,32 @@ export default function ProjectsFooterActions({
 const styles = StyleSheet.create({
   container: {
     gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.md,
+    marginTop: tokens.spacing.lg,
   },
   outlineAddButton: {
-    height: 48,
+    height: 40,
     borderWidth: 1,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
+    ...tokens.shadow.sm,
   },
   outlineAddButtonText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   skipButton: {
     alignSelf: "center",
     paddingVertical: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
     marginTop: tokens.spacing.xs,
   },
   skipText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
-    textDecorationLine: "underline",
+    lineHeight: 16,
   },
 });

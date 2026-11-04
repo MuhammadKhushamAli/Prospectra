@@ -28,34 +28,40 @@ export default function ProjectsEmptyState({
       <View
         style={[
           styles.iconCircle,
-          { backgroundColor: colors.background, borderColor: colors.border },
+          {
+            backgroundColor: colors.surfaceElevated,
+            borderColor: colors.border,
+          },
         ]}
       >
-        <Briefcase size={28} color={colors.primary} />
+        <Briefcase size={20} color={colors.textSecondary} strokeWidth={1.75} />
       </View>
 
       <Text style={[styles.title, { color: colors.text }]}>
         No Projects Added Yet
       </Text>
 
-      <Text style={[styles.subtitle, { color: colors.placeholder }]}>
+      <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
         {hasGithub
           ? "No repositories were found or selected from GitHub. You can add your flagship projects manually below."
           : "Add your key software, engineering, or client projects so Prospectra can pitch your relevant work during outreach."}
       </Text>
 
       <Pressable
+        accessibilityRole="button"
         style={({ pressed }) => [
           styles.addButton,
           {
             backgroundColor: colors.primary,
-            opacity: pressed ? 0.85 : 1,
+            opacity: pressed ? 0.88 : 1,
           },
         ]}
         onPress={onAddProject}
       >
-        <Plus size={16} color="#FFFFFF" />
-        <Text style={styles.addButtonText}>Add Your First Project</Text>
+        <Plus size={14} color={colors.onPrimary} strokeWidth={1.75} />
+        <Text style={[styles.addButtonText, { color: colors.onPrimary }]}>
+          Add Your First Project
+        </Text>
       </Pressable>
     </View>
   );
@@ -69,20 +75,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: tokens.spacing.sm,
-    marginVertical: tokens.spacing.md,
+    ...tokens.shadow.sm,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: tokens.radius.full,
+    width: 44,
+    height: 44,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: tokens.spacing.xs,
   },
   title: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    lineHeight: 22,
+    letterSpacing: -0.2,
     textAlign: "center",
   },
   subtitle: {
@@ -93,17 +101,17 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   addButton: {
+    height: 36,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
-    paddingVertical: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.lg,
-    borderRadius: tokens.radius.lg,
+    gap: tokens.spacing.xs + 2,
+    paddingHorizontal: tokens.spacing.md,
+    borderRadius: tokens.radius.md,
     marginTop: tokens.spacing.xs,
   },
   addButtonText: {
-    color: "#FFFFFF",
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

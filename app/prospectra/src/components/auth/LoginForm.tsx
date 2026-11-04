@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
-import type { LoginCredentials, LoginFormProps } from "../../types/auth";
+import type { LoginFormProps } from "../../types/auth";
 import { authCopy } from "../../constants/constants";
 
 export type { LoginFormProps };
@@ -30,28 +30,48 @@ export default function LoginForm({
         value={email}
         onChangeText={setEmail}
       />
-      <PasswordField label={authCopy.fields.password} placeholder={authCopy.placeholders.loginPassword} value={password} onChangeText={setPassword} />
-      <Text
-        onPress={onForgotPassword}
-        style={[styles.forgot, { color: colors.primary }]}
-      >
-        {authCopy.actions.forgotPassword}
-      </Text>
-      <Button
-        label={isLoading ? "Logging in..." : authCopy.actions.login}
-        disabled={isLoading}
-        onPress={() => onSubmit?.({ email, password })}
+      <PasswordField
+        label={authCopy.fields.password}
+        placeholder={authCopy.placeholders.loginPassword}
+        value={password}
+        onChangeText={setPassword}
       />
+      <Pressable
+        accessibilityRole="button"
+        onPress={onForgotPassword}
+        style={({ pressed }) => [
+          styles.forgotWrap,
+          { opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
+        <Text style={[styles.forgot, { color: colors.textSecondary }]}>
+          {authCopy.actions.forgotPassword}
+        </Text>
+      </Pressable>
+      <View style={styles.submitWrap}>
+        <Button
+          label={isLoading ? "Logging in..." : authCopy.actions.login}
+          disabled={isLoading}
+          onPress={() => onSubmit?.({ email, password })}
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  form: { gap: tokens.spacing.md },
-  forgot: {
+  form: {
+    gap: tokens.spacing.md,
+  },
+  forgotWrap: {
     alignSelf: "flex-end",
+  },
+  forgot: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
-    marginTop: tokens.spacing.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
+  submitWrap: {
+    marginTop: tokens.spacing.xs,
   },
 });

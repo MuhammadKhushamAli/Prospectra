@@ -1,16 +1,33 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useFocusEffect } from "expo-router";
-import { AlertCircle, CheckCircle2, Lock } from "lucide-react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import {
+  Building2,
+  Globe,
+  Mail,
+  ShieldAlert,
+} from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -21,52 +38,40 @@ import {
   checkUserOnboardingStatus,
   resolveUserOrgMembership,
 } from "../../services/onboardingService";
-import { getProfileFromSupabase } from "../../services/profileService";
-import { getTargetIndustries } from "../../services/targetIndustryService";
 import {
-  appName,
-  buttonVariant,
-  homeCopy,
-  notificationVariant,
-} from "../../constants/constants";
-import type { NotificationVariant } from "../../types/ui";
-import Button from "../../components/ui/Button";
-import NotificationBanner from "../../components/ui/NotificationBanner";
-
+  fetchProfileFullNameFromDb,
+  formatDisplayName,
+  isProfileComplete,
+} from "../../services/profileService";
+import type { UserIdCardProfile } from "../../types/profile";
 import type { UserOnboardingStatus } from "../../types/onboarding";
 
-interface HomeDashboardData {
-  headline: string | null;
-  hasProfile: boolean;
-  hasTargetIndustries: boolean;
-  orgId: string | null;
-  orgName: string | null;
-  domain: string | null;
-}
-
-async function fetchHomeDashboardData(
+async function fetchUserIdCardProfile(
   userId: string,
+  fallbackName: string | null,
+  fallbackEmail: string | null,
   onboarding: UserOnboardingStatus,
-): Promise<HomeDashboardData> {
+): Promise<UserIdCardProfile> {
   const supabase = getSupabaseClient();
 
-  // 1. Reuse headline and company name (orgName) from onboarding
-  const headline = onboarding.headline ?? null;
-  const orgName = onboarding.orgName ?? null;
+  // 1. Fetch user full name from user_profiles or fallback to auth metadata
+  const dbFullName = await fetchProfileFullNameFromDb(supabase, userId).catch(
+    () => null,
+  );
+  const name = dbFullName || fallbackName;
 
-  // 2. Fetch target industries fresh from DB
-  const targetIndustries = await getTargetIndustries().catch(() => []);
-  const hasTargetIndustries = targetIndustries.length > 0;
+  // 2. Role in organization (professional headline configured in profile setup)
+  const role = onboarding.headline ?? null;
 
-  // 3. Resolve organization ID fresh from DB using shared membership resolver
+  // 3. Resolve organization ID and name fresh from DB
   const { orgId, orgName: resolvedOrgName } = await resolveUserOrgMembership(
     supabase,
     userId,
   );
-  const activeOrgName = resolvedOrgName || orgName;
+  const organizationName = resolvedOrgName || onboarding.orgName || null;
 
-  // 4. Fetch domain fresh from DB
-  let domain: string | null = null;
+  // 4. Fetch verified organization domain from DB
+  let organizationDomain: string | null = null;
   if (orgId) {
     const { data: domainRec } = await supabase
       .from(TABLES.DOMAIN_VERIFICATIONS)
@@ -74,35 +79,98 @@ async function fetchHomeDashboardData(
       .eq(DB_KEYS.ORG_ID, orgId)
       .limit(1)
       .maybeSingle();
-    domain = domainRec?.domain ?? null;
+    organizationDomain = domainRec?.domain ?? null;
   }
 
-  const hasProfile = Boolean(headline) && hasTargetIndustries;
-
   return {
-    headline,
-    hasProfile,
-    hasTargetIndustries,
-    orgId,
-    orgName: activeOrgName,
-    domain,
+    name,
+    organizationName,
+    organizationDomain,
+    email: fallbackEmail,
+    role,
   };
 }
 
 export default function HomeRoute() {
   const colors = useTheme();
-  const [dashboardData, setDashboardData] =
-    useState<HomeDashboardData | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const { width: screenWidth } = useWindowDimensions();
+
+  const [profile, setProfile] = useState<UserIdCardProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [notification, setNotification] = useState<{
-    variant: NotificationVariant;
-    message: string;
-  } | null>(null);
+
+  // Track whether profile was previously incomplete so returning from profile-setup flips 3D
+  const wasIncompleteRef = useRef<boolean | null>(null);
+
+  // Reanimated shared values (UI thread)
+  const translateX = useSharedValue(0);
+  const idleSwipeX = useSharedValue(0);
+  const cardOpacity = useSharedValue(1);
+  // 0deg = Front face visible, 180deg = Back face visible
+  const flipRotation = useSharedValue(0);
+  const skeletonPulse = useSharedValue(0.45);
+
+  const startIdleLeftSwipeAnimation = useCallback(() => {
+    idleSwipeX.value = 0;
+    idleSwipeX.value = withRepeat(
+      withSequence(
+        withDelay(
+          1100,
+          withTiming(-22, {
+            duration: 500,
+            easing: Easing.out(Easing.cubic),
+          }),
+        ),
+        withSpring(0, {
+          damping: 12,
+          stiffness: 150,
+          mass: 0.8,
+        }),
+        withDelay(1400, withTiming(0, { duration: 100 })),
+      ),
+      -1,
+      false,
+    );
+  }, [idleSwipeX]);
+
+  useEffect(() => {
+    skeletonPulse.value = withRepeat(
+      withSequence(
+        withTiming(0.9, { duration: 750, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0.45, { duration: 750, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      false,
+    );
+  }, [skeletonPulse]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      startIdleLeftSwipeAnimation();
+    }
+    return () => {
+      cancelAnimation(idleSwipeX);
+    };
+  }, [isLoading, idleSwipeX, startIdleLeftSwipeAnimation]);
+
+  const complete = isProfileComplete(profile);
+
+  const navigateFromCard = useCallback(() => {
+    if (isProfileComplete(profile)) {
+      router.push("/prospecting" as any);
+    } else {
+      router.push("/profile-setup");
+    }
+  }, [profile]);
 
   useFocusEffect(
     useCallback(() => {
       let isMounted = true;
+
+      // Immediately reset swipe position, opacity & restart subtle left-swipe hint when returning to Home
+      translateX.value = 0;
+      cardOpacity.value = 1;
+      startIdleLeftSwipeAnimation();
+
       async function loadData() {
         try {
           const onboarding = await checkUserOnboardingStatus();
@@ -120,14 +188,40 @@ export default function HomeRoute() {
             return;
           }
 
-          if (isMounted) {
-            setUserEmail(user.email ?? null);
+          const metaName =
+            (user.user_metadata?.full_name as string) ||
+            (user.user_metadata?.display_name as string) ||
+            null;
+
+          const fetchedProfile = await fetchUserIdCardProfile(
+            user.id,
+            metaName,
+            user.email ?? null,
+            onboarding,
+          );
+
+          if (!isMounted) return;
+
+          const nowComplete = isProfileComplete(fetchedProfile);
+
+          if (wasIncompleteRef.current === null) {
+            // Initial mount: start on front (0deg) if complete, or flipped on back (180deg) if incomplete
+            flipRotation.value = nowComplete ? 0 : 180;
+            wasIncompleteRef.current = !nowComplete;
+          } else if (wasIncompleteRef.current && nowComplete) {
+            // Returned from profile setup after completing profile: smooth 3D Y-axis flip (~400ms)
+            flipRotation.value = 180;
+            flipRotation.value = withTiming(0, {
+              duration: 400,
+              easing: Easing.inOut(Easing.cubic),
+            });
+            wasIncompleteRef.current = false;
+          } else {
+            flipRotation.value = nowComplete ? 0 : 180;
+            wasIncompleteRef.current = !nowComplete;
           }
 
-          const dashboard = await fetchHomeDashboardData(user.id, onboarding);
-          if (isMounted) {
-            setDashboardData(dashboard);
-          }
+          setProfile(fetchedProfile);
         } catch {
           if (isMounted) {
             router.replace("/auth");
@@ -144,548 +238,671 @@ export default function HomeRoute() {
       return () => {
         isMounted = false;
       };
-    }, []),
+    }, [cardOpacity, flipRotation, startIdleLeftSwipeAnimation, translateX]),
   );
 
-  const handleSignOut = async () => {
-    try {
-      await getSupabaseClient().auth.signOut();
-    } catch {
-      // ignore
-    }
-    router.replace("/auth");
-  };
+  // Swipe threshold (~120px or ~35% of screen width)
+  const swipeThreshold = Math.min(120, Math.round(screenWidth * 0.35));
 
-  const handleCompleteProfile = () => {
-    if (dashboardData?.headline && !dashboardData?.hasTargetIndustries) {
-      router.push("/target-industries" as any);
-    } else {
-      router.push("/profile-setup");
-    }
-  };
-
-  const hasProfile = Boolean(dashboardData?.hasProfile);
-
-  const handlePerformOperation = (operationName: string) => {
-    if (!hasProfile) {
-      setNotification({
-        variant: notificationVariant.error,
-        message: homeCopy.operationsLockedAlert,
-      });
-      return;
-    }
-
-    if (operationName === homeCopy.actions.startProspecting) {
-      router.push("/prospecting" as any);
-      return;
-    }
-
-    setNotification({
-      variant: notificationVariant.success,
-      message: `${operationName} initialized successfully.`,
+  const panGesture = Gesture.Pan()
+    .enabled(!isLoading)
+    .activeOffsetX([-10, 10])
+    .onBegin(() => {
+      "worklet";
+      cancelAnimation(idleSwipeX);
+      idleSwipeX.value = withTiming(0, { duration: 120 });
+    })
+    .onUpdate((event) => {
+      "worklet";
+      translateX.value = event.translationX;
+      cardOpacity.value = interpolate(
+        Math.abs(event.translationX),
+        [0, swipeThreshold * 2.2],
+        [1, 0.35],
+        Extrapolation.CLAMP,
+      );
+    })
+    .onEnd((event) => {
+      "worklet";
+      if (Math.abs(event.translationX) >= swipeThreshold) {
+        const direction = event.translationX >= 0 ? 1 : -1;
+        translateX.value = withTiming(direction * screenWidth * 1.15, {
+          duration: 250,
+          easing: Easing.out(Easing.cubic),
+        });
+        cardOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
+          if (finished) {
+            runOnJS(navigateFromCard)();
+          }
+        });
+      } else {
+        translateX.value = withSpring(0, {
+          damping: 18,
+          stiffness: 180,
+          mass: 0.9,
+        });
+        cardOpacity.value = withSpring(1);
+        runOnJS(startIdleLeftSwipeAnimation)();
+      }
     });
-  };
 
-  if (isLoading) {
-    return (
-      <View
-        style={[styles.loadingScreen, { backgroundColor: colors.background }]}
-      >
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+  const cardDragAnimatedStyle = useAnimatedStyle(() => {
+    const combinedX = translateX.value + idleSwipeX.value;
+    const rotateZ = interpolate(
+      combinedX,
+      [-screenWidth * 0.75, 0, screenWidth * 0.75],
+      [-15, 0, 15],
+      Extrapolation.CLAMP,
     );
-  }
+    return {
+      opacity: cardOpacity.value,
+      transform: [
+        { translateX: combinedX },
+        { rotateZ: `${rotateZ}deg` },
+      ],
+    };
+  });
+
+  const frontFaceAnimatedStyle = useAnimatedStyle(() => {
+    const rotateY = interpolate(
+      flipRotation.value,
+      [0, 180],
+      [0, 180],
+      Extrapolation.CLAMP,
+    );
+    const faceOpacity = interpolate(
+      flipRotation.value,
+      [0, 89, 90, 180],
+      [1, 1, 0, 0],
+      Extrapolation.CLAMP,
+    );
+    return {
+      opacity: faceOpacity,
+      transform: [{ perspective: 1200 }, { rotateY: `${rotateY}deg` }],
+      backfaceVisibility: "hidden" as const,
+    };
+  });
+
+  const backFaceAnimatedStyle = useAnimatedStyle(() => {
+    const rotateY = interpolate(
+      flipRotation.value,
+      [0, 180],
+      [-180, 0],
+      Extrapolation.CLAMP,
+    );
+    const faceOpacity = interpolate(
+      flipRotation.value,
+      [0, 89, 90, 180],
+      [0, 0, 1, 1],
+      Extrapolation.CLAMP,
+    );
+    return {
+      opacity: faceOpacity,
+      transform: [{ perspective: 1200 }, { rotateY: `${rotateY}deg` }],
+      backfaceVisibility: "hidden" as const,
+    };
+  });
+
+  const hintAnimatedStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      Math.abs(translateX.value),
+      [0, swipeThreshold * 0.7],
+      [1, 0],
+      Extrapolation.CLAMP,
+    );
+    return { opacity };
+  });
+
+  const skeletonAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: skeletonPulse.value,
+  }));
+
+  const displayName = formatDisplayName(profile?.name);
+  const userInitial =
+    displayName.charAt(0).toUpperCase() ||
+    profile?.name?.trim()?.charAt(0)?.toUpperCase() ||
+    "P";
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      {notification ? (
-        <NotificationBanner
-          variant={notification.variant}
-          message={notification.message}
-          onDismiss={() => setNotification(null)}
-        />
-      ) : null}
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Top bar */}
-        <View style={styles.topBar}>
-          <View style={styles.brand}>
-            <Image
-              source={colors.icon}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={[styles.brandName, { color: colors.text }]}>
-              {appName}
-            </Text>
-          </View>
-          <Pressable
-            onPress={handleSignOut}
-            style={({ pressed }) => [
-              styles.signOutBtn,
-              { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+      <View style={styles.screenContainer}>
+        {isLoading ? (
+          /* Skeleton ID Card (shown while user data is being fetched) */
+          <View
+            accessibilityLabel="Loading workspace ID card"
+            style={[
+              styles.cardShell,
+              styles.skeletonCard,
+              {
+                backgroundColor: colors.cardSurface,
+                borderColor: colors.cardBorder,
+              },
             ]}
           >
-            <Text style={[styles.signOutText, { color: colors.textSecondary }]}>
-              {homeCopy.actions.signOut}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Welcome Header */}
-        <View style={styles.headerBlock}>
-          <Text style={[styles.title, { color: colors.text }]}>
-            {homeCopy.title}
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            {homeCopy.subtitle}
-          </Text>
-          {userEmail ? (
-            <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-              {homeCopy.user}:{" "}
-              <Text
-                style={{ color: colors.text, fontFamily: "DMSansSemiBold" }}
-              >
-                {userEmail}
-              </Text>
-            </Text>
-          ) : null}
-          {hasProfile && dashboardData?.headline ? (
-            <Text style={[styles.userEmail, { color: colors.textSecondary }]}>
-              Headline:{" "}
-              <Text style={{ color: colors.text, fontFamily: "DMSansMedium" }}>
-                {dashboardData.headline}
-              </Text>
-            </Text>
-          ) : null}
-        </View>
-
-        {/* Cards container */}
-        <View style={styles.cardsGrid}>
-          {/* Profile Card: Incomplete Action Required vs Configured */}
-          {!hasProfile ? (
-            <View
-              style={[
-                styles.card,
-                styles.incompleteProfileCard,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.warning,
-                },
-              ]}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.titleWithIcon}>
-                  <AlertCircle
-                    color={colors.warning}
-                    size={18}
-                    strokeWidth={2}
-                  />
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>
-                    {homeCopy.profileIncompleteTitle}
-                  </Text>
-                </View>
+            <Animated.View style={[styles.skeletonInner, skeletonAnimatedStyle]}>
+              <View style={styles.brandRow}>
                 <View
                   style={[
-                    styles.statusBadge,
-                    { backgroundColor: colors.warning },
+                    styles.skeletonPill,
+                    { backgroundColor: colors.cardDivider },
                   ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      { color: colors.surfaceElevated },
-                    ]}
-                  >
-                    {homeCopy.lockedBadge}
-                  </Text>
-                </View>
-              </View>
-              <Text
-                style={[styles.cardDescription, { color: colors.textSecondary }]}
-              >
-                {homeCopy.profileIncompleteDesc}
-              </Text>
-              <View style={styles.actionRow}>
-                <Button
-                  label={homeCopy.completeProfileButton}
-                  variant={buttonVariant.primary}
-                  onPress={handleCompleteProfile}
                 />
               </View>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.card,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.cardHeader}>
-                <View style={styles.titleWithIcon}>
-                  <CheckCircle2
-                    color={colors.success}
-                    size={18}
-                    strokeWidth={2}
-                  />
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>
-                    Professional Profile
-                  </Text>
-                </View>
+
+              <View style={styles.identitySection}>
                 <View
                   style={[
-                    styles.statusBadge,
-                    { backgroundColor: colors.success },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusBadgeText,
-                      { color: colors.surfaceElevated },
-                    ]}
-                  >
-                    {homeCopy.profileCompleteBadge}
-                  </Text>
-                </View>
-              </View>
-              <Text style={[styles.cardMainValue, { color: colors.text }]}>
-                {dashboardData?.headline || "Profile Configured"}
-              </Text>
-              <View style={styles.actionRow}>
-                <Button
-                  label={homeCopy.editProfile}
-                  variant={buttonVariant.ghost}
-                  onPress={handleCompleteProfile}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* Organization Card */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
-                {homeCopy.organization}
-              </Text>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    { color: colors.onPrimary },
-                  ]}
-                >
-                  {homeCopy.statusActive}
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.cardMainValue, { color: colors.text }]}>
-              {dashboardData?.orgName || "Primary Workspace"}
-            </Text>
-            <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
-              Workspace ID:{" "}
-              {dashboardData?.orgId ? `${dashboardData.orgId.slice(0, 8)}...` : ""}
-            </Text>
-          </View>
-
-          {/* Domain Verification Card */}
-          <View
-            style={[
-              styles.card,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.success,
-              },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>
-                {homeCopy.domain}
-              </Text>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: colors.success },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
-                    { color: colors.surfaceElevated },
-                  ]}
-                >
-                  {homeCopy.verifiedBadge}
-                </Text>
-              </View>
-            </View>
-            <Text style={[styles.cardMainValue, { color: colors.text }]}>
-              {dashboardData?.domain || "Authenticated Domain"}
-            </Text>
-            <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
-              DNS records verified & synced.
-            </Text>
-          </View>
-
-          {/* Workspace Operations Card */}
-          <View
-            style={[
-              styles.readyCard,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderColor: !hasProfile ? colors.warning : colors.border,
-              },
-            ]}
-          >
-            <View style={styles.cardHeader}>
-              <View style={styles.titleWithIcon}>
-                {!hasProfile ? (
-                  <Lock color={colors.warning} size={18} strokeWidth={2} />
-                ) : null}
-                <Text style={[styles.readyTitle, { color: colors.text }]}>
-                  {!hasProfile ? "Workspace Operations" : homeCopy.readyTitle}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor: !hasProfile
-                      ? colors.warning
-                      : colors.primary,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusBadgeText,
+                    styles.avatarCircle,
                     {
-                      color: !hasProfile
-                        ? colors.surfaceElevated
-                        : colors.onPrimary,
+                      backgroundColor: colors.cardAccentSoft,
+                      borderColor: colors.cardBorder,
                     },
                   ]}
-                >
-                  {!hasProfile ? homeCopy.lockedBadge : homeCopy.statusActive}
-                </Text>
+                />
+                <View
+                  style={[
+                    styles.skeletonTitleBar,
+                    { backgroundColor: colors.cardDivider },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.skeletonSubtitleBar,
+                    { backgroundColor: colors.cardDivider },
+                  ]}
+                />
               </View>
-            </View>
-            <Text style={[styles.readyDesc, { color: colors.textSecondary }]}>
-              {!hasProfile
-                ? homeCopy.operationsLockedAlert
-                : homeCopy.readyDescription}
-            </Text>
 
-            {/* Operations action buttons */}
-            <View style={styles.operationsGrid}>
-              <Pressable
-                onPress={() =>
-                  handlePerformOperation(homeCopy.actions.startProspecting)
+              <View
+                style={[
+                  styles.cardDivider,
+                  { backgroundColor: colors.cardDivider },
+                ]}
+              />
+
+              <View style={styles.rowsContainer}>
+                {[0, 1, 2].map((item) => (
+                  <View key={item} style={styles.skeletonRow}>
+                    <View
+                      style={[
+                        styles.skeletonRowLabel,
+                        { backgroundColor: colors.cardDivider },
+                      ]}
+                    />
+                    <View
+                      style={[
+                        styles.skeletonRowValue,
+                        { backgroundColor: colors.cardDivider },
+                      ]}
+                    />
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
+          </View>
+        ) : (
+          <>
+            <GestureDetector gesture={panGesture}>
+              <Animated.View
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={
+                  complete
+                    ? `Prospectra ID card for ${profile?.name}, ${profile?.role} at ${profile?.organizationName}. Swipe to open prospecting.`
+                    : "Profile not set up. Swipe to complete your profile."
                 }
-                style={({ pressed }) => [
-                  styles.operationButton,
-                  !hasProfile
-                    ? {
-                        backgroundColor: colors.surface,
-                        borderColor: colors.border,
-                        opacity: pressed ? 0.6 : 0.85,
-                      }
-                    : {
-                        backgroundColor: colors.primary,
-                        borderColor: colors.primary,
-                        opacity: pressed ? 0.85 : 1,
-                      },
-                ]}
+                accessibilityActions={[{ name: "activate", label: complete ? "Open prospecting" : "Complete profile" }]}
+                onAccessibilityAction={(event) => {
+                  if (event.nativeEvent.actionName === "activate") {
+                    navigateFromCard();
+                  }
+                }}
+                style={[styles.cardWrapper, cardDragAnimatedStyle]}
               >
-                {!hasProfile ? (
-                  <Lock color={colors.textDisabled} size={16} strokeWidth={2} />
-                ) : null}
-                <Text
+                {/* FRONT SIDE (shown when profile is complete) */}
+                <Animated.View
+                  pointerEvents={complete ? "auto" : "none"}
                   style={[
-                    styles.operationButtonText,
+                    styles.cardShell,
                     {
-                      color: !hasProfile
-                        ? colors.textDisabled
-                        : colors.onPrimary,
+                      backgroundColor: colors.cardSurface,
+                      borderColor: colors.cardBorder,
                     },
+                    frontFaceAnimatedStyle,
                   ]}
                 >
-                  {!hasProfile
-                    ? homeCopy.actions.lockedAction
-                    : homeCopy.actions.startProspecting}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
+                  {/* Subtle Top Glass Specular Sheen */}
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.glassSheenBar,
+                      { backgroundColor: colors.cardDivider },
+                    ]}
+                  />
+
+                  {/* App Brand Mark */}
+                  <View style={styles.brandRow}>
+                    <View
+                      style={[
+                        styles.brandDot,
+                        { backgroundColor: colors.cardAccent },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.brandMark, { color: colors.cardText }]}
+                    >
+                      PROSPECTRA
+                    </Text>
+                  </View>
+
+                  {/* Avatar Circle + Full Name + Role */}
+                  <View style={styles.identitySection}>
+                    <View
+                      style={[
+                        styles.avatarCircle,
+                        {
+                          backgroundColor: colors.cardAccentSoft,
+                          borderColor: colors.cardAccent,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.avatarInitial, { color: colors.cardAccent }]}
+                      >
+                        {userInitial}
+                      </Text>
+                    </View>
+
+                    <Text
+                      style={[styles.fullName, { color: colors.cardText }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {displayName}
+                    </Text>
+
+                    <Text
+                      style={[styles.roleText, { color: colors.cardAccent }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {profile?.role}
+                    </Text>
+                  </View>
+
+                  {/* Divider */}
+                  <View
+                    style={[
+                      styles.cardDivider,
+                      { backgroundColor: colors.cardDivider },
+                    ]}
+                  />
+
+                  {/* Labeled Rows: ORGANIZATION, DOMAIN, EMAIL */}
+                  <View style={styles.rowsContainer}>
+                    <View style={styles.infoRow}>
+                      <View style={styles.infoLabelWrap}>
+                        <Building2
+                          size={14}
+                          color={colors.cardMuted}
+                          strokeWidth={1.75}
+                        />
+                        <Text
+                          style={[styles.infoLabel, { color: colors.cardMuted }]}
+                        >
+                          ORGANIZATION
+                        </Text>
+                      </View>
+                      <Text
+                        style={[styles.infoValue, { color: colors.cardText }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {profile?.organizationName}
+                      </Text>
+                    </View>
+
+                    <View style={styles.infoRow}>
+                      <View style={styles.infoLabelWrap}>
+                        <Globe
+                          size={14}
+                          color={colors.cardMuted}
+                          strokeWidth={1.75}
+                        />
+                        <Text
+                          style={[styles.infoLabel, { color: colors.cardMuted }]}
+                        >
+                          DOMAIN
+                        </Text>
+                      </View>
+                      <Text
+                        style={[styles.infoValue, { color: colors.cardText }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {profile?.organizationDomain}
+                      </Text>
+                    </View>
+
+                    <View style={styles.infoRow}>
+                      <View style={styles.infoLabelWrap}>
+                        <Mail
+                          size={14}
+                          color={colors.cardMuted}
+                          strokeWidth={1.75}
+                        />
+                        <Text
+                          style={[styles.infoLabel, { color: colors.cardMuted }]}
+                        >
+                          EMAIL
+                        </Text>
+                      </View>
+                      <Text
+                        style={[styles.infoValue, { color: colors.cardText }]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {profile?.email}
+                      </Text>
+                    </View>
+                  </View>
+                </Animated.View>
+
+                {/* BACK SIDE (shown when profile is NOT complete) */}
+                <Animated.View
+                  pointerEvents={!complete ? "auto" : "none"}
+                  style={[
+                    styles.cardShell,
+                    styles.backCardShell,
+                    {
+                      backgroundColor: colors.cardSurface,
+                      borderColor: colors.cardBorder,
+                    },
+                    backFaceAnimatedStyle,
+                  ]}
+                >
+                  {/* Subtle Top Glass Specular Sheen */}
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.glassSheenBar,
+                      { backgroundColor: colors.cardDivider },
+                    ]}
+                  />
+
+                  <View style={styles.brandRow}>
+                    <View
+                      style={[
+                        styles.brandDot,
+                        { backgroundColor: colors.cardAccent },
+                      ]}
+                    />
+                    <Text
+                      style={[styles.brandMark, { color: colors.cardText }]}
+                    >
+                      PROSPECTRA
+                    </Text>
+                  </View>
+
+                  <View style={styles.backCenterContent}>
+                    <View
+                      style={[
+                        styles.backIconBadge,
+                        {
+                          backgroundColor: colors.cardAccentSoft,
+                          borderColor: colors.cardBorder,
+                        },
+                      ]}
+                    >
+                      <ShieldAlert
+                        size={28}
+                        color={colors.cardAccent}
+                        strokeWidth={1.75}
+                      />
+                    </View>
+
+                    <Text
+                      style={[styles.backTitle, { color: colors.cardText }]}
+                    >
+                      Profile not set up
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.backDescription,
+                        { color: colors.cardMuted },
+                      ]}
+                    >
+                      Please add your name, organization, domain, and role to
+                      activate your workspace ID card.
+                    </Text>
+                  </View>
+                </Animated.View>
+              </Animated.View>
+            </GestureDetector>
+
+            {/* Swipe Hint Text (fades out as user drags) */}
+            <Animated.View style={[styles.hintWrap, hintAnimatedStyle]}>
+              <Text style={[styles.hintText, { color: colors.textSecondary }]}>
+                {complete
+                  ? "Swipe to prospect ›››"
+                  : "Swipe to complete profile ›››"}
+              </Text>
+            </Animated.View>
+          </>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
+
+const CARD_MIN_HEIGHT = 400;
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
   },
-  loadingScreen: {
+  screenContainer: {
     flex: 1,
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
-  },
-  content: {
-    flexGrow: 1,
-    width: "100%",
-    maxWidth: 520,
-    alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.md,
-    paddingBottom: tokens.spacing.xl,
+    paddingVertical: tokens.spacing.lg,
     gap: tokens.spacing.lg,
   },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
+  cardWrapper: {
+    width: "100%",
+    minHeight: CARD_MIN_HEIGHT,
+    position: "relative",
+  },
+  cardShell: {
+    width: "100%",
+    minHeight: CARD_MIN_HEIGHT,
+    borderRadius: tokens.radius.card,
+    borderWidth: 1.5,
+    padding: tokens.spacing.lg + 4,
     justifyContent: "space-between",
+    overflow: "hidden",
+    ...tokens.shadow.lg,
   },
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
-  },
-  logo: {
-    width: 36,
-    height: 36,
-  },
-  brandName: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.md,
-  },
-  signOutBtn: {
-    borderWidth: 1,
-    borderRadius: tokens.radius.md,
-    paddingVertical: tokens.spacing.xs,
-    paddingHorizontal: tokens.spacing.md,
-  },
-  signOutText: {
-    fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.xs,
-  },
-  headerBlock: {
-    gap: tokens.spacing.xs,
-  },
-  title: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.authTitle,
-    lineHeight: tokens.fontSize.xl,
-  },
-  subtitle: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.authSubtitle,
-    lineHeight: tokens.fontSize.lg,
-  },
-  userEmail: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.xs,
-    marginTop: tokens.spacing.xs,
-  },
-  cardsGrid: {
-    gap: tokens.spacing.md,
-  },
-  card: {
-    padding: tokens.spacing.md,
-    borderRadius: tokens.radius.lg,
-    borderWidth: 1,
-    gap: tokens.spacing.xs,
-  },
-  incompleteProfileCard: {
-    borderLeftWidth: 4,
-  },
-  titleWithIcon: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.xs,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: tokens.spacing.xs,
-  },
-  cardTitle: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.sm,
-  },
-  statusBadge: {
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 3,
+  glassSheenBar: {
+    position: "absolute",
+    top: 0,
+    left: 24,
+    right: 24,
+    height: 1,
     borderRadius: tokens.radius.full,
   },
-  statusBadgeText: {
-    fontFamily: "DMSansBold",
-    fontSize: tokens.fontSize.xs,
-    letterSpacing: 0.5,
+  backCardShell: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
-  cardMainValue: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.lg,
-  },
-  cardDescription: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.sm,
-    lineHeight: 20,
-    marginBottom: tokens.spacing.xs,
-  },
-  actionRow: {
-    marginTop: tokens.spacing.xs,
-  },
-  cardMeta: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.xs,
-  },
-  readyCard: {
-    padding: tokens.spacing.md,
-    borderRadius: tokens.radius.lg,
-    borderWidth: 1,
-    gap: tokens.spacing.sm,
-  },
-  readyTitle: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.md,
-  },
-  readyDesc: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.sm,
-    lineHeight: 20,
-  },
-  operationsGrid: {
-    gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.xs,
-  },
-  operationButton: {
-    height: 46,
-    borderWidth: 1,
-    borderRadius: tokens.radius.lg,
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.spacing.xs,
-    paddingHorizontal: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
-  operationButtonText: {
+  brandDot: {
+    width: 8,
+    height: 8,
+    borderRadius: tokens.radius.full,
+  },
+  brandMark: {
     fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.xs,
+    letterSpacing: 2.4,
+    lineHeight: 16,
+  },
+  identitySection: {
+    alignItems: "center",
+    paddingVertical: tokens.spacing.md,
+    gap: tokens.spacing.xs + 2,
+  },
+  avatarCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: tokens.spacing.xs,
+  },
+  avatarInitial: {
+    fontFamily: "DMSansBold",
+    fontSize: 28,
+    lineHeight: 34,
+  },
+  fullName: {
+    maxWidth: "100%",
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.xl,
+    lineHeight: 30,
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  roleText: {
+    maxWidth: "100%",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+    textAlign: "center",
+  },
+  cardDivider: {
+    height: 1,
+    width: "100%",
+    marginVertical: tokens.spacing.xs,
+  },
+  rowsContainer: {
+    gap: tokens.spacing.md,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacing.md,
+  },
+  infoLabelWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+    flexShrink: 0,
+  },
+  infoLabel: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    letterSpacing: 1,
+    lineHeight: 16,
+  },
+  infoValue: {
+    flex: 1,
+    textAlign: "right",
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+  },
+  backCenterContent: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: tokens.spacing.md,
+    gap: tokens.spacing.md,
+  },
+  backIconBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: tokens.spacing.xs,
+  },
+  backTitle: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.xl,
+    lineHeight: 30,
+    letterSpacing: -0.4,
+    textAlign: "center",
+  },
+  backDescription: {
+    fontFamily: "DMSans",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 22,
+    textAlign: "center",
+  },
+  hintWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  hintText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.sm,
+    letterSpacing: 0.4,
+    lineHeight: 20,
+  },
+  skeletonCard: {
+    justifyContent: "center",
+  },
+  skeletonInner: {
+    flex: 1,
+    justifyContent: "space-between",
+  },
+  skeletonPill: {
+    width: 110,
+    height: 14,
+    borderRadius: tokens.radius.full,
+  },
+  skeletonTitleBar: {
+    width: 180,
+    height: 22,
+    borderRadius: tokens.radius.sm,
+    marginTop: tokens.spacing.xs,
+  },
+  skeletonSubtitleBar: {
+    width: 130,
+    height: 16,
+    borderRadius: tokens.radius.sm,
+  },
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacing.md,
+  },
+  skeletonRowLabel: {
+    width: 96,
+    height: 14,
+    borderRadius: tokens.radius.sm,
+  },
+  skeletonRowValue: {
+    width: 140,
+    height: 16,
+    borderRadius: tokens.radius.sm,
   },
 });

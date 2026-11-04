@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, TextInputProps } from "react-native";
+import { Pressable, StyleSheet } from "react-native";
 import { Eye, EyeOff } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
@@ -18,6 +18,7 @@ export default function PasswordField({
   const colors = useTheme();
   const [visible, setVisible] = useState(false);
   const Icon = visible ? EyeOff : Eye;
+
   return (
     <TextField
       {...props}
@@ -26,16 +27,31 @@ export default function PasswordField({
       secureTextEntry={!visible}
       rightSlot={
         <Pressable
-          accessibilityLabel={visible ? authCopy.passwordVisibility.hide : authCopy.passwordVisibility.show}
+          accessibilityRole="button"
+          accessibilityLabel={
+            visible
+              ? authCopy.passwordVisibility.hide
+              : authCopy.passwordVisibility.show
+          }
           hitSlop={tokens.spacing.sm}
           onPress={() => setVisible((value) => !value)}
-          style={styles.toggle}
+          style={({ pressed }) => [
+            styles.toggle,
+            { opacity: pressed ? 0.65 : 1 },
+          ]}
         >
-          <Icon color={colors.textSecondary} size={20} strokeWidth={1.75} />
+          <Icon color={colors.textSecondary} size={16} strokeWidth={1.75} />
         </Pressable>
       }
     />
   );
 }
 
-const styles = StyleSheet.create({ toggle: { padding: tokens.spacing.sm } });
+const styles = StyleSheet.create({
+  toggle: {
+    paddingHorizontal: tokens.spacing.sm + 4,
+    paddingVertical: tokens.spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

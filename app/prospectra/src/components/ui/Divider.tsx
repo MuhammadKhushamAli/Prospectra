@@ -27,12 +27,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
-    marginVertical: tokens.spacing.lg,
+    marginVertical: tokens.spacing.md,
   },
-  line: { flex: 1, height: 1 },
+  line: {
+    flex: 1,
+    height: 1,
+  },
   text: {
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
     paddingHorizontal: tokens.spacing.sm,
   },
 });

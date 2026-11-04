@@ -46,7 +46,9 @@ export default function ProjectsScreen() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [selectedProject, setSelectedProject] = useState<UserProject | null>(null);
+  const [selectedProject, setSelectedProject] = useState<UserProject | null>(
+    null,
+  );
 
   // Notification State
   const [notification, setNotification] = useState<{
@@ -85,7 +87,10 @@ export default function ProjectsScreen() {
           // 2. Fetch existing projects from database
           let existingProjects: UserProject[] = [];
           if (currentOrgId) {
-            existingProjects = await fetchUserProjects(currentUserId, currentOrgId);
+            existingProjects = await fetchUserProjects(
+              currentUserId,
+              currentOrgId,
+            );
           }
 
           if (isMounted) {
@@ -270,6 +275,7 @@ export default function ProjectsScreen() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
           {/* Header */}
           <ProjectsHeader
@@ -322,8 +328,12 @@ export default function ProjectsScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  flex: { flex: 1 },
+  safe: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   loadingScreen: {
     flex: 1,
     justifyContent: "center",
@@ -335,10 +345,10 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     alignSelf: "center",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: tokens.spacing.lg,
+    paddingTop: tokens.spacing.xl,
     paddingBottom: tokens.spacing.xl,
   },
   list: {
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm + 4,
   },
 });

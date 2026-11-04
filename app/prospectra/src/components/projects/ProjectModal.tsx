@@ -9,13 +9,16 @@ import {
   Text,
   View,
 } from "react-native";
-import { Check, Plus, Sparkles, X } from "lucide-react-native";
+import { Check, Layers, Plus, X } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import TextField from "../ui/TextField";
 import { validateProjectForm } from "../../validation/projectValidation";
-import type { ProjectFormValues, ProjectModalProps } from "../../types/projects";
+import type {
+  ProjectFormValues,
+  ProjectModalProps,
+} from "../../types/projects";
 
 const DEFAULT_TECH_SUGGESTIONS = [
   "React",
@@ -132,7 +135,7 @@ export default function ProjectModal({
     >
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={styles.modalOverlay}
+        style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}
       >
         <View
           style={[
@@ -141,12 +144,22 @@ export default function ProjectModal({
           ]}
         >
           {/* Modal Header */}
-          <View style={styles.modalHeader}>
+          <View
+            style={[
+              styles.modalHeader,
+              { borderBottomColor: colors.border },
+            ]}
+          >
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               {isEditing ? "Edit Project" : "Add New Project"}
             </Text>
-            <Pressable onPress={onClose} style={styles.closeButton}>
-              <X size={20} color={colors.placeholder} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              onPress={onClose}
+              style={styles.closeButton}
+            >
+              <X size={18} color={colors.textSecondary} strokeWidth={1.75} />
             </Pressable>
           </View>
 
@@ -164,7 +177,8 @@ export default function ProjectModal({
               value={title}
               onChangeText={(text) => {
                 setTitle(text);
-                if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
+                if (errors.title)
+                  setErrors((prev) => ({ ...prev, title: undefined }));
               }}
               error={errors.title}
             />
@@ -203,7 +217,7 @@ export default function ProjectModal({
                     ]}
                   >
                     <Text
-                      style={[styles.counterText, { color: colors.primary }]}
+                      style={[styles.counterText, { color: colors.text }]}
                     >
                       {techStack.length}
                     </Text>
@@ -211,7 +225,6 @@ export default function ProjectModal({
                 ) : null}
               </View>
 
-              {/* Add Tech Input - immediately below heading */}
               <View style={styles.addTechRow}>
                 <View style={styles.addTechInputWrap}>
                   <TextField
@@ -223,14 +236,18 @@ export default function ProjectModal({
                   />
                 </View>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Add technology"
                   style={[
                     styles.addTechButton,
                     {
                       backgroundColor: newTechInput.trim()
                         ? colors.primary
                         : colors.surfaceElevated,
-                      borderColor: colors.border,
-                      opacity: newTechInput.trim() ? 1 : 0.6,
+                      borderColor: newTechInput.trim()
+                        ? colors.primary
+                        : colors.border,
+                      opacity: newTechInput.trim() ? 1 : 0.5,
                     },
                   ]}
                   onPress={handleAddTech}
@@ -238,14 +255,16 @@ export default function ProjectModal({
                 >
                   <Plus
                     size={16}
+                    strokeWidth={1.75}
                     color={
-                      newTechInput.trim() ? "#FFFFFF" : colors.textSecondary
+                      newTechInput.trim()
+                        ? colors.onPrimary
+                        : colors.textSecondary
                     }
                   />
                 </Pressable>
               </View>
 
-              {/* Selected Tech Chips (shown only when techStack has items) */}
               {techStack.length > 0 ? (
                 <View style={styles.chipsWrap}>
                   {techStack.map((tech) => (
@@ -263,21 +282,30 @@ export default function ProjectModal({
                         {tech}
                       </Text>
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${tech}`}
                         onPress={() => handleRemoveTech(tech)}
                         hitSlop={6}
                         style={styles.chipRemove}
                       >
-                        <X size={12} color={colors.textSecondary} />
+                        <X
+                          size={12}
+                          color={colors.textSecondary}
+                          strokeWidth={1.75}
+                        />
                       </Pressable>
                     </View>
                   ))}
                 </View>
               ) : null}
 
-              {/* Suggestions / Hints */}
               <View style={styles.suggestionsContainer}>
                 <View style={styles.suggestionsHeader}>
-                  <Sparkles size={12} color={colors.primary} />
+                  <Layers
+                    size={12}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                   <Text
                     style={[
                       styles.suggestionsLabel,
@@ -294,33 +322,46 @@ export default function ProjectModal({
                     );
                     return (
                       <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
                         key={suggestion}
                         onPress={() => handleToggleSuggestion(suggestion)}
                         style={({ pressed }) => [
                           styles.suggestionChip,
                           {
                             backgroundColor: isSelected
-                              ? colors.primary
-                              : colors.surfaceElevated,
+                              ? colors.primarySoft
+                              : colors.surface,
                             borderColor: isSelected
-                              ? colors.primary
+                              ? colors.primaryBorder
                               : colors.border,
                             opacity: pressed ? 0.75 : 1,
                           },
                         ]}
                       >
                         {isSelected ? (
-                          <Check size={11} color="#FFFFFF" />
+                          <Check
+                            size={12}
+                            color={colors.primary}
+                            strokeWidth={1.75}
+                          />
                         ) : (
-                          <Plus size={11} color={colors.textSecondary} />
+                          <Plus
+                            size={12}
+                            color={colors.textSecondary}
+                            strokeWidth={1.75}
+                          />
                         )}
                         <Text
                           style={[
                             styles.suggestionChipText,
                             {
                               color: isSelected
-                                ? "#FFFFFF"
+                                ? colors.primary
                                 : colors.textSecondary,
+                              fontFamily: isSelected
+                                ? "DMSansMedium"
+                                : "DMSans",
                             },
                           ]}
                         >
@@ -362,11 +403,21 @@ export default function ProjectModal({
           </ScrollView>
 
           {/* Modal Actions */}
-          <View style={styles.modalActions}>
+          <View
+            style={[
+              styles.modalActions,
+              { borderTopColor: colors.border },
+            ]}
+          >
             <Pressable
-              style={[
+              accessibilityRole="button"
+              style={({ pressed }) => [
                 styles.cancelButton,
-                { borderColor: colors.border, backgroundColor: colors.background },
+                {
+                  borderColor: colors.border,
+                  backgroundColor: colors.surface,
+                  opacity: pressed ? 0.8 : 1,
+                },
               ]}
               onPress={onClose}
             >
@@ -376,10 +427,19 @@ export default function ProjectModal({
             </Pressable>
 
             <Pressable
-              style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.saveButton,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}
               onPress={handleSave}
             >
-              <Text style={styles.saveButtonText}>
+              <Text
+                style={[styles.saveButtonText, { color: colors.onPrimary }]}
+              >
                 {isEditing ? "Save Changes" : "Add Project"}
               </Text>
             </Pressable>
@@ -393,51 +453,54 @@ export default function ProjectModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
     justifyContent: "center",
     alignItems: "center",
-    padding: tokens.spacing.md,
+    padding: tokens.spacing.lg,
   },
   modalCard: {
     width: "100%",
-    maxWidth: 440,
+    maxWidth: 460,
     maxHeight: "90%",
     borderWidth: 1,
     borderRadius: tokens.radius.lg,
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
+    overflow: "hidden",
+    ...tokens.shadow.md,
   },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.md,
+    borderBottomWidth: 1,
   },
   modalTitle: {
-    fontFamily: "DMSansBold",
-    fontSize: tokens.fontSize.lg,
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.md,
+    letterSpacing: -0.2,
   },
   closeButton: {
-    padding: 4,
+    padding: tokens.spacing.xs,
   },
   scrollArea: {
     flexGrow: 0,
-    maxHeight: 520,
+    maxHeight: 500,
   },
   formContent: {
+    padding: tokens.spacing.lg,
     gap: tokens.spacing.md,
-    paddingBottom: tokens.spacing.xs,
   },
   textAreaWrap: {
-    minHeight: 120,
+    minHeight: 112,
   },
   textArea: {
-    minHeight: 110,
+    minHeight: 104,
     textAlignVertical: "top",
     paddingTop: tokens.spacing.sm,
     paddingBottom: tokens.spacing.sm,
   },
   techStackContainer: {
-    gap: 6,
+    gap: tokens.spacing.sm,
   },
   techStackHeader: {
     flexDirection: "row",
@@ -446,30 +509,32 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   counterBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 2,
-    borderRadius: tokens.radius.full,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
   },
   counterText: {
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   addTechRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
   },
   addTechInputWrap: {
     flex: 1,
   },
   addTechButton: {
-    width: 48,
-    height: 48,
-    borderRadius: tokens.radius.lg,
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
@@ -477,84 +542,88 @@ const styles = StyleSheet.create({
   chipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
-    paddingTop: 2,
+    gap: tokens.spacing.xs + 2,
   },
   chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 5,
-    borderRadius: tokens.radius.sm,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: 6,
     borderWidth: 1,
   },
   chipText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   chipRemove: {
     padding: 2,
   },
   suggestionsContainer: {
-    marginTop: 4,
-    gap: 6,
+    marginTop: tokens.spacing.xs,
+    gap: tokens.spacing.sm,
   },
   suggestionsHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: tokens.spacing.xs,
   },
   suggestionsLabel: {
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   suggestionsChipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
   },
   suggestionChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: tokens.radius.full,
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: 6,
     borderWidth: 1,
   },
   suggestionChipText: {
-    fontFamily: "DMSans",
-    fontSize: 11,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
     gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.md,
+    borderTopWidth: 1,
   },
   cancelButton: {
-    paddingVertical: tokens.spacing.sm,
+    height: 36,
     paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
     justifyContent: "center",
     alignItems: "center",
   },
   cancelButtonText: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   saveButton: {
-    paddingVertical: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.lg,
-    borderRadius: tokens.radius.lg,
+    height: 36,
+    paddingHorizontal: tokens.spacing.md,
+    borderRadius: tokens.radius.md,
     justifyContent: "center",
     alignItems: "center",
   },
   saveButtonText: {
-    color: "#FFFFFF",
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
 });

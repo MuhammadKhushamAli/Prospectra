@@ -1,4 +1,4 @@
-import { StyleSheet, Text } from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -12,22 +12,32 @@ export default function DomainVerificationFooterLink({
 }: DomainVerificationFooterLinkProps) {
   const colors = useTheme();
   return (
-    <Text
+    <Pressable
+      accessibilityRole="button"
       onPress={onPress}
-      style={[styles.text, { color: colors.textSecondary }]}
+      style={({ pressed }) => [
+        styles.wrap,
+        { opacity: pressed ? 0.7 : 1 },
+      ]}
     >
-      <Text style={{ color: colors.primary, fontFamily: "DMSansSemiBold" }}>
+      <Text style={[styles.text, { color: colors.textSecondary }]}>
         {domainVerificationCopy.actions.backToLogin}
       </Text>
-    </Text>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    alignSelf: "center",
+    marginTop: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+  },
   text: {
     textAlign: "center",
-    fontFamily: "DMSans",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
-    marginTop: tokens.spacing.lg,
+    lineHeight: 20,
   },
 });

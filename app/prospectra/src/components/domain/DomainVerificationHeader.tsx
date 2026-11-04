@@ -1,4 +1,5 @@
 import { Image, StyleSheet, Text, View } from "react-native";
+import { Globe } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -8,12 +9,46 @@ export default function DomainVerificationHeader() {
   const colors = useTheme();
   return (
     <View style={styles.container}>
-      <View style={styles.brand}>
-        <Image source={colors.icon} style={styles.logo} resizeMode="contain" />
-        <Text style={[styles.brandName, { color: colors.text }]}>
-          {appName}
-        </Text>
+      <View style={styles.brandRow}>
+        <View style={styles.brand}>
+          <View
+            style={[
+              styles.logoWrap,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Image
+              source={colors.icon}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={[styles.brandName, { color: colors.text }]}>
+            {appName}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.stepBadge,
+            {
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Globe size={12} color={colors.textSecondary} strokeWidth={1.75} />
+          <Text
+            style={[styles.stepBadgeText, { color: colors.textSecondary }]}
+          >
+            Domain Auth
+          </Text>
+        </View>
       </View>
+
       <View style={styles.titleBlock}>
         <Text style={[styles.title, { color: colors.text }]}>
           {domainVerificationCopy.title}
@@ -27,20 +62,63 @@ export default function DomainVerificationHeader() {
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: tokens.spacing.lg },
-  brand: { flexDirection: "row", alignItems: "center", gap: tokens.spacing.sm },
-  logo: { width: 40, height: 40 },
-  brandName: { fontFamily: "DMSansSemiBold", fontSize: tokens.fontSize.md },
-  titleBlock: { marginTop: tokens.spacing.auth },
+  container: {
+    marginBottom: tokens.spacing.lg,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  brand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  logoWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  logo: {
+    width: 20,
+    height: 20,
+  },
+  brandName: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.md,
+    letterSpacing: -0.3,
+  },
+  stepBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+  },
+  stepBadgeText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
+  titleBlock: {
+    marginTop: tokens.spacing.lg,
+  },
   title: {
     fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.authTitle,
-    lineHeight: tokens.fontSize.xl,
+    fontSize: tokens.fontSize.xl,
+    lineHeight: 32,
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontFamily: "DMSans",
-    fontSize: tokens.fontSize.authSubtitle,
-    lineHeight: tokens.fontSize.lg,
-    marginTop: tokens.spacing.sm,
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
+    marginTop: tokens.spacing.xs,
   },
 });

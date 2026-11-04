@@ -29,6 +29,14 @@ interface UserProfileData {
   linkedinUrl?: string | null;
 }
 
+interface UserIdCardProfile {
+  name: string | null | undefined;
+  organizationName: string | null | undefined;
+  organizationDomain: string | null | undefined;
+  email: string | null | undefined;
+  role: string | null | undefined;
+}
+
 interface ProfileSetupHeaderProps {
   userName: string;
 }
@@ -57,6 +65,7 @@ export type {
   UserProfile,
   UpdateProfileParams,
   UserProfileData,
+  UserIdCardProfile,
   ProfileSetupHeaderProps,
   ProfileSetupFormProps,
   ProfileSetupFooterLinkProps,

@@ -7,7 +7,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Check, Plus, Sparkles, Target, X } from "lucide-react-native";
+import { Building2, Check, Plus, Target, X } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -102,13 +102,17 @@ export default function TargetIndustriesForm({
           styles.summaryCard,
           {
             backgroundColor: colors.surface,
-            borderColor: selectedIndustries.length > 0 ? colors.primary : colors.border,
+            borderColor: colors.border,
           },
         ]}
       >
         <View style={styles.summaryHeader}>
           <View style={styles.summaryTitleRow}>
-            <Target size={16} color={colors.primary} />
+            <Target
+              size={14}
+              color={colors.textSecondary}
+              strokeWidth={1.75}
+            />
             <Text style={[styles.summaryTitle, { color: colors.text }]}>
               {targetIndustriesCopy.selectedTitle}
             </Text>
@@ -119,9 +123,12 @@ export default function TargetIndustriesForm({
               {
                 backgroundColor:
                   selectedIndustries.length > 0
-                    ? colors.primary
+                    ? colors.primarySoft
                     : colors.surfaceElevated,
-                borderColor: colors.border,
+                borderColor:
+                  selectedIndustries.length > 0
+                    ? colors.primaryBorder
+                    : colors.border,
               },
             ]}
           >
@@ -131,7 +138,7 @@ export default function TargetIndustriesForm({
                 {
                   color:
                     selectedIndustries.length > 0
-                      ? colors.onPrimary
+                      ? colors.primary
                       : colors.textSecondary,
                 },
               ]}
@@ -154,7 +161,7 @@ export default function TargetIndustriesForm({
                   styles.activeChip,
                   {
                     backgroundColor: colors.surfaceElevated,
-                    borderColor: colors.primary,
+                    borderColor: colors.border,
                   },
                 ]}
               >
@@ -162,12 +169,18 @@ export default function TargetIndustriesForm({
                   {ind}
                 </Text>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${ind}`}
                   onPress={() => handleRemoveIndustry(ind)}
                   disabled={isLoading}
                   hitSlop={6}
                   style={styles.chipRemoveBtn}
                 >
-                  <X size={13} color={colors.textSecondary} />
+                  <X
+                    size={12}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 </Pressable>
               </View>
             ))}
@@ -176,8 +189,16 @@ export default function TargetIndustriesForm({
       </View>
 
       {/* Custom Industry Input */}
-      <View style={styles.customSection}>
-        <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
+      <View
+        style={[
+          styles.customCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.inputLabel, { color: colors.text }]}>
           {targetIndustriesCopy.customLabel}
         </Text>
         <View
@@ -196,7 +217,7 @@ export default function TargetIndustriesForm({
           <TextInput
             style={[styles.input, { color: colors.text }]}
             placeholder={targetIndustriesCopy.customPlaceholder}
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={colors.placeholder}
             value={customInput}
             onChangeText={(text) => {
               setCustomInput(text);
@@ -211,6 +232,7 @@ export default function TargetIndustriesForm({
             autoCorrect={false}
           />
           <Pressable
+            accessibilityRole="button"
             onPress={handleAddCustomIndustry}
             disabled={isLoading || !customInput.trim()}
             style={({ pressed }) => [
@@ -220,13 +242,21 @@ export default function TargetIndustriesForm({
                   customInput.trim().length > 0
                     ? colors.primary
                     : colors.surfaceElevated,
-                borderColor: colors.border,
-                opacity: pressed ? 0.7 : customInput.trim().length > 0 ? 1 : 0.5,
+                borderColor:
+                  customInput.trim().length > 0
+                    ? colors.primary
+                    : colors.border,
+                opacity: pressed
+                  ? 0.75
+                  : customInput.trim().length > 0
+                    ? 1
+                    : 0.5,
               },
             ]}
           >
             <Plus
               size={14}
+              strokeWidth={1.75}
               color={
                 customInput.trim().length > 0
                   ? colors.onPrimary
@@ -258,7 +288,11 @@ export default function TargetIndustriesForm({
       {/* Suggested Industry Grid */}
       <View style={styles.suggestionsSection}>
         <View style={styles.suggestionsHeader}>
-          <Sparkles size={15} color={colors.secondary} />
+          <Building2
+            size={14}
+            color={colors.textSecondary}
+            strokeWidth={1.75}
+          />
           <Text style={[styles.suggestionsTitle, { color: colors.text }]}>
             {targetIndustriesCopy.popularTitle}
           </Text>
@@ -271,6 +305,8 @@ export default function TargetIndustriesForm({
             );
             return (
               <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: isSelected }}
                 key={suggestion}
                 onPress={() => handleToggleIndustry(suggestion)}
                 disabled={isLoading}
@@ -278,10 +314,12 @@ export default function TargetIndustriesForm({
                   styles.optionCard,
                   {
                     backgroundColor: isSelected
-                      ? colors.primary
+                      ? colors.primarySoft
                       : colors.surface,
-                    borderColor: isSelected ? colors.primary : colors.border,
-                    opacity: pressed ? 0.8 : 1,
+                    borderColor: isSelected
+                      ? colors.primary
+                      : colors.border,
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
@@ -291,26 +329,28 @@ export default function TargetIndustriesForm({
                       styles.checkCircle,
                       {
                         backgroundColor: isSelected
-                          ? colors.onPrimary
-                          : colors.surfaceElevated,
+                          ? colors.primary
+                          : colors.surface,
                         borderColor: isSelected
-                          ? colors.onPrimary
+                          ? colors.primary
                           : colors.border,
                       },
                     ]}
                   >
                     {isSelected ? (
-                      <Check size={12} color={colors.primary} strokeWidth={3} />
+                      <Check
+                        size={11}
+                        color={colors.onPrimary}
+                        strokeWidth={2.5}
+                      />
                     ) : null}
                   </View>
                   <Text
                     style={[
                       styles.optionText,
                       {
-                        color: isSelected ? colors.onPrimary : colors.text,
-                        fontFamily: isSelected
-                          ? "DMSansSemiBold"
-                          : "DMSansMedium",
+                        color: colors.text,
+                        fontFamily: isSelected ? "DMSansMedium" : "DMSans",
                       },
                     ]}
                   >
@@ -341,37 +381,46 @@ export default function TargetIndustriesForm({
 
 const styles = StyleSheet.create({
   container: {
-    gap: tokens.spacing.lg,
+    gap: tokens.spacing.md,
   },
   summaryCard: {
     padding: tokens.spacing.md,
     borderRadius: tokens.radius.lg,
     borderWidth: 1,
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 4,
+    ...tokens.shadow.sm,
   },
   summaryHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: tokens.spacing.xs + 2,
   },
   summaryTitleRow: {
+    flex: 1,
+    minWidth: 120,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   summaryTitle: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.sm,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+    flexShrink: 1,
   },
   countPill: {
+    flexShrink: 0,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 3,
-    borderRadius: tokens.radius.full,
+    paddingVertical: 2,
+    borderRadius: 6,
     borderWidth: 1,
   },
   countPillText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   emptyText: {
     fontFamily: "DMSans",
@@ -381,64 +430,72 @@ const styles = StyleSheet.create({
   selectedChipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   activeChip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
-    paddingLeft: tokens.spacing.sm,
-    paddingRight: 6,
-    borderRadius: tokens.radius.full,
+    gap: tokens.spacing.xs + 2,
+    paddingVertical: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+    borderRadius: 6,
     borderWidth: 1,
   },
   activeChipText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   chipRemoveBtn: {
     padding: 2,
-    borderRadius: tokens.radius.full,
   },
-  customSection: {
-    gap: tokens.spacing.xs,
+  customCard: {
+    padding: tokens.spacing.md,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    gap: tokens.spacing.sm,
+    ...tokens.shadow.sm,
   },
   inputLabel: {
     fontFamily: "DMSansMedium",
-    fontSize: tokens.fontSize.sm,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   inputRow: {
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderRadius: tokens.radius.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 4,
+    paddingLeft: tokens.spacing.sm + 4,
+    paddingRight: tokens.spacing.xs,
+    gap: tokens.spacing.xs,
   },
   input: {
     flex: 1,
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
     paddingVertical: tokens.spacing.xs,
   },
   addBtn: {
+    height: 30,
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: tokens.spacing.xs,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
-    borderRadius: tokens.radius.sm,
+    borderRadius: 6,
     borderWidth: 1,
   },
   addBtnText: {
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   errorText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    marginTop: 2,
+    lineHeight: 16,
   },
   suggestionsSection: {
     gap: tokens.spacing.sm,
@@ -446,17 +503,18 @@ const styles = StyleSheet.create({
   suggestionsHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   suggestionsTitle: {
-    fontFamily: "DMSansSemiBold",
-    fontSize: tokens.fontSize.sm,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   grid: {
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   optionCard: {
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.sm + 2,
     paddingHorizontal: tokens.spacing.md,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
@@ -464,21 +522,22 @@ const styles = StyleSheet.create({
   optionContent: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 2,
   },
   checkCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: tokens.radius.full,
-    borderWidth: 1.5,
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
   optionText: {
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
     flexShrink: 1,
   },
   actionWrap: {
-    marginTop: tokens.spacing.sm,
+    marginTop: tokens.spacing.xs,
   },
 });

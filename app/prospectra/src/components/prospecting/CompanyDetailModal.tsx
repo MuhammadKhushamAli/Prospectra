@@ -11,6 +11,7 @@ import {
 import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 import {
+  Activity,
   Briefcase,
   Building2,
   Check,
@@ -19,6 +20,7 @@ import {
   ChevronRight,
   ChevronUp,
   Clock,
+  Compass,
   Copy,
   Cpu,
   ExternalLink,
@@ -29,7 +31,6 @@ import {
   Mail,
   ShieldAlert,
   ShieldCheck,
-  Sparkles,
   Target,
   Users,
   X,
@@ -38,9 +39,7 @@ import {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import type {
-  CompanyDetailModalProps,
-} from "../../types/prospecting";
+import type { CompanyDetailModalProps } from "../../types/prospecting";
 
 export default function CompanyDetailModal({
   company,
@@ -93,7 +92,8 @@ export default function CompanyDetailModal({
   };
 
   const handleOpenWebsite = () => {
-    const url = company.website || (company.domain ? `https://${company.domain}` : null);
+    const url =
+      company.website || (company.domain ? `https://${company.domain}` : null);
     if (url) {
       Linking.openURL(url).catch(() => {});
     }
@@ -112,6 +112,32 @@ export default function CompanyDetailModal({
     return colors.success;
   };
 
+  const getStatusSoft = () => {
+    if (company.status === "rejected") return colors.errorSoft;
+    if (
+      company.status === "pending_review" ||
+      company.status === "discovered" ||
+      company.status === "enriched" ||
+      company.status === "pending_send_approval"
+    ) {
+      return colors.warningSoft;
+    }
+    return colors.successSoft;
+  };
+
+  const getStatusBorder = () => {
+    if (company.status === "rejected") return colors.errorBorder;
+    if (
+      company.status === "pending_review" ||
+      company.status === "discovered" ||
+      company.status === "enriched" ||
+      company.status === "pending_send_approval"
+    ) {
+      return colors.warningBorder;
+    }
+    return colors.successBorder;
+  };
+
   const getStatusLabel = () => {
     if (company.status === "rejected") return "Rejected";
     if (company.status === "pending_review") return "Pending Review";
@@ -123,10 +149,11 @@ export default function CompanyDetailModal({
   };
 
   const statusColor = getStatusColor();
+  const statusSoft = getStatusSoft();
+  const statusBorder = getStatusBorder();
   const authScore = company.auth_score ?? company.company_auth?.score;
   const authFeedback = company.auth_feedback || company.company_auth?.feedback;
   const userSkills = company.company_auth?.user_skills || [];
-  const targetIndustries = company.company_auth?.target_industries || [];
 
   const needHypothesis = company.need_hypothesis;
   const neededSkills =
@@ -168,6 +195,13 @@ export default function CompanyDetailModal({
             },
           ]}
         >
+          {/* Sheet Handle */}
+          <View style={styles.handleRow}>
+            <View
+              style={[styles.sheetHandle, { backgroundColor: colors.border }]}
+            />
+          </View>
+
           {/* Sheet Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={styles.headerLeft}>
@@ -175,12 +209,12 @@ export default function CompanyDetailModal({
                 style={[
                   styles.iconWrap,
                   {
-                    backgroundColor: `${colors.primary}18`,
-                    borderColor: `${colors.primary}40`,
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.border,
                   },
                 ]}
               >
-                <Building2 size={20} color={colors.primary} />
+                <Building2 size={18} color={colors.text} strokeWidth={1.75} />
               </View>
               <View style={styles.headerTextWrap}>
                 <Text
@@ -190,15 +224,20 @@ export default function CompanyDetailModal({
                   {company.name}
                 </Text>
                 <Text
-                  style={[styles.companySubtitle, { color: colors.textSecondary }]}
+                  style={[
+                    styles.companySubtitle,
+                    { color: colors.textSecondary },
+                  ]}
                   numberOfLines={1}
                 >
-                  Company Prospect Details
+                  Company Prospect Intelligence
                 </Text>
               </View>
             </View>
 
             <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close"
               onPress={onClose}
               hitSlop={8}
               style={({ pressed }) => [
@@ -210,7 +249,7 @@ export default function CompanyDetailModal({
                 },
               ]}
             >
-              <X size={18} color={colors.textSecondary} />
+              <X size={16} color={colors.textSecondary} strokeWidth={1.75} />
             </Pressable>
           </View>
 
@@ -225,8 +264,8 @@ export default function CompanyDetailModal({
                 style={[
                   styles.statusBadge,
                   {
-                    backgroundColor: `${statusColor}20`,
-                    borderColor: statusColor,
+                    backgroundColor: statusSoft,
+                    borderColor: statusBorder,
                   },
                 ]}
               >
@@ -240,28 +279,41 @@ export default function CompanyDetailModal({
 
               {company.domain ? (
                 <Pressable
+                  accessibilityRole="button"
                   onPress={handleCopyDomain}
                   style={({ pressed }) => [
                     styles.copyDomainButton,
                     {
-                      backgroundColor: colors.surfaceElevated,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.7 : 1,
+                      backgroundColor: copiedDomain
+                        ? colors.successSoft
+                        : colors.surfaceElevated,
+                      borderColor: copiedDomain
+                        ? colors.successBorder
+                        : colors.border,
+                      opacity: pressed ? 0.75 : 1,
                     },
                   ]}
                 >
                   {copiedDomain ? (
-                    <Check size={13} color={colors.success} />
+                    <Check
+                      size={12}
+                      color={colors.success}
+                      strokeWidth={1.75}
+                    />
                   ) : (
-                    <Copy size={13} color={colors.textSecondary} />
+                    <Copy
+                      size={12}
+                      color={colors.textSecondary}
+                      strokeWidth={1.75}
+                    />
                   )}
                   <Text
                     style={[
                       styles.copyDomainText,
-                      { color: copiedDomain ? colors.success : colors.textSecondary },
+                      { color: copiedDomain ? colors.success : colors.text },
                     ]}
                   >
-                    {copiedDomain ? "Copied" : company.domain}
+                    {copiedDomain ? "Copied!" : company.domain}
                   </Text>
                 </Pressable>
               ) : null}
@@ -279,8 +331,14 @@ export default function CompanyDetailModal({
                 ]}
               >
                 <View style={styles.scoreQuickLeft}>
-                  <ShieldCheck size={16} color={authScore >= 70 ? colors.success : colors.warning} />
-                  <Text style={[styles.scoreQuickLabel, { color: colors.text }]}>
+                  <ShieldCheck
+                    size={16}
+                    strokeWidth={1.75}
+                    color={authScore >= 70 ? colors.success : colors.warning}
+                  />
+                  <Text
+                    style={[styles.scoreQuickLabel, { color: colors.text }]}
+                  >
                     AI Buyer Match Score
                   </Text>
                 </View>
@@ -290,10 +348,12 @@ export default function CompanyDetailModal({
                     {
                       backgroundColor:
                         authScore >= 70
-                          ? `${colors.success}20`
-                          : `${colors.warning}20`,
+                          ? colors.successSoft
+                          : colors.warningSoft,
                       borderColor:
-                        authScore >= 70 ? colors.success : colors.warning,
+                        authScore >= 70
+                          ? colors.successBorder
+                          : colors.warningBorder,
                     },
                   ]}
                 >
@@ -311,7 +371,7 @@ export default function CompanyDetailModal({
               </View>
             ) : null}
 
-            {/* Review Decision: Accept or Reject (only visible for pending companies) */}
+            {/* Review Decision: Accept or Reject */}
             {isPending && (onAcceptCompany || onRejectCompany) ? (
               <View
                 style={[
@@ -319,7 +379,7 @@ export default function CompanyDetailModal({
                   styles.decisionCard,
                   {
                     backgroundColor: colors.surfaceElevated,
-                    borderColor: `${colors.primary}50`,
+                    borderColor: colors.border,
                   },
                 ]}
               >
@@ -328,12 +388,16 @@ export default function CompanyDetailModal({
                     style={[
                       styles.decisionHeaderIcon,
                       {
-                        backgroundColor: `${colors.primary}18`,
-                        borderColor: `${colors.primary}30`,
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
                       },
                     ]}
                   >
-                    <Sparkles size={16} color={colors.primary} />
+                    <ShieldCheck
+                      size={16}
+                      color={colors.primary}
+                      strokeWidth={1.75}
+                    />
                   </View>
                   <View style={styles.decisionHeaderTextWrap}>
                     <Text style={[styles.decisionTitle, { color: colors.text }]}>
@@ -345,7 +409,8 @@ export default function CompanyDetailModal({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Accepting approves this prospect and enables outreach drafting.
+                      Accepting approves this prospect and unlocks AI outreach
+                      drafting.
                     </Text>
                   </View>
                 </View>
@@ -353,21 +418,30 @@ export default function CompanyDetailModal({
                 <View style={styles.decisionButtonsRow}>
                   {onAcceptCompany ? (
                     <Pressable
+                      accessibilityRole="button"
                       onPress={handleAccept}
                       disabled={isAccepting || isRejecting}
                       style={({ pressed }) => [
                         styles.acceptBtn,
                         {
-                          backgroundColor: colors.success,
-                          opacity: pressed || isAccepting || isRejecting ? 0.8 : 1,
+                          backgroundColor: colors.primary,
+                          opacity:
+                            pressed || isAccepting || isRejecting ? 0.85 : 1,
                         },
                       ]}
                     >
                       {isAccepting ? (
-                        <ActivityIndicator size="small" color={colors.onPrimary} />
+                        <ActivityIndicator
+                          size="small"
+                          color={colors.onPrimary}
+                        />
                       ) : (
                         <>
-                          <Check size={16} color={colors.onPrimary} />
+                          <Check
+                            size={15}
+                            color={colors.onPrimary}
+                            strokeWidth={1.75}
+                          />
                           <Text
                             style={[
                               styles.decisionBtnText,
@@ -383,14 +457,16 @@ export default function CompanyDetailModal({
 
                   {onRejectCompany ? (
                     <Pressable
+                      accessibilityRole="button"
                       onPress={handleReject}
                       disabled={isAccepting || isRejecting}
                       style={({ pressed }) => [
                         styles.rejectBtn,
                         {
-                          backgroundColor: `${colors.error}15`,
-                          borderColor: colors.error,
-                          opacity: pressed || isAccepting || isRejecting ? 0.8 : 1,
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          opacity:
+                            pressed || isAccepting || isRejecting ? 0.85 : 1,
                         },
                       ]}
                     >
@@ -398,7 +474,11 @@ export default function CompanyDetailModal({
                         <ActivityIndicator size="small" color={colors.error} />
                       ) : (
                         <>
-                          <X size={16} color={colors.error} />
+                          <X
+                            size={15}
+                            color={colors.error}
+                            strokeWidth={1.75}
+                          />
                           <Text
                             style={[
                               styles.decisionBtnText,
@@ -415,22 +495,29 @@ export default function CompanyDetailModal({
               </View>
             ) : null}
 
-            {/* Quick Actions (Outreach Draft only for approved companies, Website) */}
+            {/* Quick Actions (Outreach Draft, Website) */}
             <View style={styles.actionsContainer}>
-              {company.status === "approved" && associatedEmail && onViewEmail ? (
+              {company.status === "approved" &&
+              associatedEmail &&
+              onViewEmail ? (
                 <Pressable
+                  accessibilityRole="button"
                   onPress={() => onViewEmail(associatedEmail)}
                   style={({ pressed }) => [
                     styles.primaryActionBtn,
                     {
-                      backgroundColor: `${colors.primary}18`,
-                      borderColor: colors.primary,
-                      opacity: pressed ? 0.75 : 1,
+                      backgroundColor: colors.primarySoft,
+                      borderColor: colors.primaryBorder,
+                      opacity: pressed ? 0.8 : 1,
                     },
                   ]}
                 >
                   <View style={styles.actionBtnLeft}>
-                    <Mail size={16} color={colors.primary} />
+                    <Mail
+                      size={15}
+                      color={colors.primary}
+                      strokeWidth={1.75}
+                    />
                     <Text
                       style={[
                         styles.primaryActionBtnText,
@@ -441,24 +528,33 @@ export default function CompanyDetailModal({
                       View Outreach Draft
                     </Text>
                   </View>
-                  <ChevronRight size={16} color={colors.primary} />
+                  <ChevronRight
+                    size={15}
+                    color={colors.primary}
+                    strokeWidth={1.75}
+                  />
                 </Pressable>
               ) : null}
 
               {company.website || company.domain ? (
                 <Pressable
+                  accessibilityRole="link"
                   onPress={handleOpenWebsite}
                   style={({ pressed }) => [
                     styles.secondaryActionBtn,
                     {
                       backgroundColor: colors.surfaceElevated,
                       borderColor: colors.border,
-                      opacity: pressed ? 0.75 : 1,
+                      opacity: pressed ? 0.8 : 1,
                     },
                   ]}
                 >
                   <View style={styles.actionBtnLeft}>
-                    <Globe size={15} color={colors.textSecondary} />
+                    <Globe
+                      size={15}
+                      color={colors.textSecondary}
+                      strokeWidth={1.75}
+                    />
                     <Text
                       style={[
                         styles.secondaryActionBtnText,
@@ -469,7 +565,11 @@ export default function CompanyDetailModal({
                       Visit Website
                     </Text>
                   </View>
-                  <ExternalLink size={14} color={colors.textSecondary} />
+                  <ExternalLink
+                    size={14}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 </Pressable>
               ) : null}
             </View>
@@ -490,9 +590,18 @@ export default function CompanyDetailModal({
 
               <View style={styles.attributesGrid}>
                 {company.industry ? (
-                  <View style={styles.attributeItem}>
+                  <View
+                    style={[
+                      styles.attributeItem,
+                      { borderBottomColor: colors.border },
+                    ]}
+                  >
                     <View style={styles.attributeLabelRow}>
-                      <Briefcase size={13} color={colors.textSecondary} />
+                      <Briefcase
+                        size={13}
+                        color={colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
                       <Text
                         style={[
                           styles.attributeLabel,
@@ -511,9 +620,18 @@ export default function CompanyDetailModal({
                 ) : null}
 
                 {company.size ? (
-                  <View style={styles.attributeItem}>
+                  <View
+                    style={[
+                      styles.attributeItem,
+                      { borderBottomColor: colors.border },
+                    ]}
+                  >
                     <View style={styles.attributeLabelRow}>
-                      <Users size={13} color={colors.textSecondary} />
+                      <Users
+                        size={13}
+                        color={colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
                       <Text
                         style={[
                           styles.attributeLabel,
@@ -532,9 +650,18 @@ export default function CompanyDetailModal({
                 ) : null}
 
                 {company.source ? (
-                  <View style={styles.attributeItem}>
+                  <View
+                    style={[
+                      styles.attributeItem,
+                      { borderBottomColor: colors.border },
+                    ]}
+                  >
                     <View style={styles.attributeLabelRow}>
-                      <Sparkles size={13} color={colors.textSecondary} />
+                      <Compass
+                        size={13}
+                        color={colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
                       <Text
                         style={[
                           styles.attributeLabel,
@@ -556,9 +683,18 @@ export default function CompanyDetailModal({
                 ) : null}
 
                 {formattedDate ? (
-                  <View style={styles.attributeItem}>
+                  <View
+                    style={[
+                      styles.attributeItem,
+                      { borderBottomColor: "transparent" },
+                    ]}
+                  >
                     <View style={styles.attributeLabelRow}>
-                      <Clock size={13} color={colors.textSecondary} />
+                      <Clock
+                        size={13}
+                        color={colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
                       <Text
                         style={[
                           styles.attributeLabel,
@@ -578,19 +714,20 @@ export default function CompanyDetailModal({
               </View>
             </View>
 
-            {/* ======================================================== */}
             {/* SHOW DETAILS ACTION BUTTON */}
-            {/* ======================================================== */}
             <Pressable
+              accessibilityRole="button"
               onPress={() => setShowDetails((prev) => !prev)}
               style={({ pressed }) => [
                 styles.showDetailsBtn,
                 {
                   backgroundColor: showDetails
-                    ? `${colors.primary}18`
+                    ? colors.primarySoft
                     : colors.surfaceElevated,
-                  borderColor: showDetails ? colors.primary : `${colors.primary}50`,
-                  opacity: pressed ? 0.8 : 1,
+                  borderColor: showDetails
+                    ? colors.primaryBorder
+                    : colors.border,
+                  opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
@@ -599,21 +736,27 @@ export default function CompanyDetailModal({
                   style={[
                     styles.showDetailsIconWrap,
                     {
-                      backgroundColor: `${colors.primary}20`,
-                      borderColor: `${colors.primary}40`,
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
                     },
                   ]}
                 >
-                  <Sparkles size={16} color={colors.primary} />
+                  <Activity
+                    size={15}
+                    color={showDetails ? colors.primary : colors.text}
+                    strokeWidth={1.75}
+                  />
                 </View>
                 <View style={styles.showDetailsTextWrap}>
                   <Text
                     style={[
                       styles.showDetailsBtnTitle,
-                      { color: colors.primary },
+                      { color: showDetails ? colors.primary : colors.text },
                     ]}
                   >
-                    {showDetails ? "Hide Detailed Intelligence" : "Show Details & AI Intelligence"}
+                    {showDetails
+                      ? "Hide Detailed Intelligence"
+                      : "Show Details & AI Intelligence"}
                   </Text>
                   <Text
                     style={[
@@ -623,7 +766,7 @@ export default function CompanyDetailModal({
                   >
                     {showDetails
                       ? "Collapse deep company signals, hypothesis & tech gaps"
-                      : "Click to view why company needs you, needed skills, gaps & contacts"}
+                      : "View why company needs you, needed skills, gaps & contacts"}
                   </Text>
                 </View>
               </View>
@@ -633,36 +776,49 @@ export default function CompanyDetailModal({
                   {
                     backgroundColor: showDetails
                       ? colors.primary
-                      : `${colors.primary}18`,
+                      : colors.surface,
+                    borderColor: showDetails
+                      ? colors.primary
+                      : colors.border,
                   },
                 ]}
               >
                 {showDetails ? (
-                  <ChevronUp size={15} color={colors.onPrimary} />
+                  <ChevronUp
+                    size={14}
+                    color={colors.onPrimary}
+                    strokeWidth={1.75}
+                  />
                 ) : (
-                  <ChevronDown size={15} color={colors.primary} />
+                  <ChevronDown
+                    size={14}
+                    color={colors.textSecondary}
+                    strokeWidth={1.75}
+                  />
                 )}
               </View>
             </Pressable>
 
-            {/* ======================================================== */}
-            {/* DETAILED INTELLIGENCE SECTIONS (Revealed on click) */}
-            {/* ======================================================== */}
+            {/* DETAILED INTELLIGENCE SECTIONS */}
             {showDetails ? (
               <View style={styles.detailsContainer}>
-                {/* 1. WHY THIS COMPANY NEEDS YOU (NEED HYPOTHESIS) */}
+                {/* 1. WHY THIS COMPANY NEEDS YOU */}
                 <View
                   style={[
                     styles.card,
                     {
                       backgroundColor: colors.surfaceElevated,
-                      borderColor: `${colors.primary}45`,
+                      borderColor: colors.border,
                     },
                   ]}
                 >
                   <View style={styles.cardHeader}>
                     <View style={styles.cardHeaderLeft}>
-                      <Lightbulb size={16} color={colors.primary} />
+                      <Lightbulb
+                        size={15}
+                        color={colors.primary}
+                        strokeWidth={1.75}
+                      />
                       <Text
                         style={[styles.cardSectionTitle, { color: colors.text }]}
                       >
@@ -673,12 +829,14 @@ export default function CompanyDetailModal({
                       style={[
                         styles.aiPill,
                         {
-                          backgroundColor: `${colors.primary}18`,
-                          borderColor: colors.primary,
+                          backgroundColor: colors.primarySoft,
+                          borderColor: colors.primaryBorder,
                         },
                       ]}
                     >
-                      <Text style={[styles.aiPillText, { color: colors.primary }]}>
+                      <Text
+                        style={[styles.aiPillText, { color: colors.primary }]}
+                      >
                         AI Conclusion
                       </Text>
                     </View>
@@ -690,11 +848,13 @@ export default function CompanyDetailModal({
                         styles.hypothesisBox,
                         {
                           backgroundColor: colors.surface,
-                          borderColor: `${colors.primary}30`,
+                          borderColor: colors.border,
                         },
                       ]}
                     >
-                      <Text style={[styles.hypothesisText, { color: colors.text }]}>
+                      <Text
+                        style={[styles.hypothesisText, { color: colors.text }]}
+                      >
                         {needHypothesis}
                       </Text>
                     </View>
@@ -705,12 +865,13 @@ export default function CompanyDetailModal({
                         { color: colors.textSecondary },
                       ]}
                     >
-                      Target prospect business has high compatibility with your digital service capabilities.
+                      Target prospect business has high compatibility with your
+                      digital service capabilities.
                     </Text>
                   )}
 
                   {proposedSolution ? (
-                    <View style={{ marginTop: 8 }}>
+                    <View style={{ marginTop: tokens.spacing.sm }}>
                       <Text
                         style={[
                           styles.subSectionTitle,
@@ -719,7 +880,9 @@ export default function CompanyDetailModal({
                       >
                         Proposed Outreach Angle & Pitch:
                       </Text>
-                      <Text style={[styles.solutionText, { color: colors.text }]}>
+                      <Text
+                        style={[styles.solutionText, { color: colors.text }]}
+                      >
                         {proposedSolution}
                       </Text>
                     </View>
@@ -739,9 +902,16 @@ export default function CompanyDetailModal({
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
-                        <Zap size={16} color={colors.warning} />
+                        <Zap
+                          size={15}
+                          color={colors.warning}
+                          strokeWidth={1.75}
+                        />
                         <Text
-                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
                         >
                           Skill & Service Opportunities
                         </Text>
@@ -749,7 +919,7 @@ export default function CompanyDetailModal({
                     </View>
 
                     {neededSkills.length > 0 && (
-                      <View style={{ marginTop: 4 }}>
+                      <View style={{ marginTop: tokens.spacing.xs }}>
                         <Text
                           style={[
                             styles.subSectionTitle,
@@ -765,13 +935,16 @@ export default function CompanyDetailModal({
                               style={[
                                 styles.skillTag,
                                 {
-                                  backgroundColor: `${colors.primary}18`,
-                                  borderColor: `${colors.primary}40`,
+                                  backgroundColor: colors.surface,
+                                  borderColor: colors.border,
                                 },
                               ]}
                             >
                               <Text
-                                style={[styles.skillTagText, { color: colors.primary }]}
+                                style={[
+                                  styles.skillTagText,
+                                  { color: colors.text },
+                                ]}
                               >
                                 {skill}
                               </Text>
@@ -782,7 +955,7 @@ export default function CompanyDetailModal({
                     )}
 
                     {neededServices.length > 0 && (
-                      <View style={{ marginTop: 10 }}>
+                      <View style={{ marginTop: tokens.spacing.sm }}>
                         <Text
                           style={[
                             styles.subSectionTitle,
@@ -794,9 +967,16 @@ export default function CompanyDetailModal({
                         <View style={styles.bulletList}>
                           {neededServices.map((service, idx) => (
                             <View key={idx} style={styles.bulletItem}>
-                              <CheckCircle2 size={13} color={colors.success} />
+                              <CheckCircle2
+                                size={13}
+                                color={colors.success}
+                                strokeWidth={1.75}
+                              />
                               <Text
-                                style={[styles.bulletText, { color: colors.text }]}
+                                style={[
+                                  styles.bulletText,
+                                  { color: colors.text },
+                                ]}
                               >
                                 {service}
                               </Text>
@@ -821,9 +1001,16 @@ export default function CompanyDetailModal({
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
-                        <Target size={16} color={colors.secondary} />
+                        <Target
+                          size={15}
+                          color={colors.primary}
+                          strokeWidth={1.75}
+                        />
                         <Text
-                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
                         >
                           Website Evidence & Digital Gaps
                         </Text>
@@ -831,7 +1018,7 @@ export default function CompanyDetailModal({
                     </View>
 
                     {needSignals.length > 0 && (
-                      <View style={{ marginTop: 4 }}>
+                      <View style={{ marginTop: tokens.spacing.xs }}>
                         <Text
                           style={[
                             styles.subSectionTitle,
@@ -846,11 +1033,14 @@ export default function CompanyDetailModal({
                               <View
                                 style={[
                                   styles.dotBullet,
-                                  { backgroundColor: colors.secondary },
+                                  { backgroundColor: colors.primary },
                                 ]}
                               />
                               <Text
-                                style={[styles.bulletText, { color: colors.text }]}
+                                style={[
+                                  styles.bulletText,
+                                  { color: colors.text },
+                                ]}
                               >
                                 {signal}
                               </Text>
@@ -861,7 +1051,7 @@ export default function CompanyDetailModal({
                     )}
 
                     {digitalFeatures.length > 0 && (
-                      <View style={{ marginTop: 10 }}>
+                      <View style={{ marginTop: tokens.spacing.sm }}>
                         <Text
                           style={[
                             styles.subSectionTitle,
@@ -882,11 +1072,15 @@ export default function CompanyDetailModal({
                                 },
                               ]}
                             >
-                              <Cpu size={11} color={colors.textSecondary} />
+                              <Cpu
+                                size={11}
+                                color={colors.textSecondary}
+                                strokeWidth={1.75}
+                              />
                               <Text
                                 style={[
                                   styles.featureTagText,
-                                  { color: colors.textSecondary },
+                                  { color: colors.text },
                                 ]}
                               >
                                 {feat}
@@ -912,9 +1106,16 @@ export default function CompanyDetailModal({
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
-                        <Layers size={16} color={colors.textSecondary} />
+                        <Layers
+                          size={15}
+                          color={colors.textSecondary}
+                          strokeWidth={1.75}
+                        />
                         <Text
-                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
                         >
                           Services Offered by Company
                         </Text>
@@ -967,9 +1168,16 @@ export default function CompanyDetailModal({
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
-                        <FileText size={16} color={colors.textSecondary} />
+                        <FileText
+                          size={15}
+                          color={colors.textSecondary}
+                          strokeWidth={1.75}
+                        />
                         <Text
-                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
                         >
                           About the Company
                         </Text>
@@ -993,17 +1201,24 @@ export default function CompanyDetailModal({
                       styles.card,
                       {
                         backgroundColor: colors.surfaceElevated,
-                        borderColor:
-                          authScore >= 70 ? colors.border : `${colors.warning}60`,
+                        borderColor: colors.border,
                       },
                     ]}
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
                         {authScore >= 70 ? (
-                          <ShieldCheck size={16} color={colors.success} />
+                          <ShieldCheck
+                            size={15}
+                            color={colors.success}
+                            strokeWidth={1.75}
+                          />
                         ) : (
-                          <ShieldAlert size={16} color={colors.warning} />
+                          <ShieldAlert
+                            size={15}
+                            color={colors.warning}
+                            strokeWidth={1.75}
+                          />
                         )}
                         <Text
                           style={[
@@ -1074,9 +1289,16 @@ export default function CompanyDetailModal({
                   >
                     <View style={styles.cardHeader}>
                       <View style={styles.cardHeaderLeft}>
-                        <Mail size={16} color={colors.primary} />
+                        <Mail
+                          size={15}
+                          color={colors.success}
+                          strokeWidth={1.75}
+                        />
                         <Text
-                          style={[styles.cardSectionTitle, { color: colors.text }]}
+                          style={[
+                            styles.cardSectionTitle,
+                            { color: colors.text },
+                          ]}
                         >
                           Reacher-Verified Contacts ({emails.length})
                         </Text>
@@ -1097,7 +1319,10 @@ export default function CompanyDetailModal({
                         >
                           <View style={styles.contactHeader}>
                             <Text
-                              style={[styles.contactName, { color: colors.text }]}
+                              style={[
+                                styles.contactName,
+                                { color: colors.text },
+                              ]}
                             >
                               {contact.first_name || contact.last_name
                                 ? `${contact.first_name || ""} ${contact.last_name || ""}`.trim()
@@ -1107,8 +1332,8 @@ export default function CompanyDetailModal({
                               style={[
                                 styles.verifiedContactBadge,
                                 {
-                                  backgroundColor: `${colors.success}18`,
-                                  borderColor: colors.success,
+                                  backgroundColor: colors.successSoft,
+                                  borderColor: colors.successBorder,
                                 },
                               ]}
                             >
@@ -1118,7 +1343,8 @@ export default function CompanyDetailModal({
                                   { color: colors.success },
                                 ]}
                               >
-                                {contact.is_verified || contact.is_reachable === "safe"
+                                {contact.is_verified ||
+                                contact.is_reachable === "safe"
                                   ? "Reachable"
                                   : "Verified"}
                               </Text>
@@ -1159,12 +1385,26 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   modalSheet: {
-    maxHeight: "88%",
+    maxHeight: "90%",
+    width: "100%",
+    maxWidth: 640,
+    alignSelf: "center",
     borderTopLeftRadius: tokens.radius.lg,
     borderTopRightRadius: tokens.radius.lg,
     borderWidth: 1,
     borderBottomWidth: 0,
     overflow: "hidden",
+    ...tokens.shadow.lg,
+  },
+  handleRow: {
+    alignItems: "center",
+    paddingTop: tokens.spacing.sm,
+    paddingBottom: 2,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: tokens.radius.full,
   },
   header: {
     flexDirection: "row",
@@ -1177,14 +1417,14 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 4,
     flex: 1,
     marginRight: tokens.spacing.sm,
   },
   iconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: tokens.radius.md,
+    width: 36,
+    height: 36,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -1193,18 +1433,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   companyTitle: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
+    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   companySubtitle: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
-    marginTop: 1,
+    lineHeight: 16,
   },
   closeButton: {
-    width: 34,
-    height: 34,
-    borderRadius: tokens.radius.full,
+    width: 32,
+    height: 32,
+    borderRadius: tokens.radius.sm,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -1225,37 +1467,38 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 5,
-    borderRadius: tokens.radius.full,
+    paddingHorizontal: tokens.spacing.sm + 2,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: 6,
     borderWidth: 1,
   },
   statusDot: {
-    width: 7,
-    height: 7,
+    width: 6,
+    height: 6,
     borderRadius: tokens.radius.full,
   },
   statusBadgeText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    letterSpacing: 0.3,
+    lineHeight: 16,
   },
   copyDomainButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 5,
-    borderRadius: tokens.radius.full,
+    paddingHorizontal: tokens.spacing.sm + 2,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: 6,
     borderWidth: 1,
   },
   copyDomainText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   card: {
     padding: tokens.spacing.md,
-    borderRadius: tokens.radius.md,
+    borderRadius: tokens.radius.lg,
     borderWidth: 1,
     gap: tokens.spacing.sm,
   },
@@ -1268,25 +1511,27 @@ const styles = StyleSheet.create({
   cardHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
     flex: 1,
     flexShrink: 1,
   },
   cardSectionTitle: {
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
     flexShrink: 1,
   },
   scorePill: {
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 3,
-    borderRadius: tokens.radius.full,
+    paddingVertical: 2,
+    borderRadius: 6,
     borderWidth: 1,
     flexShrink: 0,
   },
   scorePillText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   progressTrack: {
     height: 6,
@@ -1299,7 +1544,7 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.full,
   },
   feedbackBox: {
-    padding: tokens.spacing.sm,
+    padding: tokens.spacing.sm + 2,
     borderRadius: tokens.radius.sm,
     borderWidth: 1,
     marginTop: 2,
@@ -1309,32 +1554,28 @@ const styles = StyleSheet.create({
     fontSize: tokens.fontSize.xs,
     lineHeight: 18,
   },
-  feedbackNotice: {
-    fontFamily: "DMSans",
-    fontSize: tokens.fontSize.xs,
-    lineHeight: 18,
-  },
   actionsContainer: {
     gap: tokens.spacing.sm,
   },
   primaryActionBtn: {
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 12,
     paddingHorizontal: tokens.spacing.md,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
   },
   primaryActionBtnText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   secondaryActionBtn: {
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 11,
     paddingHorizontal: tokens.spacing.md,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
@@ -1342,43 +1583,45 @@ const styles = StyleSheet.create({
   secondaryActionBtnText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   actionBtnLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: tokens.spacing.sm,
     flex: 1,
   },
   attributesGrid: {
-    gap: tokens.spacing.sm,
+    gap: 0,
   },
   attributeItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(150, 150, 150, 0.15)",
+    paddingVertical: tokens.spacing.sm,
+    borderBottomWidth: 1,
   },
   attributeLabelRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
   },
   attributeLabel: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   attributeValue: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   contactList: {
-    gap: tokens.spacing.xs,
+    gap: tokens.spacing.xs + 2,
   },
   contactItem: {
-    padding: tokens.spacing.sm,
-    borderRadius: tokens.radius.sm,
+    padding: tokens.spacing.sm + 2,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
     gap: 2,
   },
@@ -1388,31 +1631,34 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   contactName: {
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   verifiedContactBadge: {
     paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: tokens.radius.full,
+    paddingVertical: 2,
+    borderRadius: 4,
     borderWidth: 1,
   },
   verifiedContactText: {
-    fontFamily: "DMSansBold",
-    fontSize: 10,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 14,
   },
   contactEmail: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   decisionCard: {
     padding: tokens.spacing.md,
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 2,
   },
   decisionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 2,
   },
   decisionHeaderIcon: {
     width: 32,
@@ -1426,75 +1672,77 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   decisionTitle: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   decisionSubtitle: {
     fontFamily: "DMSans",
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 15,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   decisionButtonsRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
-    marginTop: 4,
+    marginTop: 2,
   },
   acceptBtn: {
     flex: 1,
+    height: 38,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
+    gap: tokens.spacing.xs + 2,
     borderRadius: tokens.radius.md,
   },
   rejectBtn: {
     flex: 1,
+    height: 38,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 11,
+    gap: tokens.spacing.xs + 2,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
   },
   decisionBtnText: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   scoreQuickBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 10,
+    paddingVertical: tokens.spacing.sm + 2,
     borderRadius: tokens.radius.md,
     borderWidth: 1,
   },
   scoreQuickLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: tokens.spacing.sm,
   },
   scoreQuickLabel: {
-    fontFamily: "DMSansSemiBold",
+    fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   showDetailsBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 12,
-    borderRadius: tokens.radius.md,
-    borderWidth: 1.5,
+    paddingVertical: tokens.spacing.sm + 4,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
   },
   showDetailsBtnLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.sm + 2,
     flex: 1,
     marginRight: tokens.spacing.sm,
   },
@@ -1510,18 +1758,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   showDetailsBtnTitle: {
-    fontFamily: "DMSansBold",
+    fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   showDetailsBtnSubtitle: {
     fontFamily: "DMSans",
-    fontSize: 11,
-    marginTop: 1,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   chevronCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: tokens.radius.full,
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1530,20 +1780,21 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.xs,
   },
   aiPill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 2,
-    borderRadius: tokens.radius.full,
+    borderRadius: 6,
     borderWidth: 1,
   },
   aiPillText: {
-    fontFamily: "DMSansBold",
-    fontSize: 10,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   hypothesisBox: {
-    padding: tokens.spacing.md,
-    borderRadius: tokens.radius.sm,
+    padding: tokens.spacing.sm + 4,
+    borderRadius: tokens.radius.md,
     borderWidth: 1,
-    marginTop: 4,
+    marginTop: 2,
   },
   hypothesisText: {
     fontFamily: "DMSans",
@@ -1553,13 +1804,13 @@ const styles = StyleSheet.create({
   emptyDetailText: {
     fontFamily: "DMSans",
     fontSize: tokens.fontSize.xs,
-    fontStyle: "italic",
-    marginTop: 4,
+    lineHeight: 18,
   },
   subSectionTitle: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
-    marginBottom: 6,
+    lineHeight: 16,
+    marginBottom: tokens.spacing.xs + 2,
   },
   solutionText: {
     fontFamily: "DMSans",
@@ -1569,31 +1820,32 @@ const styles = StyleSheet.create({
   tagWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
   },
   skillTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
   },
   skillTagText: {
-    fontFamily: "DMSansBold",
-    fontSize: 11,
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   bulletList: {
-    gap: 6,
+    gap: tokens.spacing.xs + 2,
   },
   bulletItem: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 8,
+    gap: tokens.spacing.sm,
   },
   dotBullet: {
-    width: 6,
-    height: 6,
+    width: 5,
+    height: 5,
     borderRadius: tokens.radius.full,
-    marginTop: 6,
+    marginTop: 7,
   },
   bulletText: {
     fontFamily: "DMSans",
@@ -1604,25 +1856,27 @@ const styles = StyleSheet.create({
   featureTag: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
   },
   featureTagText: {
     fontFamily: "DMSansMedium",
-    fontSize: 11,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   servicePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
   },
   servicePillText: {
     fontFamily: "DMSansMedium",
-    fontSize: 11,
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
   },
   aboutText: {
     fontFamily: "DMSans",

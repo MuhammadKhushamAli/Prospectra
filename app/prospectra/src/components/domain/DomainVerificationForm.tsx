@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
+import { useTheme } from "../../hooks/useTheme";
 import Button from "../ui/Button";
 import TextField from "../ui/TextField";
 import {
@@ -20,6 +21,7 @@ export default function DomainVerificationForm({
   onSubmit,
   isLoading,
 }: DomainVerificationFormProps) {
+  const colors = useTheme();
   const [domain, setDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -43,7 +45,15 @@ export default function DomainVerificationForm({
   };
 
   return (
-    <View style={styles.form}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        },
+      ]}
+    >
       <TextField
         label={domainVerificationCopy.fields.domain}
         placeholder={domainVerificationCopy.placeholders.domain}
@@ -69,5 +79,11 @@ export default function DomainVerificationForm({
 }
 
 const styles = StyleSheet.create({
-  form: { gap: tokens.spacing.md },
+  card: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    gap: tokens.spacing.md,
+    ...tokens.shadow.sm,
+  },
 });

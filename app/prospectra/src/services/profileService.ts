@@ -1,9 +1,48 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
 import { DB_KEYS } from "../constants/dbKeys";
-import type { UpdateProfileParams, UserProfileData } from "../types/profile";
+import type {
+  UpdateProfileParams,
+  UserIdCardProfile,
+  UserProfileData,
+} from "../types/profile";
 
 import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
+
+/**
+ * Reusable selector that determines whether the user's ID card profile is complete.
+ * Profile complete requires name, organization name, organization domain, email, and role
+ * to all be non-empty strings.
+ */
+export function isProfileComplete(
+  profile: UserIdCardProfile | null | undefined,
+): boolean {
+  if (!profile) return false;
+  return Boolean(
+    profile.name?.trim() &&
+      profile.organizationName?.trim() &&
+      profile.organizationDomain?.trim() &&
+      profile.email?.trim() &&
+      profile.role?.trim(),
+  );
+}
+
+/**
+ * Format a user's full name into a concise display name:
+ * - 2 chunks (e.g. "Khusham Ali"): returns the first name (chunks[0])
+ * - 3+ chunks (e.g. "Muhammad Khusham Ali"): returns the middle name (chunks[1])
+ * - 1 chunk: returns chunks[0]
+ */
+export function formatDisplayName(
+  fullName: string | null | undefined,
+): string {
+  if (!fullName) return "";
+  const chunks = fullName.trim().split(/\s+/).filter(Boolean);
+  if (chunks.length === 0) return "";
+  if (chunks.length === 2) return chunks[0];
+  if (chunks.length >= 3) return chunks[1];
+  return chunks[0];
+}
 
 /**
  * Validate and sanitize the professional headline.
