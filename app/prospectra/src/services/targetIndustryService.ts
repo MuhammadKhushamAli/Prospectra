@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
 import { DB_KEYS } from "../constants/dbKeys";
+import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
 
 /**
  * Clean, trim, and deduplicate an array of industry names.
@@ -18,7 +19,9 @@ export function sanitizeIndustries(industries: string[]): string[] {
 /**
  * Retrieve the current authenticated user session or throw an error.
  */
-export async function getAuthenticatedUser(supabase: ReturnType<typeof getSupabaseClient>) {
+export async function getAuthenticatedUser(
+  supabase: ReturnType<typeof getSupabaseClient>,
+) {
   const { data: sessionData, error: sessionErr } =
     await supabase.auth.getSession();
   if (sessionErr) throw sessionErr;
@@ -26,8 +29,6 @@ export async function getAuthenticatedUser(supabase: ReturnType<typeof getSupaba
   if (!user) throw new Error("No authenticated session found.");
   return user;
 }
-
-import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
 
 /**
  * Resolve the user's active organization ID using shared membership resolution.
@@ -44,49 +45,209 @@ export async function resolveUserOrgId(
 }
 
 /**
- * Upsert or update target_industries for an organization and return its record ID.
+ * Find an existing target industry by name in the organization, or insert a new one.
+ * Each industry has its own record and unique ID, exactly like skills in the skills table.
  */
-export async function upsertOrgTargetIndustries(
+export async function findOrCreateOrgTargetIndustry(
   supabase: ReturnType<typeof getSupabaseClient>,
   orgId: string,
-  cleanedIndustries: string[],
-): Promise<string> {
-  const { data: existingTarget } = await supabase
+  industryName: string,
+): Promise<string | null> {
+  const cleanName = industryName.trim();
+  if (!cleanName) return null;
+
+  const { data: foundIndustry } = await supabase
     .from(TABLES.TARGET_INDUSTRIES)
     .select(DB_KEYS.ID)
     .eq(DB_KEYS.ORG_ID, orgId)
+    .ilike(DB_KEYS.NAME, cleanName)
     .limit(1)
     .maybeSingle();
 
-  if (existingTarget?.id) {
-    const { error: updateErr } = await supabase
-      .from(TABLES.TARGET_INDUSTRIES)
-      .update({
-        [DB_KEYS.TARGET_INDUSTRIES]: cleanedIndustries,
-        [DB_KEYS.UPDATED_AT]: new Date().toISOString(),
-      })
-      .eq(DB_KEYS.ID, existingTarget.id);
-
-    if (updateErr) throw updateErr;
-    return existingTarget.id;
+  if (foundIndustry?.id) {
+    return foundIndustry.id;
   }
 
-  const { data: insertedTarget, error: insertErr } = await supabase
+  const { data: insertedIndustry, error: insertErr } = await supabase
     .from(TABLES.TARGET_INDUSTRIES)
     .insert({
       [DB_KEYS.ORG_ID]: orgId,
-      [DB_KEYS.TARGET_INDUSTRIES]: cleanedIndustries,
-      [DB_KEYS.UPDATED_AT]: new Date().toISOString(),
+      [DB_KEYS.NAME]: cleanName,
     })
     .select(DB_KEYS.ID)
     .single();
 
-  if (insertErr) throw insertErr;
-  return insertedTarget.id;
+  if (!insertErr && insertedIndustry?.id) {
+    return insertedIndustry.id;
+  }
+  if (insertErr) {
+    console.warn("Target industry insert notice:", insertErr.message);
+  }
+  return null;
 }
 
 /**
- * Link a user to a target_industries record in user_target_industries junction table.
+ * Sync user's target industries into target_industries and user_target_industries junction table.
+ * Maintains the separated user-industry relationship, matching user_skills architecture.
+ */
+export async function syncUserTargetIndustriesList(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  orgId: string,
+  userId: string,
+  industries: string[],
+): Promise<void> {
+  const { data: currentLinks } = await supabase
+    .from(TABLES.USER_TARGET_INDUSTRIES)
+    .select(DB_KEYS.TARGET_INDUSTRY_ID)
+    .eq(DB_KEYS.USER_ID, userId);
+
+  const existingLinkedIds =
+    currentLinks?.map((c) => c.target_industry_id) || [];
+  const targetIndustryIds: string[] = [];
+
+  for (const industryName of industries) {
+    const industryId = await findOrCreateOrgTargetIndustry(
+      supabase,
+      orgId,
+      industryName,
+    );
+    if (industryId) {
+      targetIndustryIds.push(industryId);
+      await supabase.from(TABLES.USER_TARGET_INDUSTRIES).upsert({
+        [DB_KEYS.USER_ID]: userId,
+        [DB_KEYS.TARGET_INDUSTRY_ID]: industryId,
+      });
+    }
+  }
+
+  // Remove any unselected industries
+  const toDelete = existingLinkedIds.filter(
+    (id) => !targetIndustryIds.includes(id),
+  );
+  if (toDelete.length > 0) {
+    await supabase
+      .from(TABLES.USER_TARGET_INDUSTRIES)
+      .delete()
+      .eq(DB_KEYS.USER_ID, userId)
+      .in(DB_KEYS.TARGET_INDUSTRY_ID, toDelete);
+  }
+}
+
+/**
+ * Fetch target industry names associated with a user via user_target_industries.
+ */
+export async function fetchUserTargetIndustryNames(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string,
+): Promise<string[]> {
+  const { data: userIndustryRecords } = await supabase
+    .from(TABLES.USER_TARGET_INDUSTRIES)
+    .select(DB_KEYS.TARGET_INDUSTRY_ID)
+    .eq(DB_KEYS.USER_ID, userId);
+
+  if (!userIndustryRecords || userIndustryRecords.length === 0) return [];
+
+  const industryIds = userIndustryRecords
+    .map((r) => r.target_industry_id)
+    .filter(Boolean);
+
+  if (industryIds.length === 0) return [];
+
+  const { data: industriesData } = await supabase
+    .from(TABLES.TARGET_INDUSTRIES)
+    .select(DB_KEYS.NAME)
+    .in(DB_KEYS.ID, industryIds);
+
+  return industriesData ? industriesData.map((s) => s.name).filter(Boolean) : [];
+}
+
+/**
+ * Legacy compatibility alias for fetching user-linked target industries.
+ */
+export async function fetchUserLinkedTargetIndustries(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string,
+  _orgId?: string,
+): Promise<string[]> {
+  return fetchUserTargetIndustryNames(supabase, userId);
+}
+
+/**
+ * Fetch organization-level target industries as fallback.
+ */
+export async function fetchOrgFallbackTargetIndustries(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  orgId: string,
+): Promise<string[]> {
+  const { data: orgIndustries } = await supabase
+    .from(TABLES.TARGET_INDUSTRIES)
+    .select(DB_KEYS.NAME)
+    .eq(DB_KEYS.ORG_ID, orgId);
+
+  if (!orgIndustries || orgIndustries.length === 0) return [];
+  return orgIndustries.map((r) => r.name).filter(Boolean);
+}
+
+/**
+ * Saves the selected target industries for the user's active organization,
+ * ensuring each industry has its own record in target_industries and maintaining
+ * the separated user-industry relationship in user_target_industries.
+ */
+export async function saveTargetIndustries(
+  industries: string[],
+): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  const user = await getAuthenticatedUser(supabase);
+  const cleanedIndustries = sanitizeIndustries(industries);
+
+  if (cleanedIndustries.length === 0) {
+    throw new Error("Please select at least one target industry.");
+  }
+
+  const orgId = await resolveUserOrgId(supabase, user.id);
+  await syncUserTargetIndustriesList(
+    supabase,
+    orgId,
+    user.id,
+    cleanedIndustries,
+  );
+
+  return cleanedIndustries;
+}
+
+/**
+ * Retrieves the currently saved target industries for the user
+ * through the user_target_industries junction table, with fallback to org industries.
+ */
+export async function getTargetIndustries(): Promise<string[]> {
+  const supabase = getSupabaseClient();
+  const { data: sessionData, error: sessionErr } =
+    await supabase.auth.getSession();
+  if (sessionErr || !sessionData.session?.user) return [];
+  const user = sessionData.session.user;
+
+  let orgId: string | null = null;
+  try {
+    orgId = await resolveUserOrgId(supabase, user.id);
+  } catch {
+    return [];
+  }
+
+  // 1. Try user-linked target industries
+  const userIndustries = await fetchUserTargetIndustryNames(
+    supabase,
+    user.id,
+  );
+  if (userIndustries.length > 0) {
+    return userIndustries;
+  }
+
+  // 2. Fallback to organization level target industries
+  return fetchOrgFallbackTargetIndustries(supabase, orgId);
+}
+
+/**
+ * Legacy compatibility alias for linking a user to a target industry.
  */
 export async function linkUserTargetIndustry(
   supabase: ReturnType<typeof getSupabaseClient>,
@@ -104,121 +265,19 @@ export async function linkUserTargetIndustry(
 }
 
 /**
- * Fetch industries linked to a specific user via user_target_industries.
+ * Legacy compatibility alias for upserting an organization target industry.
  */
-export async function fetchUserLinkedTargetIndustries(
+export async function upsertOrgTargetIndustries(
   supabase: ReturnType<typeof getSupabaseClient>,
-  userId: string,
   orgId: string,
-): Promise<string[]> {
-  const { data: userLinks } = await supabase
-    .from(TABLES.USER_TARGET_INDUSTRIES)
-    .select(DB_KEYS.TARGET_INDUSTRY_ID)
-    .eq(DB_KEYS.USER_ID, userId);
-
-  if (!userLinks || userLinks.length === 0) return [];
-
-  const targetIndustryIds = userLinks
-    .map((l) => l.target_industry_id)
-    .filter(Boolean);
-
-  if (targetIndustryIds.length === 0) return [];
-
-  const { data: targetRecords } = await supabase
-    .from(TABLES.TARGET_INDUSTRIES)
-    .select(DB_KEYS.TARGET_INDUSTRIES)
-    .in(DB_KEYS.ID, targetIndustryIds)
-    .eq(DB_KEYS.ORG_ID, orgId);
-
-  if (!targetRecords || targetRecords.length === 0) return [];
-
-  const combined = new Set<string>();
-  for (const rec of targetRecords) {
-    if (Array.isArray(rec.target_industries)) {
-      rec.target_industries.forEach((ind: string) => combined.add(ind));
+  cleanedIndustries: string[],
+): Promise<string> {
+  let firstId: string | null = null;
+  for (const name of cleanedIndustries) {
+    const id = await findOrCreateOrgTargetIndustry(supabase, orgId, name);
+    if (!firstId && id) {
+      firstId = id;
     }
   }
-  return Array.from(combined);
-}
-
-/**
- * Fetch organization-level target industries as fallback.
- */
-export async function fetchOrgFallbackTargetIndustries(
-  supabase: ReturnType<typeof getSupabaseClient>,
-  orgId: string,
-): Promise<string[]> {
-  const { data: orgTarget } = await supabase
-    .from(TABLES.TARGET_INDUSTRIES)
-    .select(DB_KEYS.TARGET_INDUSTRIES)
-    .eq(DB_KEYS.ORG_ID, orgId)
-    .limit(1)
-    .maybeSingle();
-
-  if (
-    orgTarget?.target_industries &&
-    Array.isArray(orgTarget.target_industries)
-  ) {
-    return orgTarget.target_industries;
-  }
-  return [];
-}
-
-/**
- * Saves the selected target industries for the user's active organization,
- * persisting to target_industries and linking via user_target_industries.
- */
-export async function saveTargetIndustries(
-  industries: string[],
-): Promise<string[]> {
-  const supabase = getSupabaseClient();
-  const user = await getAuthenticatedUser(supabase);
-  const cleanedIndustries = sanitizeIndustries(industries);
-
-  if (cleanedIndustries.length === 0) {
-    throw new Error("Please select at least one target industry.");
-  }
-
-  const orgId = await resolveUserOrgId(supabase, user.id);
-  const targetIndustryId = await upsertOrgTargetIndustries(
-    supabase,
-    orgId,
-    cleanedIndustries,
-  );
-
-  await linkUserTargetIndustry(supabase, user.id, targetIndustryId);
-
-  return cleanedIndustries;
-}
-
-/**
- * Retrieves the currently saved target industries for the user's active organization
- * through user_target_industries junction table.
- */
-export async function getTargetIndustries(): Promise<string[]> {
-  const supabase = getSupabaseClient();
-  const { data: sessionData, error: sessionErr } =
-    await supabase.auth.getSession();
-  if (sessionErr || !sessionData.session?.user) return [];
-  const user = sessionData.session.user;
-
-  let orgId: string | null = null;
-  try {
-    orgId = await resolveUserOrgId(supabase, user.id);
-  } catch {
-    return [];
-  }
-
-  // 1. Try user-linked target industries
-  const userIndustries = await fetchUserLinkedTargetIndustries(
-    supabase,
-    user.id,
-    orgId,
-  );
-  if (userIndustries.length > 0) {
-    return userIndustries;
-  }
-
-  // 2. Fallback to organization level target industries
-  return fetchOrgFallbackTargetIndustries(supabase, orgId);
+  return firstId || "";
 }

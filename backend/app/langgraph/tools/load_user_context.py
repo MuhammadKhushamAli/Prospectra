@@ -114,32 +114,32 @@ async def fetch_user_target_industries(
         if target_ids:
             target_industries_response = await (
                 supabase.table(TARGET_INDUSTRIES_TABLE)
-                .select("target_industries")
+                .select("*")
                 .in_("id", target_ids)
                 .eq("org_id", org_id)
                 .execute()
             )
             for row in (target_industries_response.data or []):
-                raw_items = row.get("target_industries")
-                if isinstance(raw_items, list):
-                    target_industries.extend([str(item).strip() for item in raw_items if str(item).strip()])
-                elif isinstance(raw_items, str) and raw_items.strip():
-                    target_industries.append(raw_items.strip())
+                val = row.get("name") or row.get("target_industries")
+                if isinstance(val, list):
+                    target_industries.extend([str(item).strip() for item in val if str(item).strip()])
+                elif isinstance(val, str) and val.strip():
+                    target_industries.append(val.strip())
 
         # 3. Fallback to organization level target_industries
         if not target_industries:
             org_target_res = await (
                 supabase.table(TARGET_INDUSTRIES_TABLE)
-                .select("target_industries")
+                .select("*")
                 .eq("org_id", org_id)
                 .execute()
             )
             for row in (org_target_res.data or []):
-                raw_items = row.get("target_industries")
-                if isinstance(raw_items, list):
-                    target_industries.extend([str(item).strip() for item in raw_items if str(item).strip()])
-                elif isinstance(raw_items, str) and raw_items.strip():
-                    target_industries.append(raw_items.strip())
+                val = row.get("name") or row.get("target_industries")
+                if isinstance(val, list):
+                    target_industries.extend([str(item).strip() for item in val if str(item).strip()])
+                elif isinstance(val, str) and val.strip():
+                    target_industries.append(val.strip())
 
     except Exception as e:
         print(f"Warning: Failed to load target industries for user {user_id}: {str(e)}")
