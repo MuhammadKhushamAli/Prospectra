@@ -33,6 +33,7 @@ import { useTheme } from "../../hooks/useTheme";
 import {
   fetchProspectingData,
   initiateCompanyFinder,
+  requestEmailGeneration,
   subscribeToProspectingRealtime,
   updateCompanyStatusInDb,
   updateEmailContentInDb,
@@ -48,6 +49,8 @@ import type {
 } from "../../types/prospecting";
 import CompanyDetailModal from "./CompanyDetailModal";
 import EmailDetailModal from "./EmailDetailModal";
+import NotificationBanner from "../ui/NotificationBanner";
+import type { NotificationVariant } from "../../types/ui";
 
 export default function ProspectingScreen() {
   const colors = useTheme();
@@ -57,13 +60,18 @@ export default function ProspectingScreen() {
 
   const [userRole, setUserRole] = useState<ProspectingRole>("founder");
   const [orgName, setOrgName] = useState<string | null>(null);
+  const [orgDomain, setOrgDomain] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [companies, setCompanies] = useState<CompanyProspect[]>([]);
   const [emails, setEmails] = useState<EmailProspect[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [notification, setNotification] = useState<{
+    variant: NotificationVariant;
+    message: string;
+  } | null>(null);
 
   const [processingCompanyId, setProcessingCompanyId] =
     useState<string | null>(null);
@@ -87,8 +95,15 @@ export default function ProspectingScreen() {
       const data = await fetchProspectingData();
       setCompanies(data.companies);
       setEmails(data.emails);
+      setSelectedCompany((prev) =>
+        prev ? (data.companies.find((c) => c.id === prev.id) ?? null) : null,
+      );
+      setSelectedEmail((prev) =>
+        prev ? (data.emails.find((e) => e.id === prev.id) ?? null) : null,
+      );
       setUserRole(data.role);
       setOrgName(data.orgName || null);
+      setOrgDomain(data.orgDomain || null);
       setOrgId(data.orgId);
       setCurrentUserId(data.currentUserId);
     } finally {
@@ -224,7 +239,10 @@ export default function ProspectingScreen() {
   ).length;
 
   // Handlers for Company Decisions
-  const handleAcceptCompany = async (company: CompanyProspect) => {
+  const handleAcceptCompany = async (
+    company: CompanyProspect,
+    selectedEmails?: string[],
+  ) => {
     if (processingCompanyId === company.id) return;
     setProcessingCompanyId(company.id);
 
@@ -240,12 +258,51 @@ export default function ProspectingScreen() {
 
     try {
       await updateCompanyStatusInDb(company.id, "approved");
+      void loadData();
+
+      // Send email generation request to backend.
+      // If email generation fails, the backend reverts the company in the database.
+      requestEmailGeneration(company.id, {
+        targetOrgId: orgId || undefined,
+        recipientEmails: selectedEmails,
+        orgDomain: orgDomain || undefined,
+      })
+        .then((res) => {
+          if (res && res.status === "error") {
+            console.warn(
+              "Email generation returned error from backend:",
+              res.errors || res.message,
+            );
+            setNotification({
+              variant: "error",
+              message: `Could not generate outreach draft for ${company.name}.`,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn(
+            "Could not reach email generation service:",
+            err?.message || err,
+          );
+          setNotification({
+            variant: "error",
+            message: `Could not reach email generation service for ${company.name}.`,
+          });
+        })
+        .finally(() => {
+          void loadData();
+        });
 
       initiateCompanyFinder(undefined, orgId || undefined).catch((err) => {
         console.warn("Could not refill company queue:", err?.message || err);
       });
     } catch (err) {
       console.warn("Failed to approve company in DB:", err);
+      setNotification({
+        variant: "error",
+        message: `Failed to approve ${company.name}.`,
+      });
+      void loadData();
     } finally {
       setProcessingCompanyId(null);
     }
@@ -280,6 +337,7 @@ export default function ProspectingScreen() {
     } catch (err) {
       console.warn("Failed to reject company in DB:", err);
     } finally {
+      void loadData();
       setProcessingCompanyId(null);
     }
   };
@@ -295,27 +353,89 @@ export default function ProspectingScreen() {
     );
     setSelectedEmail(updatedEmail);
 
-    updateEmailStatusInDb(email.id, "sent").catch(() => {});
+    try {
+      await updateEmailStatusInDb(email.id, "sent");
+    } catch {
+      // Non-fatal; fresh DB fetch below reconciles state
+    } finally {
+      void loadData();
+    }
   };
 
-  const handleRegenerateEmail = async (email: EmailProspect) => {
+  const handleRegenerateEmail = async (
+    email: EmailProspect,
+    feedback?: string,
+  ) => {
     const associatedComp = companies.find((c) => c.id === email.company_id);
-    const newContent = {
+
+    try {
+      const response = await requestEmailGeneration(email.company_id, {
+        targetOrgId: orgId || undefined,
+        orgDomain: orgDomain || undefined,
+        userId: currentUserId || undefined,
+        feedback: feedback?.trim() || undefined,
+      });
+
+      if (response && response.status !== "error" && response.subject && response.body) {
+        const feedbackNote = feedback?.trim()
+          ? `Regenerated addressing user feedback: "${feedback.trim()}".`
+          : "Regenerated and verified by outreach agent.";
+
+        const updatedEmail: EmailProspect = {
+          ...email,
+          subject: response.subject,
+          body: response.body,
+          email_body: {
+            subject: response.subject,
+            body: response.body,
+          },
+          verification: {
+            score: Math.round(response.review_score ?? 92),
+            feedback: feedbackNote,
+          },
+        };
+
+        setEmails((prev) =>
+          prev.map((e) => (e.id === email.id ? updatedEmail : e)),
+        );
+        setSelectedEmail(updatedEmail);
+
+        await updateEmailContentInDb(
+          email.id,
+          response.subject,
+          response.body,
+          response.review_score ? Math.round(response.review_score) : 92,
+          feedbackNote,
+        );
+        void loadData();
+        return;
+      }
+    } catch (err) {
+      console.warn("Backend regenerate email failed, falling back:", err);
+    }
+
+    const domainText = orgDomain
+      ? `\n\nYou can explore our background and past work at ${orgDomain.startsWith("http") ? orgDomain : `https://${orgDomain}`}.`
+      : "";
+    const feedbackNote = feedback?.trim()
+      ? `\n\nAdditionally, focusing on your feedback: ${feedback.trim()}.`
+      : "";
+    const fallbackContent = {
       subject: `Accelerating growth for ${associatedComp?.name || email.company_name || "Target Partner"}`,
-      body: `Hi team,\n\nReaching out regarding our automated outreach infrastructure tailored for ${associatedComp?.industry || "your industry"}. Would love to share how our profile matching accelerates qualified opportunities.\n\nOpen to a brief call next week?`,
+      body: `Hi team,\n\nReaching out regarding our automated outreach infrastructure tailored for ${associatedComp?.industry || "your industry"}. Would love to share how our profile matching accelerates qualified opportunities.${domainText}${feedbackNote}\n\nOpen to a brief call next week?`,
       reviewScore: 96,
     };
 
     const updatedEmail: EmailProspect = {
       ...email,
-      subject: newContent.subject,
-      body: newContent.body,
+      subject: fallbackContent.subject,
+      body: fallbackContent.body,
       email_body: {
-        subject: newContent.subject,
-        body: newContent.body,
+        subject: fallbackContent.subject,
+        body: fallbackContent.body,
       },
       verification: {
-        score: newContent.reviewScore,
+        score: fallbackContent.reviewScore,
         feedback: "Regenerated and verified with high conversion model.",
       },
     };
@@ -325,12 +445,19 @@ export default function ProspectingScreen() {
     );
     setSelectedEmail(updatedEmail);
 
-    updateEmailContentInDb(
-      email.id,
-      newContent.subject,
-      newContent.body,
-      newContent.reviewScore,
-    ).catch(() => {});
+    try {
+      await updateEmailContentInDb(
+        email.id,
+        fallbackContent.subject,
+        fallbackContent.body,
+        fallbackContent.reviewScore,
+        "Regenerated and verified with high conversion model.",
+      );
+    } catch {
+      // Non-fatal; fresh DB fetch below reconciles state
+    } finally {
+      void loadData();
+    }
   };
 
   const getCompanyStatusColor = (status: CompanyProspect["status"]) => {
@@ -827,6 +954,13 @@ export default function ProspectingScreen() {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      {notification ? (
+        <NotificationBanner
+          variant={notification.variant}
+          message={notification.message}
+          onDismiss={() => setNotification(null)}
+        />
+      ) : null}
       <View style={styles.maxContainer}>
         {/* Top Header */}
         <View

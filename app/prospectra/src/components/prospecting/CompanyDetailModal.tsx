@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -12,6 +12,7 @@ import * as Linking from "expo-linking";
 import * as Clipboard from "expo-clipboard";
 import {
   Activity,
+  AlertCircle,
   Briefcase,
   Building2,
   Check,
@@ -39,7 +40,58 @@ import {
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
-import type { CompanyDetailModalProps } from "../../types/prospecting";
+import type { CompanyDetailModalProps, CompanyProspect } from "../../types/prospecting";
+
+export interface SelectableCompanyEmail {
+  email: string;
+  name?: string;
+  role?: string;
+  isVerified?: boolean;
+}
+
+export function extractSelectableEmails(company: CompanyProspect | null): SelectableCompanyEmail[] {
+  if (!company) return [];
+
+  const list: SelectableCompanyEmail[] = [];
+  const seen = new Set<string>();
+
+  // 1. From company.emails
+  if (company.emails && Array.isArray(company.emails)) {
+    for (const em of company.emails) {
+      const clean = em.email?.trim()?.toLowerCase();
+      if (clean && !seen.has(clean)) {
+        seen.add(clean);
+        const nameParts = [em.first_name, em.last_name].filter(Boolean).join(" ").trim();
+        list.push({
+          email: em.email.trim(),
+          name: nameParts || undefined,
+          role: em.email_of || "Contact",
+          isVerified: em.is_verified,
+        });
+      }
+    }
+  }
+
+  // 2. Fallback to raw_signals contacts / emails if list is still empty
+  if (list.length === 0 && company.raw_signals) {
+    const rawEmails = company.raw_signals.emails || company.raw_signals.contacts || [];
+    if (Array.isArray(rawEmails)) {
+      for (const item of rawEmails) {
+        const rawStr = typeof item === "string" ? item : item?.email;
+        const clean = rawStr?.trim()?.toLowerCase();
+        if (clean && !seen.has(clean)) {
+          seen.add(clean);
+          list.push({
+            email: clean,
+            role: typeof item === "object" ? item?.role || item?.email_of : "Discovered Contact",
+          });
+        }
+      }
+    }
+  }
+
+  return list;
+}
 
 export default function CompanyDetailModal({
   company,
@@ -56,6 +108,45 @@ export default function CompanyDetailModal({
   const [isRejecting, setIsRejecting] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
+  const availableEmails = useMemo(
+    () => extractSelectableEmails(company),
+    [company?.id, company?.domain, company?.emails, company?.raw_signals],
+  );
+
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set());
+
+  // Automatically select all available emails whenever the company changes or modal opens
+  useEffect(() => {
+    if (availableEmails.length > 0) {
+      setSelectedEmails(new Set(availableEmails.map((e) => e.email)));
+    } else {
+      setSelectedEmails(new Set());
+    }
+  }, [availableEmails]);
+
+  const isAllSelected =
+    availableEmails.length > 0 && selectedEmails.size === availableEmails.length;
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedEmails(new Set());
+    } else {
+      setSelectedEmails(new Set(availableEmails.map((e) => e.email)));
+    }
+  };
+
+  const handleToggleEmail = (emailStr: string) => {
+    setSelectedEmails((prev) => {
+      const next = new Set(prev);
+      if (next.has(emailStr)) {
+        next.delete(emailStr);
+      } else {
+        next.add(emailStr);
+      }
+      return next;
+    });
+  };
+
   if (!company) return null;
 
   const isPending =
@@ -65,10 +156,10 @@ export default function CompanyDetailModal({
     company.status === "pending_send_approval";
 
   const handleAccept = async () => {
-    if (!onAcceptCompany || isAccepting || isRejecting) return;
+    if (!onAcceptCompany || isAccepting || isRejecting || selectedEmails.size === 0) return;
     try {
       setIsAccepting(true);
-      await onAcceptCompany(company);
+      await onAcceptCompany(company, Array.from(selectedEmails));
     } finally {
       setIsAccepting(false);
     }
@@ -415,18 +506,173 @@ export default function CompanyDetailModal({
                   </View>
                 </View>
 
+                {/* Email Recipients Selection */}
+                {onAcceptCompany ? (
+                  <View style={styles.recipientSection}>
+                    <View style={styles.recipientHeaderRow}>
+                      <View style={styles.recipientTitleWrap}>
+                        <Mail
+                          size={13}
+                          color={colors.primary}
+                          strokeWidth={1.75}
+                        />
+                        <Text
+                          style={[styles.recipientTitle, { color: colors.text }]}
+                        >
+                          Outreach Recipients
+                        </Text>
+                      </View>
+
+                      {/* Select All Toggle Button */}
+                      {availableEmails.length > 0 ? (
+                        <Pressable
+                          accessibilityRole="button"
+                          onPress={handleToggleSelectAll}
+                          hitSlop={6}
+                          style={styles.selectAllBtn}
+                        >
+                          <Text
+                            style={[
+                              styles.selectAllBtnText,
+                              { color: colors.primary },
+                            ]}
+                          >
+                            {isAllSelected ? "Deselect All" : "Select All"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+
+                    {/* Email Checkbox Options List */}
+                    {availableEmails.length > 0 ? (
+                      <View style={styles.recipientList}>
+                        {availableEmails.map((item) => {
+                          const isSelected = selectedEmails.has(item.email);
+                          return (
+                            <Pressable
+                              key={item.email}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: isSelected }}
+                              onPress={() => handleToggleEmail(item.email)}
+                              style={[
+                                styles.recipientOptionRow,
+                                {
+                                  backgroundColor: isSelected
+                                    ? colors.surface
+                                    : colors.surfaceElevated,
+                                  borderColor: isSelected
+                                    ? colors.primary
+                                    : colors.border,
+                                },
+                              ]}
+                            >
+                              <View
+                                style={[
+                                  styles.checkboxBox,
+                                  {
+                                    borderColor: isSelected
+                                      ? colors.primary
+                                      : colors.border,
+                                    backgroundColor: isSelected
+                                      ? colors.primary
+                                      : "transparent",
+                                  },
+                                ]}
+                              >
+                                {isSelected && (
+                                  <Check
+                                    size={11}
+                                    color={colors.onPrimary}
+                                    strokeWidth={2.5}
+                                  />
+                                )}
+                              </View>
+
+                              <View style={styles.recipientInfo}>
+                                <Text
+                                  style={[
+                                    styles.recipientEmailText,
+                                    {
+                                      color: isSelected
+                                        ? colors.text
+                                        : colors.textSecondary,
+                                    },
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {item.email}
+                                </Text>
+                                {item.name || item.role ? (
+                                  <Text
+                                    style={[
+                                      styles.recipientRoleText,
+                                      { color: colors.textMuted },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {item.name ? `${item.name} • ` : ""}
+                                    {item.role || "Contact"}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+
+                    {/* Validation Warning if 0 selected */}
+                    {selectedEmails.size === 0 ? (
+                      <View
+                        style={[
+                          styles.validationWarningRow,
+                          {
+                            backgroundColor: colors.errorSoft,
+                            borderColor: colors.errorBorder,
+                          },
+                        ]}
+                      >
+                        <AlertCircle
+                          size={13}
+                          color={colors.error}
+                          strokeWidth={1.75}
+                        />
+                        <Text
+                          style={[
+                            styles.validationWarningText,
+                            { color: colors.error },
+                          ]}
+                        >
+                          {availableEmails.length === 0
+                            ? "No verified outreach emails available for this company."
+                            : "At least one email is required to accept and send outreach."}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 <View style={styles.decisionButtonsRow}>
                   {onAcceptCompany ? (
                     <Pressable
                       accessibilityRole="button"
                       onPress={handleAccept}
-                      disabled={isAccepting || isRejecting}
+                      disabled={
+                        isAccepting ||
+                        isRejecting ||
+                        selectedEmails.size === 0
+                      }
                       style={({ pressed }) => [
                         styles.acceptBtn,
                         {
                           backgroundColor: colors.primary,
                           opacity:
-                            pressed || isAccepting || isRejecting ? 0.85 : 1,
+                            pressed ||
+                            isAccepting ||
+                            isRejecting ||
+                            selectedEmails.size === 0
+                              ? 0.6
+                              : 1,
                         },
                       ]}
                     >
@@ -1654,6 +1900,87 @@ const styles = StyleSheet.create({
   decisionCard: {
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm + 2,
+  },
+  recipientSection: {
+    gap: tokens.spacing.xs + 2,
+    marginTop: tokens.spacing.xs,
+    marginBottom: tokens.spacing.xs,
+  },
+  recipientHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacing.sm,
+  },
+  recipientTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+    flexShrink: 1,
+  },
+  recipientTitle: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
+  selectAllBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: tokens.spacing.xs,
+    flexShrink: 0,
+  },
+  selectAllBtnText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
+  recipientList: {
+    gap: tokens.spacing.xs,
+  },
+  recipientOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs + 2,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    gap: tokens.spacing.sm,
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recipientInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  recipientEmailText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+  },
+  recipientRoleText: {
+    fontFamily: "DMSans",
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  validationWarningRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+  },
+  validationWarningText: {
+    fontFamily: "DMSans",
+    fontSize: 11,
+    lineHeight: 15,
+    flex: 1,
   },
   decisionHeader: {
     flexDirection: "row",

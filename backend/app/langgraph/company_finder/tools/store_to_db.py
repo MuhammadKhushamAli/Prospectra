@@ -14,9 +14,12 @@ CONTACTS_TABLE = os.environ.get("SUPABASE_CONTACTS_TABLE_NAME", "contacts")
 
 async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
     """Node that persists accepted companies and their Reacher-verified emails to Supabase."""
-    accepted_companies = state.get("accepted_companies", [])
+    accepted_companies = [
+        c for c in state.get("accepted_companies", [])
+        if any(getattr(e, "is_verified", False) for e in (c.emails or []))
+    ]
     if not accepted_companies:
-        print("[PHASE 8: STORE TO DB] No accepted companies to store.")
+        print("[PHASE 8: STORE TO DB] No accepted companies with Reacher-verified emails to store.")
         return {}
 
     errors = list(state.get("errors", []))
@@ -90,8 +93,9 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
                 if dom not in domain_to_id:
                     domain_to_id[dom] = str(company.id)
 
-            # Insert verified contacts
+            # Insert verified contacts (deduplicated per company/email)
             contact_records: List[Dict[str, Any]] = []
+            seen_contact_keys: set[tuple[str, str]] = set()
             for company in accepted_companies:
                 comp_id = domain_to_id.get(company.domain.lower())
                 if not comp_id:
@@ -100,11 +104,15 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
                 for email_obj in company.emails:
                     if not email_obj.is_verified:
                         continue
+                    clean_email = email_obj.email.lower().strip()
+                    if not clean_email or (comp_id, clean_email) in seen_contact_keys:
+                        continue
+                    seen_contact_keys.add((comp_id, clean_email))
                     contact_records.append({
                         "company_id": comp_id,
                         "name": f"{email_obj.first_name or ''} {email_obj.last_name or ''}".strip() or None,
                         "role": email_obj.email_of or "Generic",
-                        "email": email_obj.email.lower().strip(),
+                        "email": clean_email,
                         "source": f"reacher:{email_obj.source}",
                         "is_reachable": email_obj.is_reachable or "safe",
                         "is_role_account": email_obj.is_role_account,
@@ -118,8 +126,13 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
                     for c in contact_records:
                         print(f"    - {c['email']} ({c['role']}) -> status: {c['is_reachable']}")
                 except Exception as ce:
-                    # Non-fatal if contacts table has constraint differences; record error
-                    print(f"  [DB CONTACTS WARNING] Storing contacts returned: {str(ce)}")
+                    # Fall back to individual inserts if idx_contacts_company_email conflicts
+                    print(f"  [DB CONTACTS WARNING] Batch upsert failed ({ce}); storing individually...")
+                    for rec_item in contact_records:
+                        try:
+                            await supabase.table(CONTACTS_TABLE).insert(rec_item).execute()
+                        except Exception:
+                            pass
 
     except Exception as e:
         error_msg = f"Failed to store companies to Supabase: {str(e)}"

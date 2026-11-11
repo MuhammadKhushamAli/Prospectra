@@ -61,6 +61,8 @@ export const DB_KEYS = {
   RECIPIENT_EMAIL: "recipient_email",
   SUBJECT: "subject",
   BODY: "body",
+  REVIEW_SCORE: "review_score",
+  REVIEW_FEEDBACK: "review_feedback",
   SENT_AT: "sent_at",
 } as const;
 

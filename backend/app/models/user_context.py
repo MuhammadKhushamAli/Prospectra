@@ -12,6 +12,9 @@ class UserContext:
     org_id: str
     full_name: str
     email: str
+    headline: Optional[str] = None
+    org_name: Optional[str] = None
+    org_domain: Optional[str] = None
     github_url: Optional[str] = None
     linkedin_url: Optional[str] = None
     skills: Optional[List[Skill]] = None

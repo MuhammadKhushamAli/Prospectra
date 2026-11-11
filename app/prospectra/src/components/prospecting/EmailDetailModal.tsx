@@ -1,11 +1,14 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -20,6 +23,7 @@ import {
   Send,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   X,
 } from "lucide-react-native";
 
@@ -42,6 +46,8 @@ export default function EmailDetailModal({
   const [isSending, setIsSending] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
 
   if (!email) return null;
 
@@ -63,15 +69,26 @@ export default function EmailDetailModal({
     }
   };
 
-  const handleRegenerate = async () => {
+  const handleRegenerate = () => {
+    if (!onRegenerateEmail || isSending || isRegenerating) return;
+    setShowFeedbackModal(true);
+  };
+
+  const submitRegeneration = async (customFeedback?: string) => {
     if (!onRegenerateEmail || isSending || isRegenerating) return;
     try {
       setIsRegenerating(true);
-      await onRegenerateEmail(email);
-      setActionMessage("AI draft regenerated with fresh pitch!");
+      setShowFeedbackModal(false);
+      await onRegenerateEmail(email, customFeedback);
+      setActionMessage(
+        customFeedback?.trim()
+          ? "AI draft regenerated with your feedback!"
+          : "AI draft regenerated with fresh pitch!",
+      );
       setTimeout(() => setActionMessage(null), 3000);
     } finally {
       setIsRegenerating(false);
+      setFeedbackText("");
     }
   };
 
@@ -684,6 +701,193 @@ export default function EmailDetailModal({
               </Pressable>
             ) : null}
           </ScrollView>
+
+          {/* Feedback Modal for Regenerating Email */}
+          <Modal
+            visible={showFeedbackModal}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowFeedbackModal(false)}
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : undefined}
+              style={styles.feedbackModalOverlay}
+            >
+              <Pressable
+                style={styles.feedbackModalBackdrop}
+                onPress={() => setShowFeedbackModal(false)}
+              />
+              <View
+                style={[
+                  styles.feedbackModalCard,
+                  {
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.feedbackModalHeader}>
+                  <View style={styles.feedbackHeaderTitleRow}>
+                    <View
+                      style={[
+                        styles.feedbackIconBadge,
+                        { backgroundColor: `${colors.primary}18` },
+                      ]}
+                    >
+                      <Sparkles
+                        size={16}
+                        color={colors.primary}
+                        strokeWidth={2}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.feedbackModalTitle,
+                        { color: colors.text },
+                      ]}
+                    >
+                      Regenerate with Feedback
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setShowFeedbackModal(false)}
+                    hitSlop={8}
+                  >
+                    <X size={18} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+
+                <Text
+                  style={[
+                    styles.feedbackModalSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Guide the AI to tailor this draft for{" "}
+                  {associatedCompany?.name || email.company_name || "the target company"}.
+                </Text>
+
+                {/* Quick Feedback Chips */}
+                <View style={styles.feedbackChipsRow}>
+                  {[
+                    "Make it shorter",
+                    "More technical",
+                    "Emphasize skills",
+                    "Add direct CTA",
+                  ].map((chip) => (
+                    <Pressable
+                      key={chip}
+                      onPress={() => {
+                        setFeedbackText((prev) =>
+                          prev ? `${prev}, ${chip.toLowerCase()}` : chip,
+                        );
+                      }}
+                      style={({ pressed }) => [
+                        styles.feedbackChip,
+                        {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                          opacity: pressed ? 0.75 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.feedbackChipText,
+                          { color: colors.textMuted },
+                        ]}
+                      >
+                        + {chip}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                {/* Feedback Input Field */}
+                <TextInput
+                  style={[
+                    styles.feedbackInput,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                      color: colors.text,
+                    },
+                  ]}
+                  multiline
+                  numberOfLines={3}
+                  placeholder="e.g. Focus on our high-scale API experience and keep it under 100 words..."
+                  placeholderTextColor={colors.textMuted}
+                  value={feedbackText}
+                  onChangeText={setFeedbackText}
+                  textAlignVertical="top"
+                />
+
+                {/* Action Buttons */}
+                <View style={styles.feedbackActionsRow}>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setShowFeedbackModal(false)}
+                    style={({ pressed }) => [
+                      styles.feedbackCancelBtn,
+                      {
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        opacity: pressed ? 0.75 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.feedbackCancelBtnText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      Cancel
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => submitRegeneration(feedbackText)}
+                    disabled={isRegenerating}
+                    style={({ pressed }) => [
+                      styles.feedbackSubmitBtn,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: pressed || isRegenerating ? 0.85 : 1,
+                      },
+                    ]}
+                  >
+                    {isRegenerating ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={colors.onPrimary}
+                      />
+                    ) : (
+                      <>
+                        <RefreshCw
+                          size={14}
+                          color={colors.onPrimary}
+                          strokeWidth={2}
+                        />
+                        <Text
+                          style={[
+                            styles.feedbackSubmitBtnText,
+                            { color: colors.onPrimary },
+                          ]}
+                        >
+                          {feedbackText.trim()
+                            ? "Regenerate with Feedback"
+                            : "Regenerate Draft"}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
         </View>
       </View>
     </Modal>
@@ -995,5 +1199,113 @@ const styles = StyleSheet.create({
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
     lineHeight: 16,
+  },
+  feedbackModalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: tokens.spacing.md,
+  },
+  feedbackModalBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  },
+  feedbackModalCard: {
+    width: "100%",
+    maxWidth: 480,
+    borderRadius: tokens.radius.lg,
+    borderWidth: 1,
+    padding: tokens.spacing.lg,
+    ...tokens.shadow.md,
+  },
+  feedbackModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: tokens.spacing.xs,
+  },
+  feedbackHeaderTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs + 2,
+  },
+  feedbackIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: tokens.radius.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  feedbackModalTitle: {
+    fontFamily: "DMSansBold",
+    fontSize: tokens.fontSize.md,
+    lineHeight: 22,
+  },
+  feedbackModalSubtitle: {
+    fontFamily: "DMSansRegular",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 16,
+    marginBottom: tokens.spacing.sm,
+  },
+  feedbackChipsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.spacing.xs,
+    marginBottom: tokens.spacing.sm,
+  },
+  feedbackChip: {
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs - 2,
+    borderRadius: tokens.radius.full,
+    borderWidth: 1,
+  },
+  feedbackChipText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  feedbackInput: {
+    borderWidth: 1,
+    borderRadius: tokens.radius.md,
+    padding: tokens.spacing.sm,
+    fontFamily: "DMSansRegular",
+    fontSize: tokens.fontSize.sm,
+    minHeight: 80,
+    marginBottom: tokens.spacing.md,
+  },
+  feedbackActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  feedbackCancelBtn: {
+    flex: 1,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  feedbackCancelBtnText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
+  },
+  feedbackSubmitBtn: {
+    flex: 2,
+    height: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: tokens.spacing.xs,
+    borderRadius: tokens.radius.md,
+    ...tokens.shadow.sm,
+  },
+  feedbackSubmitBtnText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs,
   },
 });

@@ -48,5 +48,8 @@ export interface EmailDetailModalProps {
   onViewCompany?: (company: CompanyProspect) => void;
   associatedCompany?: CompanyProspect | null;
   onSendEmail?: (email: EmailProspect) => void | Promise<void>;
-  onRegenerateEmail?: (email: EmailProspect) => void | Promise<void>;
+  onRegenerateEmail?: (
+    email: EmailProspect,
+    feedback?: string,
+  ) => void | Promise<void>;
 }

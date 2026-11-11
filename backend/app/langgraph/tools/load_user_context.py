@@ -13,6 +13,8 @@ USER_SKILLS_TABLE = os.environ.get("SUPABASE_USER_SKILLS_TABLE_NAME", "user_skil
 SKILLS_TABLE = os.environ.get("SUPABASE_SKILLS_TABLE_NAME", "skills")
 TARGET_INDUSTRIES_TABLE = os.environ.get("SUPABASE_TARGET_INDUSTRIES_TABLE_NAME", "target_industries")
 USER_TARGET_INDUSTRIES_TABLE = os.environ.get("SUPABASE_USER_TARGET_INDUSTRIES_TABLE_NAME", "user_target_industries")
+ORGANIZATIONS_TABLE = os.environ.get("SUPABASE_ORGANIZATIONS_TABLE_NAME", "organizations")
+DOMAIN_VERIFICATIONS_TABLE = os.environ.get("SUPABASE_DOMAIN_VERIFICATIONS_TABLE_NAME", "domain_verifications")
 
 
 def validate_state_ids(state: Dict[str, Any]) -> Tuple[str, str]:
@@ -35,7 +37,7 @@ async def fetch_user_profile(
     try:
         response = await (
             supabase.table(USER_PROFILES_TABLE)
-            .select("full_name, email, github_url, linkedin_url")
+            .select("full_name, headline, email, github_url, linkedin_url")
             .eq("user_id", user_id)
             .eq("org_id", org_id)
             .single()
@@ -147,12 +149,54 @@ async def fetch_user_target_industries(
     return target_industries
 
 
+async def fetch_organization_info(
+    supabase: Any,
+    org_id: str,
+    override_domain: Optional[str] = None,
+) -> Tuple[Optional[str], Optional[str]]:
+    """Fetch organization name and primary verified domain."""
+    org_name: Optional[str] = None
+    org_domain: Optional[str] = override_domain
+
+    try:
+        org_response = await (
+            supabase.table(ORGANIZATIONS_TABLE)
+            .select("name")
+            .eq("id", org_id)
+            .single()
+            .execute()
+        )
+        if org_response.data and org_response.data.get("name"):
+            org_name = org_response.data["name"]
+    except Exception as e:
+        print(f"Warning: Failed to fetch organization name for {org_id}: {str(e)}")
+
+    if not org_domain:
+        try:
+            domain_response = await (
+                supabase.table(DOMAIN_VERIFICATIONS_TABLE)
+                .select("domain")
+                .eq("org_id", org_id)
+                .limit(1)
+                .execute()
+            )
+            data = domain_response.data or []
+            if data and data[0].get("domain"):
+                org_domain = data[0]["domain"]
+        except Exception as e:
+            print(f"Warning: Failed to fetch organization domain for {org_id}: {str(e)}")
+
+    return org_name, org_domain
+
+
 def build_user_context(
     user_id: str,
     org_id: str,
     profile: Dict[str, Any],
     skills: List[Skill],
     target_industries: List[str],
+    org_name: Optional[str] = None,
+    org_domain: Optional[str] = None,
 ) -> UserContext:
     """Instantiate and return the UserContext dataclass."""
     return UserContext(
@@ -160,6 +204,9 @@ def build_user_context(
         org_id=org_id,
         full_name=profile.get("full_name", ""),
         email=profile.get("email", ""),
+        headline=profile.get("headline"),
+        org_name=org_name,
+        org_domain=org_domain,
         github_url=profile.get("github_url"),
         linkedin_url=profile.get("linkedin_url"),
         skills=skills,
@@ -167,8 +214,8 @@ def build_user_context(
     )
 
 
-async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
-    """Load the user's profile, skills, and target industries into a UserContext in graph state."""
+async def load_user_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    """Load the user's profile, skills, target industries, and org info into a UserContext in graph state."""
     user_id, org_id = validate_state_ids(state)
     supabase = await get_supabase_client()
 
@@ -183,15 +230,25 @@ async def load_user_context_node(state: GraphState) -> Dict[str, Any]:
         state_target_industries=state_target_industries,
     )
 
+    override_domain = state.get("org_domain")
+    org_name, org_domain = await fetch_organization_info(
+        supabase=supabase,
+        org_id=org_id,
+        override_domain=override_domain,
+    )
+
     user_context = build_user_context(
         user_id=user_id,
         org_id=org_id,
         profile=profile,
         skills=skills,
         target_industries=target_industries,
+        org_name=org_name,
+        org_domain=org_domain,
     )
 
     return {
         "user_context": user_context,
         "target_industries": target_industries,
+        "org_domain": org_domain,
     }

@@ -7,6 +7,8 @@ CREATE TABLE emails (
     sent_by_org_id UUID REFERENCES organizations(id),
     subject TEXT,
     body TEXT NOT NULL,
+    review_score DOUBLE PRECISION,
+    review_feedback TEXT,
     status email_status NOT NULL DEFAULT 'draft',
     sent_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()

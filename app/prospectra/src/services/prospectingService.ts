@@ -12,6 +12,9 @@ import type {
 export {
   initiateCompanyFinder,
 } from "./companyFinderService";
+export {
+  requestEmailGeneration,
+} from "./emailGenerationService";
 
 
 export function mapCompanyRow(r: any, contactsMap?: Map<string, any[]>): CompanyProspect {
@@ -106,12 +109,13 @@ export function mapEmailRow(
     company_name: r.companies?.name || company?.name || "Target Outreach",
     company_domain: r.companies?.domain || company?.domain || "",
     status: r.status,
-    verification: r.review_score
-      ? {
-          score: r.review_score,
-          feedback: "Agent verified outreach relevance",
-        }
-      : null,
+    verification:
+      r.review_score !== null && r.review_score !== undefined
+        ? {
+            score: Math.round(r.review_score),
+            feedback: r.review_feedback || "Agent verified outreach relevance",
+          }
+        : null,
     created_at: r.created_at,
   };
 }
@@ -237,6 +241,7 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
       currentUserId: null,
       orgId: null,
       orgName: "Workspace",
+      orgDomain: null,
     };
   }
 
@@ -256,7 +261,22 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
       currentUserId,
       orgId: null,
       orgName: orgName || "Primary Workspace",
+      orgDomain: null,
     };
+  }
+
+  // 2. Fetch primary verified domain for this organization
+  let orgDomain: string | null = null;
+  try {
+    const { data: domainRec } = await supabase
+      .from(TABLES.DOMAIN_VERIFICATIONS)
+      .select(DB_KEYS.DOMAIN)
+      .eq(DB_KEYS.ORG_ID, orgId)
+      .limit(1)
+      .maybeSingle();
+    orgDomain = domainRec?.domain ?? null;
+  } catch {
+    // Non-fatal if domain verification query fails
   }
 
   // 3. Query Supabase depending on role:
@@ -291,6 +311,7 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
       currentUserId,
       orgId,
       orgName: orgName || "Organization",
+      orgDomain,
     };
   }
 
@@ -356,6 +377,7 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
     currentUserId,
     orgId,
     orgName: orgName || "Organization",
+    orgDomain,
   };
 }
 
@@ -409,29 +431,56 @@ export async function updateEmailStatusInDb(
   }
 }
 
+function isMissingReviewColumnError(error: any): boolean {
+  const code = String(error?.code || "");
+  const msg = String(error?.message || "").toLowerCase();
+  return (
+    (code === "PGRST204" || msg.includes("schema cache")) &&
+    (msg.includes("review_score") || msg.includes("review_feedback"))
+  );
+}
+
 /**
- * Updates an email's subject, body, and review score in the database.
+ * Updates an email's subject, body, and review metadata in the database.
  */
 export async function updateEmailContentInDb(
   emailId: string,
   subject: string,
   body: string,
   reviewScore?: number,
+  reviewFeedback?: string,
 ): Promise<boolean> {
   try {
     const supabase = getSupabaseClient();
-    const payload: Record<string, any> = {
+    const basePayload: Record<string, any> = {
       [DB_KEYS.SUBJECT]: subject,
       [DB_KEYS.BODY]: body,
     };
+    const payload: Record<string, any> = { ...basePayload };
     if (reviewScore !== undefined) {
-      payload.review_score = reviewScore;
+      payload[DB_KEYS.REVIEW_SCORE] = reviewScore;
+    }
+    if (reviewFeedback !== undefined) {
+      payload[DB_KEYS.REVIEW_FEEDBACK] = reviewFeedback;
     }
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from(TABLES.EMAILS)
       .update(payload)
       .eq(DB_KEYS.ID, emailId);
+
+    // Retry without review_* columns if DB reset hasn't added them to the live schema cache yet
+    if (
+      error &&
+      isMissingReviewColumnError(error) &&
+      (DB_KEYS.REVIEW_SCORE in payload || DB_KEYS.REVIEW_FEEDBACK in payload)
+    ) {
+      const retryRes = await supabase
+        .from(TABLES.EMAILS)
+        .update(basePayload)
+        .eq(DB_KEYS.ID, emailId);
+      error = retryRes.error;
+    }
 
     if (error) {
       console.warn("Could not update email content in DB:", error.message);

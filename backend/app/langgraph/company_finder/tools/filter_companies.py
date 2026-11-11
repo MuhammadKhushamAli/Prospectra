@@ -49,6 +49,18 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
         if not company.domain:
             continue
 
+        verified_emails = [ce for ce in (company.emails or []) if ce.is_verified]
+        if not verified_emails:
+            rejected_companies.append(company)
+            rejection_feedbacks.append(
+                f"{company.name} ({company.domain}): No Reacher-verified reachable email"
+            )
+            print(
+                f"  [REJECTED] {company.name} ({company.domain}) -> "
+                f"0 Reacher-verified reachable emails."
+            )
+            continue
+
         auth_info = company_auth_scores.get(company.domain)
         if not auth_info:
             continue
@@ -91,7 +103,7 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
         company.raw_signals["services_offered"] = services_offered
         company.raw_signals["digital_features"] = digital_features
         company.raw_signals["target_industries"] = auth_info.target_industries
-        company.raw_signals["verified_email_count"] = len(company.emails)
+        company.raw_signals["verified_email_count"] = len(verified_emails)
 
         if auth_info.corrected_name:
             company.name = auth_info.corrected_name
@@ -101,7 +113,7 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
         if qualifies_as_buyer and auth_info.score >= MIN_AUTH_SCORE:
             accepted_companies.append(company)
             print(f"  [ACCEPTED] {company.name} ({company.domain})")
-            print(f"    Score: {auth_info.score}/100 | Reachable emails: {len(company.emails)}")
+            print(f"    Score: {auth_info.score}/100 | Reachable emails: {len(verified_emails)}")
             print(f"    Needed skills: {needed_skills}")
             print(f"    Needed services: {needed_services}")
             print(f"    Need signals: {auth_info.need_signals}")

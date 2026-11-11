@@ -8,9 +8,11 @@ CREATE OR REPLACE PROCEDURE public.add_email(
     p_contact_id UUID DEFAULT NULL,
     p_project_id UUID DEFAULT NULL,
     p_sent_by_user_id UUID DEFAULT NULL,
-    p_sender_identity_id UUID DEFAULT NULL,
+    p_sent_by_org_id UUID DEFAULT NULL,
     p_status email_status DEFAULT 'draft'::email_status,
     p_sent_at TIMESTAMPTZ DEFAULT NULL,
+    p_review_score DOUBLE PRECISION DEFAULT NULL,
+    p_review_feedback TEXT DEFAULT NULL,
     INOUT p_email_id UUID DEFAULT NULL
 )
 LANGUAGE plpgsql
@@ -25,7 +27,9 @@ BEGIN
         contact_id,
         project_id,
         sent_by_user_id,
-        sender_identity_id,
+        sent_by_org_id,
+        review_score,
+        review_feedback,
         status,
         sent_at
     )
@@ -36,7 +40,9 @@ BEGIN
         p_contact_id,
         p_project_id,
         p_sent_by_user_id,
-        p_sender_identity_id,
+        p_sent_by_org_id,
+        p_review_score,
+        p_review_feedback,
         COALESCE(p_status, 'draft'::email_status),
         p_sent_at
     )
@@ -67,9 +73,11 @@ BEGIN
             (v_item->>'contact_id')::UUID,
             (v_item->>'project_id')::UUID,
             (v_item->>'sent_by_user_id')::UUID,
-            (v_item->>'sender_identity_id')::UUID,
+            (v_item->>'sent_by_org_id')::UUID,
             COALESCE((v_item->>'status')::email_status, 'draft'::email_status),
             (v_item->>'sent_at')::TIMESTAMPTZ,
+            (v_item->>'review_score')::DOUBLE PRECISION,
+            v_item->>'review_feedback',
             v_email_id
         );
         p_inserted_count := p_inserted_count + 1;
@@ -77,9 +85,9 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, UUID) FROM PUBLIC;
-GRANT EXECUTE ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, UUID) TO authenticated;
-GRANT EXECUTE ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, UUID) TO service_role;
+REVOKE ALL ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, DOUBLE PRECISION, TEXT, UUID) FROM PUBLIC;
+GRANT EXECUTE ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, DOUBLE PRECISION, TEXT, UUID) TO authenticated;
+GRANT EXECUTE ON PROCEDURE public.add_email(UUID, TEXT, TEXT, UUID, UUID, UUID, UUID, email_status, TIMESTAMPTZ, DOUBLE PRECISION, TEXT, UUID) TO service_role;
 
 REVOKE ALL ON PROCEDURE public.add_emails(JSONB, INT) FROM PUBLIC;
 GRANT EXECUTE ON PROCEDURE public.add_emails(JSONB, INT) TO authenticated;

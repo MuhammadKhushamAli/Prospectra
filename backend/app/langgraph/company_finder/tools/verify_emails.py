@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Set
 import httpx
 
 from ..state.state import GraphState
+from .scrape_companies import GUESS_GENERIC_EMAILS, build_assumed_company_emails
 from app.models.company import Company, CompanyEmail
 from app.services.reacher import (
     ReacherResult,
@@ -19,19 +20,21 @@ REACHER_TIMEOUT = float(os.environ.get("REACHER_TIMEOUT_SECONDS", "45"))
 ACCEPT_RISKY = os.environ.get("REACHER_ACCEPT_RISKY", "false").lower() == "true"
 
 
-async def verify_single_company_emails(
+async def _verify_email_candidates(
     client: httpx.AsyncClient,
-    company: Company,
+    candidates: List[CompanyEmail],
     semaphore: asyncio.Semaphore,
     email_cache: Dict[str, ReacherResult],
-) -> Company:
-    """Verify all emails for a company using Reacher."""
-    verified_reachable_emails: List[CompanyEmail] = []
+    checked_emails: Set[str],
+) -> List[CompanyEmail]:
+    """Verify candidate emails with Reacher, returning only reachable ones."""
+    verified: List[CompanyEmail] = []
 
-    for ce in company.emails:
+    for ce in candidates:
         email_str = ce.email.strip().lower()
-        if not email_str:
+        if not email_str or email_str in checked_emails:
             continue
+        checked_emails.add(email_str)
 
         if email_str in email_cache:
             reacher_res = email_cache[email_str]
@@ -58,7 +61,7 @@ async def verify_single_company_emails(
         acceptable = is_acceptable_email(reacher_res, accept_risky=ACCEPT_RISKY)
         if acceptable:
             ce.is_verified = True
-            verified_reachable_emails.append(ce)
+            verified.append(ce)
             verdict_str = "ACCEPTED (Reachable)"
         else:
             verdict_str = "DISCARDED (Unreachable or rejected)"
@@ -66,6 +69,42 @@ async def verify_single_company_emails(
         print(f"    - Email: {email_str} [source: {ce.source}]")
         print(f"      Reacher result -> is_reachable: '{reacher_res.is_reachable}', catch_all: {reacher_res.is_catch_all}, role_account: {reacher_res.is_role_account}, disposable: {reacher_res.is_disposable}")
         print(f"      Verdict: {verdict_str}")
+
+    return verified
+
+
+async def verify_single_company_emails(
+    client: httpx.AsyncClient,
+    company: Company,
+    semaphore: asyncio.Semaphore,
+    email_cache: Dict[str, ReacherResult],
+) -> Company:
+    """Verify company emails via Reacher, falling back to generic domain assumptions if none reach."""
+    checked_emails: Set[str] = set()
+    verified_reachable_emails = await _verify_email_candidates(
+        client,
+        company.emails,
+        semaphore,
+        email_cache,
+        checked_emails,
+    )
+
+    # Fall back to standard generic domain assumptions (e.g. contact@domain) in backend
+    # if no scraped/existing email was verified as reachable, and test them with Reacher.
+    if not verified_reachable_emails and GUESS_GENERIC_EMAILS and company.domain:
+        assumed_emails = build_assumed_company_emails(
+            company.domain,
+            exclude_emails=checked_emails,
+        )
+        if assumed_emails:
+            print(f"  [EMAIL FALLBACK] {company.name} ({company.domain}) -> checking backend generic domain email assumption(s) via Reacher...")
+            verified_reachable_emails = await _verify_email_candidates(
+                client,
+                assumed_emails,
+                semaphore,
+                email_cache,
+                checked_emails,
+            )
 
     # Filter to only keep verified reachable emails
     company.emails = verified_reachable_emails

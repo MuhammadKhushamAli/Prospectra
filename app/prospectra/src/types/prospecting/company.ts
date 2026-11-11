@@ -66,6 +66,9 @@ export interface CompanyDetailModalProps {
   onClose: () => void;
   onViewEmail?: (email: EmailProspect) => void;
   associatedEmail?: EmailProspect | null;
-  onAcceptCompany?: (company: CompanyProspect) => void | Promise<void>;
+  onAcceptCompany?: (
+    company: CompanyProspect,
+    selectedEmails?: string[],
+  ) => void | Promise<void>;
   onRejectCompany?: (company: CompanyProspect) => void | Promise<void>;
 }

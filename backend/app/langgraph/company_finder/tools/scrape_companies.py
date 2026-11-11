@@ -2,12 +2,13 @@
 
 import asyncio
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Set
 
 import httpx
 
 from ..state.state import GraphState
 from app.models.company import Company, CompanyEmail
+from app.services.domain_filters import extract_registered_domain
 from app.services.web_scraper import scrape_company
 
 SCRAPER_CONCURRENCY = int(os.environ.get("SCRAPER_CONCURRENCY", "10"))
@@ -15,7 +16,7 @@ SCRAPER_TIMEOUT = float(os.environ.get("SCRAPER_TIMEOUT_SECONDS", "12"))
 MAX_PAGES = int(os.environ.get("SCRAPER_MAX_PAGES_PER_SITE", "5"))
 GUESS_GENERIC_EMAILS = os.environ.get("SCRAPER_GUESS_GENERIC_EMAILS", "true").lower() == "true"
 
-STANDARD_GUESS_PREFIXES = ["info", "contact", "hello", "sales"]
+STANDARD_GUESS_PREFIXES = ["contact", "info", "hello", "sales"]
 
 
 def determine_email_role(email: str) -> str:
@@ -29,6 +30,37 @@ def determine_email_role(email: str) -> str:
     if clean_local in ("support", "customerservice", "service"):
         return "Support"
     return "Person"
+
+
+def build_assumed_company_emails(
+    domain: str,
+    exclude_emails: Optional[Set[str]] = None,
+) -> List[CompanyEmail]:
+    """Build standard generic domain email assumptions (e.g. contact@domain) for verification."""
+    if not domain or not isinstance(domain, str):
+        return []
+
+    clean_domain = (
+        extract_registered_domain(domain)
+        or domain.strip().lower().removeprefix("www.")
+    ).strip()
+    if not clean_domain or "." not in clean_domain:
+        return []
+
+    excluded = {e.strip().lower() for e in (exclude_emails or set()) if e}
+    assumed: List[CompanyEmail] = []
+    for prefix in STANDARD_GUESS_PREFIXES:
+        guessed_addr = f"{prefix}@{clean_domain}"
+        if guessed_addr in excluded:
+            continue
+        assumed.append(
+            CompanyEmail(
+                email=guessed_addr,
+                email_of=determine_email_role(guessed_addr),
+                source="guessed",
+            )
+        )
+    return assumed
 
 
 async def scrape_single_company(
@@ -67,15 +99,7 @@ async def scrape_single_company(
 
         # If zero emails were scraped, optionally generate standard generic guesses to verify with Reacher
         if not email_objects and GUESS_GENERIC_EMAILS and profile.fetch_ok:
-            for prefix in STANDARD_GUESS_PREFIXES:
-                guessed_addr = f"{prefix}@{company.domain}"
-                email_objects.append(
-                    CompanyEmail(
-                        email=guessed_addr,
-                        email_of="Generic" if prefix != "sales" else "Sales",
-                        source="guessed",
-                    )
-                )
+            email_objects.extend(build_assumed_company_emails(company.domain))
 
         company.emails = email_objects
         return company
