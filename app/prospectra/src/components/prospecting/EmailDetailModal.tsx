@@ -70,12 +70,24 @@ export default function EmailDetailModal({
   };
 
   const handleRegenerate = () => {
-    if (!onRegenerateEmail || isSending || isRegenerating) return;
+    if (
+      !onRegenerateEmail ||
+      isSending ||
+      isRegenerating ||
+      email.status === "sent"
+    )
+      return;
     setShowFeedbackModal(true);
   };
 
   const submitRegeneration = async (customFeedback?: string) => {
-    if (!onRegenerateEmail || isSending || isRegenerating) return;
+    if (
+      !onRegenerateEmail ||
+      isSending ||
+      isRegenerating ||
+      email.status === "sent"
+    )
+      return;
     try {
       setIsRegenerating(true);
       setShowFeedbackModal(false);
@@ -617,7 +629,7 @@ export default function EmailDetailModal({
                   </Pressable>
                 ) : null}
 
-                {onRegenerateEmail ? (
+                {onRegenerateEmail && email.status !== "sent" ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={handleRegenerate}

@@ -4,6 +4,10 @@ import os
 from typing import Dict, Any, Optional, List
 
 from app.langgraph.email_writer.state.state import EmailGraphState
+from app.langgraph.email_writer.tools.get_existing_email_tool import (
+    ALREADY_SENT_ERROR,
+    is_email_sent,
+)
 from app.services.supabase import get_supabase_client
 
 
@@ -137,6 +141,7 @@ async def update_email_record(
                 supabase.table(table_name)
                 .update(update_payload)
                 .eq("id", email_id)
+                .neq("status", "sent")
                 .execute()
             )
         except Exception as e:
@@ -147,6 +152,7 @@ async def update_email_record(
                     supabase.table(table_name)
                     .update(_without_review_columns(update_payload))
                     .eq("id", email_id)
+                    .neq("status", "sent")
                     .execute()
                 )
             else:
@@ -170,6 +176,9 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
 
     if not generated_email or not target_company:
         return {}
+
+    if is_email_sent(state.get("existing_email")):
+        return {"errors": list(state.get("errors", [])) + [ALREADY_SENT_ERROR]}
 
     company_id = resolve_company_id(target_company)
     if not company_id:

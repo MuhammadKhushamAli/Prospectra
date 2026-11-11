@@ -6,6 +6,15 @@ from typing import Dict, Any, Optional
 from app.langgraph.email_writer.state.state import EmailGraphState
 from app.services.supabase import get_supabase_client
 
+ALREADY_SENT_ERROR = "Email has already been sent and cannot be regenerated."
+
+
+def is_email_sent(email_record: Optional[Dict[str, Any]]) -> bool:
+    """Return True when an email record's status is 'sent'."""
+    if not email_record or not isinstance(email_record, dict):
+        return False
+    return str(email_record.get("status") or "").strip().lower() == "sent"
+
 
 async def query_existing_company_email(
     supabase: Any,
@@ -89,15 +98,19 @@ async def get_existing_email_node(state: EmailGraphState) -> Dict[str, Any]:
     )
 
     if existing_record:
-        return {
-            "existing_email_id": existing_record.get("id"),
-            "existing_email": {
-                "id": existing_record.get("id"),
-                "subject": existing_record.get("subject"),
-                "body": existing_record.get("body"),
-                "status": existing_record.get("status"),
-            },
+        existing_payload = {
+            "id": existing_record.get("id"),
+            "subject": existing_record.get("subject"),
+            "body": existing_record.get("body"),
+            "status": existing_record.get("status"),
         }
+        result: Dict[str, Any] = {
+            "existing_email_id": existing_record.get("id"),
+            "existing_email": existing_payload,
+        }
+        if is_email_sent(existing_payload):
+            result["errors"] = list(state.get("errors", [])) + [ALREADY_SENT_ERROR]
+        return result
 
     return {"existing_email_id": None, "existing_email": None}
 

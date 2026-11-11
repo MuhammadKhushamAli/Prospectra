@@ -10,10 +10,18 @@ from app.langgraph.email_writer.tools.email_review_tool import email_review_node
 from app.langgraph.email_writer.tools.store_email import store_email_node
 from app.langgraph.email_writer.tools.check_email_logic import check_email_logic
 from app.langgraph.email_writer.tools.get_company_tool import get_company_node
-from app.langgraph.email_writer.tools.get_existing_email_tool import get_existing_email_node
+from app.langgraph.email_writer.tools.get_existing_email_tool import (
+    get_existing_email_node,
+    is_email_sent,
+)
 from app.langgraph.tools.load_user_context import load_user_context_node
 
 
+def route_after_existing_email(state: EmailGraphState) -> str:
+    """Stop workflow immediately when the company's existing email has already been sent."""
+    if is_email_sent(state.get("existing_email")):
+        return END
+    return "email_writer"
 
 
 workflow = StateGraph(EmailGraphState)
@@ -28,7 +36,14 @@ workflow.add_node("store_email", store_email_node)
 workflow.add_edge(START, "load_user_context")
 workflow.add_edge("load_user_context", "get_company")
 workflow.add_edge("get_company", "get_existing_email")
-workflow.add_edge("get_existing_email", "email_writer")
+workflow.add_conditional_edges(
+    "get_existing_email",
+    route_after_existing_email,
+    {
+        "email_writer": "email_writer",
+        END: END,
+    },
+)
 workflow.add_edge("email_writer", "email_review")
 
 workflow.add_conditional_edges(

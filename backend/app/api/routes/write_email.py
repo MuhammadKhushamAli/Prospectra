@@ -7,6 +7,10 @@ from pydantic import BaseModel
 
 from app.api.auth import authorize_org_member
 from app.langgraph.email_writer.graph import run_email_writer_workflow
+from app.langgraph.email_writer.tools.get_existing_email_tool import (
+    ALREADY_SENT_ERROR,
+    is_email_sent,
+)
 from app.services.supabase import get_supabase_client
 
 router = APIRouter()
@@ -50,6 +54,20 @@ async def revert_company_status_to_pending(
 
 def format_write_email_response(result: Dict[str, Any]) -> Dict[str, Any]:
     """Format the LangGraph workflow result into a standard API response."""
+    if is_email_sent(result.get("existing_email")):
+        existing = result.get("existing_email") or {}
+        errors = list(result.get("errors", []))
+        if ALREADY_SENT_ERROR not in errors:
+            errors.append(ALREADY_SENT_ERROR)
+        return {
+            "status": "error",
+            "email_id": result.get("existing_email_id") or existing.get("id"),
+            "subject": None,
+            "body": None,
+            "review_score": None,
+            "errors": errors,
+        }
+
     generated_email = result.get("generated_email")
     errors = result.get("errors", [])
     stored_id = result.get("stored_email_id")
@@ -88,13 +106,15 @@ async def write_email(body: WriteEmailRequest):
         response_data = format_write_email_response(result)
 
         # Fallback: if workflow failed to generate or store email, revert company status in DB back to pending
+        # (Never revert an approved company whose email has already been sent)
+        already_sent = is_email_sent(result.get("existing_email"))
         has_failure = (
             response_data.get("status") == "error"
             or not response_data.get("body")
             or not response_data.get("email_id")
             or bool(response_data.get("errors"))
         )
-        if has_failure:
+        if has_failure and not already_sent:
             await revert_company_status_to_pending(body.target_company_id, body.org_id)
 
         return response_data

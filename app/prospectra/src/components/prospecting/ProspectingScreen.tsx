@@ -366,6 +366,7 @@ export default function ProspectingScreen() {
     email: EmailProspect,
     feedback?: string,
   ) => {
+    if (email.status === "sent") return;
     const associatedComp = companies.find((c) => c.id === email.company_id);
 
     try {
@@ -375,6 +376,15 @@ export default function ProspectingScreen() {
         userId: currentUserId || undefined,
         feedback: feedback?.trim() || undefined,
       });
+
+      if (
+        response?.errors?.some((err) =>
+          err.toLowerCase().includes("already been sent"),
+        )
+      ) {
+        void loadData();
+        return;
+      }
 
       if (response && response.status !== "error" && response.subject && response.body) {
         const feedbackNote = feedback?.trim()
