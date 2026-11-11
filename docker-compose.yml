@@ -1,14 +1,80 @@
+name: prospectra
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   searxng:
-    image: searxng/searxng:latest
-    ports: ["8888:8080"]
-    volumes: ["./searxng:/etc/searxng"]
+    image: searxng/searxng:${SEARXNG_VERSION:-latest}
+    container_name: searxng
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging: *default-logging
     restart: unless-stopped
 
   reacher:
-    image: reacherhq/backend:latest
-    ports: ["8080:8080"]
+    image: reacherhq/backend:${REACHER_VERSION:-latest}
+    container_name: reacher
+    ports:
+      - "8080:8080"
     environment:
-      RCH_HELLO_NAME: qavren.dev
-      RCH_FROM_EMAIL: hello@qavren.dev
+      RCH_HELLO_NAME: ${RCH_HELLO_NAME:-qavren.dev}
+      RCH_FROM_EMAIL: ${RCH_FROM_EMAIL:-hello@qavren.dev}
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
     restart: unless-stopped
+
+  redis:
+    image: redis:${REDIS_VERSION:-7-alpine}
+    container_name: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+    logging: *default-logging
+    restart: unless-stopped
+
+networks:
+  backend:
+    driver: bridge

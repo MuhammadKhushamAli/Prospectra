@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import authorize_org_member
-from app.langgraph.email_writer.graph import run_email_writer_workflow
+from app.core.arq_config import enqueue_arq_job
 from app.langgraph.email_writer.tools.get_existing_email_tool import (
     ALREADY_SENT_ERROR,
     is_email_sent,
@@ -84,7 +84,7 @@ def format_write_email_response(result: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/write-email")
 async def write_email(body: WriteEmailRequest):
-    """Authenticate member, trigger autonomous email generation workflow, and return draft details."""
+    """Authenticate member, enqueue email generation job to ARQ worker (which updates DB directly)."""
     try:
         authenticated_user_id = await authorize_org_member(body.token, body.org_id)
     except Exception as auth_err:
@@ -94,38 +94,21 @@ async def write_email(body: WriteEmailRequest):
 
     effective_user_id = body.user_id or authenticated_user_id
 
-    try:
-        result = await run_email_writer_workflow(
-            user_id=effective_user_id,
-            org_id=body.org_id,
-            target_company_id=body.target_company_id,
-            recipient_emails=body.recipient_emails,
-            org_domain=body.org_domain,
-            user_feedback=body.feedback,
-        )
-        response_data = format_write_email_response(result)
-
-        # Fallback: if workflow failed to generate or store email, revert company status in DB back to pending
-        # (Never revert an approved company whose email has already been sent)
-        already_sent = is_email_sent(result.get("existing_email"))
-        has_failure = (
-            response_data.get("status") == "error"
-            or not response_data.get("body")
-            or not response_data.get("email_id")
-            or bool(response_data.get("errors"))
-        )
-        if has_failure and not already_sent:
+    job_id = await enqueue_arq_job(
+        "write_email_arq_task",
+        effective_user_id,
+        body.org_id,
+        body.target_company_id,
+        body.recipient_emails,
+        body.org_domain,
+        body.feedback,
+    )
+    if job_id is None:
+        if body.target_company_id:
             await revert_company_status_to_pending(body.target_company_id, body.org_id)
+        raise HTTPException(status_code=503, detail="Failed to enqueue email generation job in Redis")
 
-        return response_data
-    except Exception as workflow_err:
-        # Fallback: if unhandled exception occurred, revert company status in DB back to pending
-        await revert_company_status_to_pending(body.target_company_id, body.org_id)
-        return {
-            "status": "error",
-            "email_id": None,
-            "subject": None,
-            "body": None,
-            "review_score": None,
-            "errors": [f"Email workflow failed: {str(workflow_err)}"],
-        }
+    return {
+        "status": "queued",
+        "job_id": job_id,
+    }
