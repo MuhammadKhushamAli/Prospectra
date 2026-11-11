@@ -15,6 +15,11 @@ export {
 export {
   requestEmailGeneration,
 } from "./emailGenerationService";
+export {
+  ensureMobileNotificationPermissions,
+  sendMobileJobNotification,
+  subscribeToJobWebhooks,
+} from "./jobWebhookService";
 
 
 export function mapCompanyRow(r: any, contactsMap?: Map<string, any[]>): CompanyProspect {

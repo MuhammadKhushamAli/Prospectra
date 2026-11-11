@@ -1,11 +1,13 @@
 """Route: write an email using the email-writer LangGraph workflow."""
 
 import os
+import time
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import authorize_org_member
+from app.api.routes.jobs import broadcast_job_webhook
 from app.core.arq_config import enqueue_arq_job
 from app.langgraph.email_writer.tools.get_existing_email_tool import (
     ALREADY_SENT_ERROR,
@@ -84,7 +86,7 @@ def format_write_email_response(result: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/write-email")
 async def write_email(body: WriteEmailRequest):
-    """Authenticate member, enqueue email generation job to ARQ worker (which updates DB directly)."""
+    """Authenticate member, enqueue email generation job to ARQ worker, and send 'started' webhook."""
     try:
         authenticated_user_id = await authorize_org_member(body.token, body.org_id)
     except Exception as auth_err:
@@ -108,7 +110,26 @@ async def write_email(body: WriteEmailRequest):
             await revert_company_status_to_pending(body.target_company_id, body.org_id)
         raise HTTPException(status_code=503, detail="Failed to enqueue email generation job in Redis")
 
+    started_msg = (
+        "Regenerating outreach email draft with your feedback..."
+        if body.feedback
+        else "Outreach email generation started..."
+    )
+    await broadcast_job_webhook(
+        {
+            "job_id": job_id,
+            "task_name": "write_email_arq_task",
+            "org_id": body.org_id,
+            "company_id": body.target_company_id,
+            "status": "started",
+            "message": started_msg,
+            "error": None,
+            "timestamp": time.time(),
+        }
+    )
+
     return {
         "status": "queued",
         "job_id": job_id,
+        "message": started_msg,
     }

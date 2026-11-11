@@ -94,8 +94,8 @@ export default function EmailDetailModal({
       await onRegenerateEmail(email, customFeedback);
       setActionMessage(
         customFeedback?.trim()
-          ? "AI draft regenerated with your feedback!"
-          : "AI draft regenerated with fresh pitch!",
+          ? "Regeneration scheduled with your feedback..."
+          : "Regeneration scheduled...",
       );
       setTimeout(() => setActionMessage(null), 3000);
     } finally {

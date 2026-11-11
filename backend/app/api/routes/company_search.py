@@ -1,9 +1,11 @@
 import os
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.api.auth import authorize_org_member
+from app.api.routes.jobs import broadcast_job_webhook
 from app.core.arq_config import enqueue_arq_job
 from app.langgraph.company_finder.graph import run_prospect_workflow
 from app.services.supabase import get_supabase_client
@@ -47,10 +49,11 @@ async def _count_pending(org_id: str) -> int:
     return response.count or 0
 
 
-async def _search_until_threshold(user_id: str, org_id: str, threshold: int) -> None:
+async def _search_until_threshold(user_id: str, org_id: str, threshold: int) -> bool:
     """Run the company-finder graph until pending companies reach the threshold."""
     stalled = 0
-    pending = await _count_pending(org_id)
+    initial_pending = await _count_pending(org_id)
+    pending = initial_pending
 
     while pending < threshold and stalled < MAX_STALLED_RUNS:
         await run_prospect_workflow(user_id, org_id)
@@ -58,10 +61,12 @@ async def _search_until_threshold(user_id: str, org_id: str, threshold: int) -> 
         stalled = stalled + 1 if new_pending <= pending else 0
         pending = new_pending
 
+    return pending > initial_pending or pending >= threshold
+
 
 @router.post("/search-company")
 async def search_company(body: SearchCompanyRequest):
-    """Authenticate member and enqueue autonomous company finder job to ARQ."""
+    """Authenticate member, enqueue autonomous company finder job to ARQ, and send 'started' webhook."""
     user_id = await authorize_org_member(body.token, body.org_id)
 
     threshold = await _get_threshold(body.org_id)
@@ -78,9 +83,22 @@ async def search_company(body: SearchCompanyRequest):
     if job_id is None:
         raise HTTPException(status_code=503, detail="Failed to enqueue company search job in Redis")
 
+    await broadcast_job_webhook(
+        {
+            "job_id": job_id,
+            "task_name": "search_companies_arq_task",
+            "org_id": body.org_id,
+            "company_id": None,
+            "status": "started",
+            "message": "Company search started. Discovering target companies...",
+            "error": None,
+            "timestamp": time.time(),
+        }
+    )
+
     return {
         "status": "queued",
-        "message": "Company finder initiated successfully.",
+        "message": "Company search started. Discovering target companies...",
         "job_id": job_id,
         "pending": pending,
         "threshold": threshold,

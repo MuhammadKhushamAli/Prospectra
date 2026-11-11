@@ -21,7 +21,8 @@ export interface SearchCompanyRequest {
 }
 
 export interface SearchCompanyResponse {
-  status: "started" | "threshold_met" | "already_running" | "cooldown" | "error";
+  status: "queued" | "started" | "threshold_met" | "already_running" | "cooldown" | "error";
+  job_id?: string | null;
   pending: number;
   threshold: number;
   message?: string;
@@ -40,7 +41,8 @@ export interface WriteEmailRequest {
 }
 
 export interface WriteEmailResponse {
-  status: "success" | "partial" | "error";
+  status: "queued" | "success" | "partial" | "error";
+  job_id?: string | null;
   email_id?: string | null;
   subject?: string | null;
   body?: string | null;
@@ -49,3 +51,13 @@ export interface WriteEmailResponse {
   message?: string;
 }
 
+export interface JobWebhookEvent {
+  job_id: string;
+  task_name: "search_companies_arq_task" | "write_email_arq_task" | string;
+  org_id: string;
+  company_id?: string | null;
+  status: "started" | "done" | "failed" | "not_done";
+  message: string;
+  error?: string | null;
+  timestamp?: number;
+}

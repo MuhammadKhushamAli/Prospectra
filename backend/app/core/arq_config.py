@@ -1,4 +1,4 @@
-"""ARQ and Redis configuration, connection pool management, and job status tracking."""
+"""ARQ and Redis configuration, connection pool management, job status tracking, and webhook dispatch."""
 
 from __future__ import annotations
 
@@ -7,13 +7,17 @@ import os
 import time
 from typing import Any
 
+import httpx
 from arq.connections import ArqRedis, RedisSettings, create_pool
 from arq.jobs import Job, JobStatus
 
 ARQ_QUEUE_NAME: str = os.getenv("ARQ_QUEUE_NAME", "prospectra:arq:queue")
-ARQ_JOB_TIMEOUT_SECONDS: int = int(os.getenv("ARQ_JOB_TIMEOUT_SECONDS", "300"))
+ARQ_JOB_TIMEOUT_SECONDS: int = int(os.getenv("ARQ_JOB_TIMEOUT_SECONDS", "1800"))  # 30m timeout for multi-pass search
 ARQ_KEEP_RESULT_SECONDS: int = int(os.getenv("ARQ_KEEP_RESULT_SECONDS", "86400"))  # 24h TTL in Redis
 ARQ_MAX_JOBS: int = int(os.getenv("ARQ_MAX_JOBS", "10"))
+
+BACKEND_INTERNAL_URL: str = os.getenv("BACKEND_INTERNAL_URL", "http://127.0.0.1:8000")
+WEBHOOK_JOB_STATUS_PATH: str = "/api/v1/webhooks/job-status"
 
 JOB_STATUS_PREFIX = "prospectra:job:status:"
 
@@ -26,7 +30,7 @@ def get_redis_settings() -> RedisSettings:
     if redis_url:
         return RedisSettings.from_dsn(redis_url)
 
-    host = os.getenv("REDIS_HOST", "localhost")
+    host = os.getenv("REDIS_HOST", "127.0.0.1")
     port = int(os.getenv("REDIS_PORT", "6379"))
     database = int(os.getenv("REDIS_DB", "0"))
     password = os.getenv("REDIS_PASSWORD") or None
@@ -36,8 +40,8 @@ def get_redis_settings() -> RedisSettings:
         port=port,
         database=database,
         password=password,
-        conn_timeout=3,
-        conn_retries=1,
+        conn_timeout=10,
+        conn_retries=5,
         conn_retry_delay=1,
     )
 
@@ -106,6 +110,37 @@ async def update_job_status(
         )
     except Exception as exc:
         print(f"[ARQ] Failed to update job status for {job_id}: {exc}")
+
+
+async def trigger_job_webhook(
+    job_id: str,
+    task_name: str,
+    org_id: str,
+    status: str,
+    message: str,
+    company_id: str | None = None,
+    error: str | None = None,
+) -> None:
+    """
+    Send a job lifecycle webhook event ('started', 'done', 'failed') to the backend webhook
+    endpoint so the frontend is notified immediately without polling.
+    """
+    payload: dict[str, Any] = {
+        "job_id": job_id,
+        "task_name": task_name,
+        "org_id": org_id,
+        "company_id": company_id,
+        "status": status,
+        "message": message,
+        "error": error,
+        "timestamp": time.time(),
+    }
+    url = f"{BACKEND_INTERNAL_URL.rstrip('/')}{WEBHOOK_JOB_STATUS_PATH}"
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(url, json=payload)
+    except Exception as exc:
+        print(f"[ARQ WEBHOOK] Could not POST webhook to {url} for job {job_id}: {exc}")
 
 
 async def get_job_status(job_id: str) -> dict[str, Any]:

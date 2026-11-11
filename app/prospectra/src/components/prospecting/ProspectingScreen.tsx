@@ -24,6 +24,7 @@ import {
   Mail,
   RefreshCw,
   ShieldCheck,
+  Sparkles,
   User,
   XCircle,
 } from "lucide-react-native";
@@ -31,12 +32,14 @@ import {
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import {
+  ensureMobileNotificationPermissions,
   fetchProspectingData,
   initiateCompanyFinder,
   requestEmailGeneration,
+  sendMobileJobNotification,
+  subscribeToJobWebhooks,
   subscribeToProspectingRealtime,
   updateCompanyStatusInDb,
-  updateEmailContentInDb,
   updateEmailStatusInDb,
 } from "../../services/prospectingService";
 import type {
@@ -68,10 +71,35 @@ export default function ProspectingScreen() {
   const [emails, setEmails] = useState<EmailProspect[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isFindingCompanies, setIsFindingCompanies] = useState(false);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
     message: string;
   } | null>(null);
+  const notificationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const pushAppNotification = useCallback(
+    (variant: NotificationVariant, message: string) => {
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current);
+      }
+      setNotification({ variant, message });
+      notificationTimerRef.current = setTimeout(() => {
+        setNotification(null);
+      }, 4500);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimerRef.current) {
+        clearTimeout(notificationTimerRef.current);
+      }
+    };
+  }, []);
 
   const [processingCompanyId, setProcessingCompanyId] =
     useState<string | null>(null);
@@ -176,6 +204,95 @@ export default function ProspectingScreen() {
     };
   }, []);
 
+  // Subscribe to backend ARQ job webhook events and trigger native mobile OS notifications (not in-app banner, not Google services)
+  useEffect(() => {
+    void ensureMobileNotificationPermissions();
+  }, []);
+
+  useEffect(() => {
+    if (!orgId) return;
+
+    const unsubscribeWebhooks = subscribeToJobWebhooks(orgId, (event) => {
+      if (event.task_name === "search_companies_arq_task") {
+        if (event.status === "started") {
+          setIsFindingCompanies(true);
+          void sendMobileJobNotification(
+            "Company Search Started",
+            event.message ||
+              "Company search started. Discovering target companies...",
+          );
+        } else if (event.status === "done") {
+          setIsFindingCompanies(false);
+          void sendMobileJobNotification(
+            "Company Search Completed",
+            event.message ||
+              "Company search completed! Discovered companies are ready for review.",
+          );
+          void loadData();
+        } else if (event.status === "failed" || event.status === "not_done") {
+          setIsFindingCompanies(false);
+          void sendMobileJobNotification(
+            "Company Search Failed",
+            event.message ||
+              "Company search failed. Please retry fetching companies.",
+          );
+        }
+      } else if (event.task_name === "write_email_arq_task") {
+        if (event.status === "started") {
+          void sendMobileJobNotification(
+            "Email Generation Started",
+            event.message || "Outreach email generation started...",
+          );
+        } else if (event.status === "done") {
+          void sendMobileJobNotification(
+            "Email Draft Ready",
+            event.message ||
+              "Outreach email draft generated and ready for review!",
+          );
+          void loadData();
+        } else if (event.status === "failed" || event.status === "not_done") {
+          void sendMobileJobNotification(
+            "Email Generation Failed",
+            event.message || "Outreach email generation failed.",
+          );
+          void loadData();
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeWebhooks();
+    };
+  }, [orgId, loadData]);
+
+  const handleInitiateCompanyFinder = async () => {
+    if (isFindingCompanies) return;
+    setIsFindingCompanies(true);
+
+    try {
+      const res = await initiateCompanyFinder(undefined, orgId || undefined);
+      if (res.status === "threshold_met") {
+        setIsFindingCompanies(false);
+        void sendMobileJobNotification(
+          "Company Queue Full",
+          "Threshold met! Target pending prospects are already available.",
+        );
+      } else if (res.status === "error") {
+        setIsFindingCompanies(false);
+        void sendMobileJobNotification(
+          "Company Search Error",
+          res.message || "Company search failed to start. Please retry.",
+        );
+      }
+    } catch (err: any) {
+      setIsFindingCompanies(false);
+      void sendMobileJobNotification(
+        "Company Search Error",
+        err?.message || "Failed to initiate company search. Please retry.",
+      );
+    }
+  };
+
   const handleRefresh = () => {
     setIsRefreshing(true);
     loadData();
@@ -261,7 +378,7 @@ export default function ProspectingScreen() {
       void loadData();
 
       // Send email generation request to backend.
-      // If email generation fails, the backend reverts the company in the database.
+      // Notifications and DB updates are handled via the ARQ job webhook and Realtime.
       requestEmailGeneration(company.id, {
         targetOrgId: orgId || undefined,
         recipientEmails: selectedEmails,
@@ -269,39 +386,33 @@ export default function ProspectingScreen() {
       })
         .then((res) => {
           if (res && res.status === "error") {
-            console.warn(
-              "Email generation returned error from backend:",
-              res.errors || res.message,
+            pushAppNotification(
+              "error",
+              `Could not start outreach draft generation for ${company.name}.`,
             );
-            setNotification({
-              variant: "error",
-              message: `Could not generate outreach draft for ${company.name}.`,
-            });
+            void loadData();
           }
         })
-        .catch((err) => {
-          console.warn(
-            "Could not reach email generation service:",
-            err?.message || err,
+        .catch(() => {
+          pushAppNotification(
+            "error",
+            `Could not reach email generation service for ${company.name}.`,
           );
-          setNotification({
-            variant: "error",
-            message: `Could not reach email generation service for ${company.name}.`,
-          });
-        })
-        .finally(() => {
           void loadData();
         });
 
-      initiateCompanyFinder(undefined, orgId || undefined).catch((err) => {
-        console.warn("Could not refill company queue:", err?.message || err);
-      });
+      initiateCompanyFinder(undefined, orgId || undefined)
+        .then((res) => {
+          if (res.status === "queued" || res.status === "started") {
+            setIsFindingCompanies(true);
+          }
+        })
+        .catch((err) => {
+          console.warn("Could not refill company queue:", err?.message || err);
+        });
     } catch (err) {
       console.warn("Failed to approve company in DB:", err);
-      setNotification({
-        variant: "error",
-        message: `Failed to approve ${company.name}.`,
-      });
+      pushAppNotification("error", `Failed to approve ${company.name}.`);
       void loadData();
     } finally {
       setProcessingCompanyId(null);
@@ -331,9 +442,15 @@ export default function ProspectingScreen() {
     try {
       await updateCompanyStatusInDb(company.id, "rejected");
 
-      initiateCompanyFinder(undefined, orgId || undefined).catch((err) => {
-        console.warn("Could not refill company queue:", err?.message || err);
-      });
+      initiateCompanyFinder(undefined, orgId || undefined)
+        .then((res) => {
+          if (res.status === "queued" || res.status === "started") {
+            setIsFindingCompanies(true);
+          }
+        })
+        .catch((err) => {
+          console.warn("Could not refill company queue:", err?.message || err);
+        });
     } catch (err) {
       console.warn("Failed to reject company in DB:", err);
     } finally {
@@ -367,7 +484,6 @@ export default function ProspectingScreen() {
     feedback?: string,
   ) => {
     if (email.status === "sent") return;
-    const associatedComp = companies.find((c) => c.id === email.company_id);
 
     try {
       const response = await requestEmailGeneration(email.company_id, {
@@ -377,96 +493,20 @@ export default function ProspectingScreen() {
         feedback: feedback?.trim() || undefined,
       });
 
-      if (
-        response?.errors?.some((err) =>
-          err.toLowerCase().includes("already been sent"),
-        )
-      ) {
-        void loadData();
-        return;
-      }
-
-      if (response && response.status !== "error" && response.subject && response.body) {
-        const feedbackNote = feedback?.trim()
-          ? `Regenerated addressing user feedback: "${feedback.trim()}".`
-          : "Regenerated and verified by outreach agent.";
-
-        const updatedEmail: EmailProspect = {
-          ...email,
-          subject: response.subject,
-          body: response.body,
-          email_body: {
-            subject: response.subject,
-            body: response.body,
-          },
-          verification: {
-            score: Math.round(response.review_score ?? 92),
-            feedback: feedbackNote,
-          },
-        };
-
-        setEmails((prev) =>
-          prev.map((e) => (e.id === email.id ? updatedEmail : e)),
-        );
-        setSelectedEmail(updatedEmail);
-
-        await updateEmailContentInDb(
-          email.id,
-          response.subject,
-          response.body,
-          response.review_score ? Math.round(response.review_score) : 92,
-          feedbackNote,
+      if (response && response.status === "error") {
+        pushAppNotification(
+          "error",
+          response.errors?.[0] ||
+            response.message ||
+            "Could not regenerate outreach email.",
         );
         void loadData();
-        return;
       }
-    } catch (err) {
-      console.warn("Backend regenerate email failed, falling back:", err);
-    }
-
-    const domainText = orgDomain
-      ? `\n\nYou can explore our background and past work at ${orgDomain.startsWith("http") ? orgDomain : `https://${orgDomain}`}.`
-      : "";
-    const feedbackNote = feedback?.trim()
-      ? `\n\nAdditionally, focusing on your feedback: ${feedback.trim()}.`
-      : "";
-    const fallbackContent = {
-      subject: `Accelerating growth for ${associatedComp?.name || email.company_name || "Target Partner"}`,
-      body: `Hi team,\n\nReaching out regarding our automated outreach infrastructure tailored for ${associatedComp?.industry || "your industry"}. Would love to share how our profile matching accelerates qualified opportunities.${domainText}${feedbackNote}\n\nOpen to a brief call next week?`,
-      reviewScore: 96,
-    };
-
-    const updatedEmail: EmailProspect = {
-      ...email,
-      subject: fallbackContent.subject,
-      body: fallbackContent.body,
-      email_body: {
-        subject: fallbackContent.subject,
-        body: fallbackContent.body,
-      },
-      verification: {
-        score: fallbackContent.reviewScore,
-        feedback: "Regenerated and verified with high conversion model.",
-      },
-    };
-
-    setEmails((prev) =>
-      prev.map((e) => (e.id === email.id ? updatedEmail : e)),
-    );
-    setSelectedEmail(updatedEmail);
-
-    try {
-      await updateEmailContentInDb(
-        email.id,
-        fallbackContent.subject,
-        fallbackContent.body,
-        fallbackContent.reviewScore,
-        "Regenerated and verified with high conversion model.",
+    } catch (err: any) {
+      pushAppNotification(
+        "error",
+        err?.message || "Failed to reach email regeneration service.",
       );
-    } catch {
-      // Non-fatal; fresh DB fetch below reconciles state
-    } finally {
-      void loadData();
     }
   };
 
@@ -1603,11 +1643,60 @@ export default function ProspectingScreen() {
                   ]}
                 >
                   {companies.length === 0
-                    ? "Your prospect pipeline is currently empty. Discovered target companies will appear here automatically."
+                    ? "Your prospect pipeline is currently empty. Initiate company search to discover and verify target companies."
                     : userRole === "founder"
                       ? `No organization companies match the selected "${companyFilter}" filter.`
                       : `No assigned companies match the "${companyFilter}" filter.`}
                 </Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Initiate Company Finder"
+                  disabled={isFindingCompanies}
+                  onPress={handleInitiateCompanyFinder}
+                  style={({ pressed }) => [
+                    styles.initiateFinderBtn,
+                    {
+                      backgroundColor: isFindingCompanies
+                        ? colors.surfaceElevated
+                        : colors.primary,
+                      borderColor: isFindingCompanies
+                        ? colors.border
+                        : colors.primary,
+                      opacity: isFindingCompanies ? 0.65 : pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  {isFindingCompanies ? (
+                    <>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text
+                        style={[
+                          styles.initiateFinderBtnText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Searching for Prospects...
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles
+                        size={15}
+                        color={colors.onPrimary}
+                        strokeWidth={1.75}
+                      />
+                      <Text
+                        style={[
+                          styles.initiateFinderBtnText,
+                          { color: colors.onPrimary },
+                        ]}
+                      >
+                        Fetch Companies
+                      </Text>
+                    </>
+                  )}
+                </Pressable>
               </View>
             }
           />
@@ -1911,6 +2000,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  initiateFinderBtn: {
+    marginTop: tokens.spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: tokens.spacing.xs + 2,
+    paddingHorizontal: tokens.spacing.md + 4,
+    paddingVertical: tokens.spacing.sm + 2,
+    borderRadius: tokens.radius.md,
+    borderWidth: 1,
+  },
+  initiateFinderBtnText: {
+    fontFamily: "DMSansSemiBold",
+    fontSize: tokens.fontSize.sm,
+    lineHeight: 20,
   },
   headerTitleWrap: {
     flex: 1,

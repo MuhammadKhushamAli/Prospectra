@@ -15,7 +15,7 @@ from app.services.reacher import (
     is_acceptable_email,
 )
 
-REACHER_CONCURRENCY = int(os.environ.get("REACHER_CONCURRENCY", "4"))
+REACHER_CONCURRENCY = int(os.environ.get("REACHER_CONCURRENCY", "8"))
 REACHER_TIMEOUT = float(os.environ.get("REACHER_TIMEOUT_SECONDS", "45"))
 ACCEPT_RISKY = os.environ.get("REACHER_ACCEPT_RISKY", "false").lower() == "true"
 
