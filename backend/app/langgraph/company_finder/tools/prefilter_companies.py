@@ -3,9 +3,12 @@
 import re
 from typing import Any, Dict, List
 
+from app.core.logging_config import get_node_logger
 from ..state.state import GraphState
 from app.models.company import Company
 from app.services.domain_filters import count_agency_keyword_hits
+
+logger = get_node_logger("prefilter_companies")
 
 PARKED_DOMAIN_PATTERNS = [
     re.compile(r"domain (for sale|is parked|expired)", re.IGNORECASE),
@@ -33,9 +36,7 @@ async def prefilter_companies_node(state: GraphState) -> Dict[str, Any]:
     agency_dropped = 0
     parked_dropped = 0
 
-    print(f"\n========================================================")
-    print(f"[PHASE 4: PRE-FILTER] Evaluating {len(scraped_companies)} scraped companies...")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 4: PRE-FILTER] Evaluating {len(scraped_companies)} scraped companies...")
 
     for company in scraped_companies:
         scraped = company.scraped
@@ -51,20 +52,20 @@ async def prefilter_companies_node(state: GraphState) -> Dict[str, Any]:
         if agency_hits >= 2:
             dropped_count += 1
             agency_dropped += 1
-            print(f"  [PREFILTER DROPPED] {company.name} ({company.domain}) -> Dev-shop/Agency keywords detected ({agency_hits} hits)")
+            logger.error(f"  [PREFILTER DROPPED] {company.name} ({company.domain}) -> Dev-shop/Agency keywords detected ({agency_hits} hits)")
             continue
 
         # 2. Parked or placeholder domain check
         if is_parked_or_empty(combined_text, len(company.emails)):
             dropped_count += 1
             parked_dropped += 1
-            print(f"  [PREFILTER DROPPED] {company.name} ({company.domain}) -> Parked, under construction, or empty placeholder")
+            logger.error(f"  [PREFILTER DROPPED] {company.name} ({company.domain}) -> Parked, under construction, or empty placeholder")
             continue
 
         survivors.append(company)
-        print(f"  [PREFILTER PASSED] {company.name} ({company.domain})")
+        logger.info(f"  [PREFILTER PASSED] {company.name} ({company.domain})")
 
-    print(f"[PHASE 4: PRE-FILTER] Summary: {len(survivors)} passed, {dropped_count} dropped (agencies: {agency_dropped}, parked: {parked_dropped}).")
+    logger.header(f"[PHASE 4: PRE-FILTER] Summary: {len(survivors)} passed, {dropped_count} dropped (agencies: {agency_dropped}, parked: {parked_dropped}).")
 
     return {
         "scraped_companies": survivors,

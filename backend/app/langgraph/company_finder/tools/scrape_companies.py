@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import httpx
 
+from app.core.logging_config import get_node_logger
 from ..state.state import GraphState
 from app.models.company import Company, CompanyEmail
 from app.services.domain_filters import extract_registered_domain
@@ -15,6 +16,7 @@ SCRAPER_CONCURRENCY = int(os.environ.get("SCRAPER_CONCURRENCY", "10"))
 SCRAPER_TIMEOUT = float(os.environ.get("SCRAPER_TIMEOUT_SECONDS", "12"))
 MAX_PAGES = int(os.environ.get("SCRAPER_MAX_PAGES_PER_SITE", "5"))
 GUESS_GENERIC_EMAILS = os.environ.get("SCRAPER_GUESS_GENERIC_EMAILS", "true").lower() == "true"
+logger = get_node_logger("scrape_companies")
 
 STANDARD_GUESS_PREFIXES = ["contact", "info", "hello", "sales"]
 
@@ -114,9 +116,7 @@ async def scrape_companies_node(state: GraphState) -> Dict[str, Any]:
             "pipeline_stats": {"scraped_success": 0, "scrape_failed": 0},
         }
 
-    print(f"\n========================================================")
-    print(f"[PHASE 3: WEB SCRAPER] Crawling {len(searched_companies)} candidate websites (concurrency: {SCRAPER_CONCURRENCY})...")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 3: WEB SCRAPER] Crawling {len(searched_companies)} candidate websites (concurrency: {SCRAPER_CONCURRENCY})...")
 
     semaphore = asyncio.Semaphore(SCRAPER_CONCURRENCY)
     scraped_results: List[Company] = []
@@ -134,30 +134,30 @@ async def scrape_companies_node(state: GraphState) -> Dict[str, Any]:
                 if res.scraped and res.scraped.fetch_ok:
                     scraped_results.append(res)
                     emails_preview = [f"{e.email} ({e.source})" for e in res.emails]
-                    print(f"  [SCRAPED OK] {res.name} ({res.domain})")
-                    print(f"    Pages visited: {res.scraped.pages_visited}")
-                    print(f"    Title: '{res.scraped.title}'")
+                    logger.success(f"  [SCRAPED OK] {res.name} ({res.domain})")
+                    logger.item(f"Pages visited: {res.scraped.pages_visited}")
+                    logger.item(f"Title: '{res.scraped.title}'")
                     if res.scraped.meta_description:
-                        print(f"    Meta Description: '{res.scraped.meta_description[:150]}...'")
-                    print(f"    About text sample ({len(res.scraped.about_text)} chars total):")
-                    print(f"      \"{res.scraped.about_text[:250]}...\"")
-                    print(f"    Emails found ({len(res.emails)}): {', '.join(emails_preview) if emails_preview else 'None'}")
+                        logger.item(f"Meta Description: '{res.scraped.meta_description[:150]}...'")
+                    logger.item(f"About text sample ({len(res.scraped.about_text)} chars total):")
+                    logger.item(f"  \"{res.scraped.about_text[:250]}...\"")
+                    logger.item(f"Emails found ({len(res.emails)}): {', '.join(emails_preview) if emails_preview else 'None'}")
                     if res.scraped.phones:
-                        print(f"    Phones: {res.scraped.phones}")
+                        logger.item(f"Phones: {res.scraped.phones}")
                     if res.scraped.services_offered:
-                        print(f"    Services Offered: {res.scraped.services_offered}")
+                        logger.item(f"Services Offered: {res.scraped.services_offered}")
                     if res.scraped.digital_features:
-                        print(f"    Digital Features/Gaps: {res.scraped.digital_features}")
+                        logger.item(f"Digital Features/Gaps: {res.scraped.digital_features}")
                     if res.scraped.social_links:
-                        print(f"    Socials: {res.scraped.social_links}")
+                        logger.item(f"Socials: {res.scraped.social_links}")
                 else:
                     scrape_failed += 1
-                    print(f"  [SCRAPE FAILED] {res.name} ({res.domain}) - site unreachable or timed out")
+                    logger.error(f"  [SCRAPE FAILED] {res.name} ({res.domain}) - site unreachable or timed out")
             else:
                 scrape_failed += 1
-                print(f"  [SCRAPE ERROR] Exception during scrape: {str(res)}")
+                logger.error(f"  [SCRAPE ERROR] Exception during scrape: {str(res)}")
 
-    print(f"[PHASE 3: WEB SCRAPER] Summary: {len(scraped_results)} successfully scraped, {scrape_failed} failed.")
+    logger.header(f"[PHASE 3: WEB SCRAPER] Summary: {len(scraped_results)} successfully scraped, {scrape_failed} failed.")
 
     return {
         "scraped_companies": scraped_results,

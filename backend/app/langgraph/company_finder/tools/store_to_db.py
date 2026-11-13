@@ -4,12 +4,14 @@ from datetime import datetime, timezone
 import os
 from typing import Any, Dict, List
 
+from app.core.logging_config import get_node_logger
 from app.models.company import COMPANY_DB_COLUMNS
 from app.services.supabase import get_supabase_client
 from ..state.state import GraphState
 
 COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
 CONTACTS_TABLE = os.environ.get("SUPABASE_CONTACTS_TABLE_NAME", "contacts")
+logger = get_node_logger("store_to_db")
 
 
 async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
@@ -19,14 +21,12 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
         if any(getattr(e, "is_verified", False) for e in (c.emails or []))
     ]
     if not accepted_companies:
-        print("[PHASE 8: STORE TO DB] No accepted companies with Reacher-verified emails to store.")
+        logger.info("[PHASE 8: STORE TO DB] No accepted companies with Reacher-verified emails to store.")
         return {}
 
     errors = list(state.get("errors", []))
 
-    print(f"\n========================================================")
-    print(f"[PHASE 8: STORE TO DB] Persisting {len(accepted_companies)} accepted companies to Supabase...")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 8: STORE TO DB] Persisting {len(accepted_companies)} accepted companies to Supabase...")
 
     try:
         supabase = await get_supabase_client()
@@ -62,15 +62,15 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
             company_records.append(clean_rec)
 
         if company_records:
-            print(f"  [DB COMPANIES] Preparing to store {len(company_records)} company record(s):")
+            logger.info(f"  [DB COMPANIES] Preparing to store {len(company_records)} company record(s):")
             for idx, r in enumerate(company_records, 1):
-                print(f"    [{idx}] {r['name']} ({r['domain']}) | status: {r['status']} | industry: '{r['industry']}' | score: {r.get('auth_score')}")
-                print(f"        Needed skills: {r.get('needed_skills')}")
-                print(f"        Needed services: {r.get('needed_services')}")
-                print(f"        Need hypothesis: {r.get('need_hypothesis')}")
-                print(f"        Services offered: {r.get('services_offered')}")
-                print(f"        Digital features: {r.get('digital_features')}")
-                print(f"        Raw signals keys: {list(r.get('raw_signals', {}).keys())}")
+                logger.item(f"[{idx}] {r['name']} ({r['domain']}) | status: {r['status']} | industry: '{r['industry']}' | score: {r.get('auth_score')}")
+                logger.item(f"    Needed skills: {r.get('needed_skills')}")
+                logger.item(f"    Needed services: {r.get('needed_services')}")
+                logger.item(f"    Need hypothesis: {r.get('need_hypothesis')}")
+                logger.item(f"    Services offered: {r.get('services_offered')}")
+                logger.item(f"    Digital features: {r.get('digital_features')}")
+                logger.item(f"    Raw signals keys: {list(r.get('raw_signals', {}).keys())}")
 
             # Upsert companies on (org_id, domain)
             upsert_res = (
@@ -79,7 +79,7 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
                 .execute()
             )
             saved_rows = upsert_res.data or []
-            print(f"  [DB COMPANIES SUCCESS] Upserted {len(company_records)} record(s) into table '{COMPANIES_TABLE}'.")
+            logger.success(f"  [DB COMPANIES SUCCESS] Upserted {len(company_records)} record(s) into table '{COMPANIES_TABLE}'.")
 
             # Map domain -> company_id from Supabase
             domain_to_id: Dict[str, str] = {}
@@ -122,12 +122,12 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
             if contact_records:
                 try:
                     await supabase.table(CONTACTS_TABLE).upsert(contact_records).execute()
-                    print(f"  [DB CONTACTS] Upserted {len(contact_records)} verified contact emails into '{CONTACTS_TABLE}'.")
+                    logger.success(f"  [DB CONTACTS SUCCESS] Upserted {len(contact_records)} verified contact emails into '{CONTACTS_TABLE}'.")
                     for c in contact_records:
-                        print(f"    - {c['email']} ({c['role']}) -> status: {c['is_reachable']}")
+                        logger.item(f"- {c['email']} ({c['role']}) -> status: {c['is_reachable']}")
                 except Exception as ce:
                     # Fall back to individual inserts if idx_contacts_company_email conflicts
-                    print(f"  [DB CONTACTS WARNING] Batch upsert failed ({ce}); storing individually...")
+                    logger.warning(f"  [DB CONTACTS WARNING] Batch upsert failed ({ce}); storing individually...")
                     for rec_item in contact_records:
                         try:
                             await supabase.table(CONTACTS_TABLE).insert(rec_item).execute()
@@ -136,10 +136,10 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
 
     except Exception as e:
         error_msg = f"Failed to store companies to Supabase: {str(e)}"
-        print(f"  [DB ERROR] {error_msg}")
+        logger.error(f"  [DB ERROR] {error_msg}", exc=e)
         if error_msg not in errors:
             errors.append(error_msg)
         return {"errors": errors}
 
-    print(f"[PHASE 8: STORE TO DB] Completed storage successfully.\n")
+    logger.header(f"[PHASE 8: STORE TO DB] Completed storage successfully.\n")
     return {"errors": errors}

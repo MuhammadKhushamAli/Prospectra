@@ -5,12 +5,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
+from app.core.logging_config import get_node_logger
 from app.models.search_progress import SearchProgress, SearchProgressSource
 from app.services.supabase import get_supabase_client
 
 SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
 SEARCH_PROGRESS_SKILLS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_SKILLS_TABLE_NAME", "search_progress_skills")
 SEARCH_PROGRESS_INDUSTRIES_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_INDUSTRIES_TABLE_NAME", "search_progress_industries")
+logger = get_node_logger("company_search")
 
 
 def is_valid_uuid(val: Any) -> bool:
@@ -159,4 +161,4 @@ async def store_search_progress(search_progress: List[SearchProgress]) -> None:
         for progress in search_progress:
             await save_single_search_progress(supabase, progress)
     except Exception as e:
-        print(f"Warning: Failed to store search progress to Supabase: {str(e)}")
+        logger.warning(f"Warning: Failed to store search progress to Supabase: {str(e)}")

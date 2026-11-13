@@ -3,7 +3,10 @@
 from typing import Any, Dict
 
 from app.agents.params_generation.param_gen_agent import generate_params
+from app.core.logging_config import get_node_logger
 from ..state.state import GraphState
+
+logger = get_node_logger("prompt_gen")
 
 
 async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
@@ -28,14 +31,12 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
         s.name if hasattr(s, "name") else str(s)
         for s in (user_context.skills or [])
     ]
-    print(f"\n========================================================")
-    print(f"[PHASE 1: PROMPT GENERATION] Attempt #{attempts}")
-    print(f"  User: {user_context.full_name} ({user_context.email})")
-    print(f"  Skills: {', '.join(skills_names) if skills_names else 'None'}")
-    print(f"  Target Industries: {user_context.target_industries or 'Inferred by LLM'}")
+    logger.banner(f"[PHASE 1: PROMPT GENERATION] Attempt #{attempts}")
+    logger.item(f"User: {user_context.full_name} ({user_context.email})")
+    logger.item(f"Skills: {', '.join(skills_names) if skills_names else 'None'}")
+    logger.item(f"Target Industries: {user_context.target_industries or 'Inferred by LLM'}")
     if search_feedback:
-        print(f"  Feedback from previous attempt:\n    {search_feedback[:200]}...")
-    print(f"========================================================")
+        logger.item(f"Feedback from previous attempt:\n    {search_feedback[:200]}...")
 
     result = await generate_params(
         user_context=user_context,
@@ -43,10 +44,10 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
         previous_prompt=previous_prompt,
     )
 
-    print(f"[PHASE 1: PROMPT GENERATION] Generated {len(result.searxng.queries)} SearXNG queries:")
+    logger.header(f"[PHASE 1: PROMPT GENERATION] Generated {len(result.searxng.queries)} SearXNG queries:")
     for idx, q in enumerate(result.searxng.queries, 1):
-        print(f"  [{idx}] Industry: {q.target_industry}")
-        print(f"      Query: {q.query}")
+        logger.item(f"[{idx}] Industry: {q.target_industry}")
+        logger.item(f"    Query: {q.query}")
 
     return {
         "search_prompt": result,

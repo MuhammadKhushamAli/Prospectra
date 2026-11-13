@@ -20,6 +20,7 @@ from app.services.domain_filters import (
     is_listicle_title,
 )
 from app.services.searxng import search_searxng
+from app.core.logging_config import get_node_logger
 from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
 from app.services.supabase import get_supabase_client
 
@@ -27,6 +28,7 @@ SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "s
 COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
 PAGES_PER_QUERY = int(os.environ.get("SEARXNG_PAGES_PER_QUERY", "2"))
 MAX_CANDIDATES = int(os.environ.get("SEARXNG_MAX_CANDIDATES", "40"))
+logger = get_node_logger("company_search")
 
 
 def is_valid_uuid(val: Any) -> bool:
@@ -85,7 +87,7 @@ async def fetch_last_search_page(
         if response.data and len(response.data) > 0:
             return response.data[0].get("last_page_fetched", 0)
     except Exception as e:
-        print(f"Warning: Failed to fetch SearXNG search progress: {str(e)}")
+        logger.warning(f"Warning: Failed to fetch SearXNG search progress: {str(e)}")
 
     return 0
 
@@ -109,7 +111,7 @@ async def fetch_existing_org_domains(
         )
         return {r["domain"].lower() for r in (response.data or []) if r.get("domain")}
     except Exception as e:
-        print(f"Warning: Failed to check existing company domains: {str(e)}")
+        logger.warning(f"Warning: Failed to check existing company domains: {str(e)}")
         return set()
 
 
@@ -140,9 +142,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     last_page = await fetch_last_search_page(supabase, str(org_id), str(user_id))
     start_page = (last_page % 5) + 1  # Cycle across pages 1..5
 
-    print(f"\n========================================================")
-    print(f"[PHASE 2: SEARXNG SEARCH] Executing {len(queries)} queries across {PAGES_PER_QUERY} pages (start_page: {start_page})")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 2: SEARXNG SEARCH] Executing {len(queries)} queries across {PAGES_PER_QUERY} pages (start_page: {start_page})")
 
     searxng_tasks = []
     async with httpx.AsyncClient() as http_client:
@@ -160,20 +160,20 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     for idx, res in enumerate(raw_results):
         if isinstance(res, Exception):
             err_msg = f"SearXNG query error: {str(res)}"
-            print(f"  [ERROR] {err_msg}")
+            logger.error(f"  [ERROR] {err_msg}")
             if err_msg not in errors:
                 errors.append(err_msg)
             continue
         query_obj = searxng_tasks[idx][0]
         page_num = searxng_tasks[idx][1]
-        print(f"  SearXNG query [{query_obj.target_industry}] (page {page_num}) -> {len(res)} raw results")
+        logger.info(f"  SearXNG query [{query_obj.target_industry}] (page {page_num}) -> {len(res)} raw results")
         for item in res:
             candidate_results.append((query_obj, item))
             # Log incoming item data sample
             if len(candidate_results) <= 5 or len(candidate_results) % 10 == 0:
-                print(f"    -> Incoming result: Title='{item.get('title', '')[:50]}' | URL={item.get('url', '')}")
+                logger.item(f"Incoming result: Title='{item.get('title', '')[:50]}' | URL={item.get('url', '')}")
                 if item.get("content"):
-                    print(f"       Snippet: {item.get('content')[:120]}...")
+                    logger.item(f"   Snippet: {item.get('content')[:120]}...")
 
     # Process and filter candidates
     discovered_companies: List[Company] = []
@@ -189,7 +189,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
         # 1. Strictly reject job postings, openings, and hiring vacancy listings
         if is_job_posting(title=title, url=url, snippet=snippet):
             jobs_count += 1
-            print(f"  [JOB REJECTED] Discarding job vacancy: '{title[:55]}' | URL={url}")
+            logger.error(f"  [JOB REJECTED] Discarding job vacancy: '{title[:55]}' | URL={url}")
             continue
 
         # 2. Block general directories, search engines, job boards, and listicles
@@ -209,7 +209,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
     batch_domains = list(unique_domains_in_batch.keys())
     existing_db_domains = await fetch_existing_org_domains(supabase, str(org_id), batch_domains)
     if existing_db_domains:
-        print(f"  [DB DEDUP] Skipping {len(existing_db_domains)} already existing domain(s) in DB: {list(existing_db_domains)[:5]}...")
+        logger.info(f"  [DB DEDUP] Skipping {len(existing_db_domains)} already existing domain(s) in DB: {list(existing_db_domains)[:5]}...")
 
     for domain, (query_obj, item, website, linkedin_url) in unique_domains_in_batch.items():
         if domain in existing_db_domains:
@@ -243,16 +243,16 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
         if len(discovered_companies) >= MAX_CANDIDATES:
             break
 
-    print(f"\n[PHASE 2: SEARXNG SEARCH] Summary:")
-    print(f"  Raw hits received: {len(candidate_results)}")
-    print(f"  Jobs rejected: {jobs_count}")
-    print(f"  Blocked (directory/listicle/job board): {blocked_count}")
-    print(f"  DB duplicates skipped: {len(existing_db_domains)}")
-    print(f"  Unique new candidate companies: {len(discovered_companies)}")
+    logger.header(f"\n[PHASE 2: SEARXNG SEARCH] Summary:")
+    logger.item(f"Raw hits received: {len(candidate_results)}")
+    logger.item(f"Jobs rejected: {jobs_count}")
+    logger.item(f"Blocked (directory/listicle/job board): {blocked_count}")
+    logger.item(f"DB duplicates skipped: {len(existing_db_domains)}")
+    logger.item(f"Unique new candidate companies: {len(discovered_companies)}")
     for idx, c in enumerate(discovered_companies, 1):
-        print(f"    [{idx}] Name: {c.name}")
-        print(f"        Domain: {c.domain} | URL: {c.website} | LinkedIn: {c.linkedin_url} | Industry: {c.industry}")
-        print(f"        Search Snippet: {c.search_snippet[:120]}...")
+        logger.item(f"  [{idx}] Name: {c.name}")
+        logger.item(f"      Domain: {c.domain} | URL: {c.website} | LinkedIn: {c.linkedin_url} | Industry: {c.industry}")
+        logger.item(f"      Search Snippet: {c.search_snippet[:120]}...")
 
     # Persist search progress
     new_last_page = start_page + PAGES_PER_QUERY - 1

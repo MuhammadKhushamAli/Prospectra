@@ -3,11 +3,13 @@
 import os
 from typing import Any, Dict, List
 
+from app.core.logging_config import get_node_logger
 from ..state.state import GraphState
 from app.models.company import Company
 
 MIN_AUTH_SCORE = int(os.environ.get("COMPANY_AUTH_MIN_SCORE", "70"))
 MAX_ACCEPTED_PER_RUN = int(os.environ.get("MAX_ACCEPTED_PER_RUN", "10"))
+logger = get_node_logger("filter_companies")
 
 
 def passes_buyer_criteria(auth_info: Any, target_industries: List[str]) -> bool:
@@ -41,9 +43,7 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
     rejected_companies: List[Company] = []
     rejection_feedbacks: List[str] = []
 
-    print(f"\n========================================================")
-    print(f"[PHASE 7: BUYER FIT & RANKING] Filtering {len(verified_companies)} companies (min_score: {MIN_AUTH_SCORE}, max_accepted: {MAX_ACCEPTED_PER_RUN})...")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 7: BUYER FIT & RANKING] Filtering {len(verified_companies)} companies (min_score: {MIN_AUTH_SCORE}, max_accepted: {MAX_ACCEPTED_PER_RUN})...")
 
     for company in verified_companies:
         if not company.domain:
@@ -55,7 +55,7 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
             rejection_feedbacks.append(
                 f"{company.name} ({company.domain}): No Reacher-verified reachable email"
             )
-            print(
+            logger.error(
                 f"  [REJECTED] {company.name} ({company.domain}) -> "
                 f"0 Reacher-verified reachable emails."
             )
@@ -112,20 +112,20 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
 
         if qualifies_as_buyer and auth_info.score >= MIN_AUTH_SCORE:
             accepted_companies.append(company)
-            print(f"  [ACCEPTED] {company.name} ({company.domain})")
-            print(f"    Score: {auth_info.score}/100 | Reachable emails: {len(verified_emails)}")
-            print(f"    Needed skills: {needed_skills}")
-            print(f"    Needed services: {needed_services}")
-            print(f"    Need signals: {auth_info.need_signals}")
+            logger.success(f"  [ACCEPTED] {company.name} ({company.domain})")
+            logger.info(f"    Score: {auth_info.score}/100 | Reachable emails: {len(verified_emails)}")
+            logger.info(f"    Needed skills: {needed_skills}")
+            logger.info(f"    Needed services: {needed_services}")
+            logger.info(f"    Need signals: {auth_info.need_signals}")
             if getattr(auth_info, "need_hypothesis", None):
-                print(f"    Need hypothesis: {auth_info.need_hypothesis}")
-            print(f"    Proposed pitch: {auth_info.proposed_solution}")
+                logger.info(f"    Need hypothesis: {auth_info.need_hypothesis}")
+            logger.info(f"    Proposed pitch: {auth_info.proposed_solution}")
         else:
             rejected_companies.append(company)
             reason = auth_info.feedback or "Failed buyer qualification (service provider or has dev workforce)"
             rejection_feedbacks.append(f"{company.name} ({company.domain}): {reason}")
-            print(f"  [REJECTED] {company.name} ({company.domain})")
-            print(f"    Score: {auth_info.score}/100 | Reason: {reason}")
+            logger.error(f"  [REJECTED] {company.name} ({company.domain})")
+            logger.error(f"    Score: {auth_info.score}/100 | Reason: {reason}")
 
     # Rank accepted companies by (score, email_count) descending
     accepted_companies.sort(
@@ -137,9 +137,9 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
     )
     accepted_companies = accepted_companies[:MAX_ACCEPTED_PER_RUN]
 
-    print(f"\n[PHASE 7: BUYER FIT & RANKING] Summary:")
-    print(f"  Total accepted: {len(accepted_companies)}")
-    print(f"  Total rejected: {len(rejected_companies)}")
+    logger.header(f"\n[PHASE 7: BUYER FIT & RANKING] Summary:")
+    logger.info(f"  Total accepted: {len(accepted_companies)}")
+    logger.info(f"  Total rejected: {len(rejected_companies)}")
 
     # Synthesize structured search feedback for the prompt generator
     feedback_parts: List[str] = []

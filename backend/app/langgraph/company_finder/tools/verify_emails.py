@@ -8,6 +8,7 @@ import httpx
 
 from ..state.state import GraphState
 from .scrape_companies import GUESS_GENERIC_EMAILS, build_assumed_company_emails
+from app.core.logging_config import get_node_logger
 from app.models.company import Company, CompanyEmail
 from app.services.reacher import (
     ReacherResult,
@@ -18,6 +19,7 @@ from app.services.reacher import (
 REACHER_CONCURRENCY = int(os.environ.get("REACHER_CONCURRENCY", "8"))
 REACHER_TIMEOUT = float(os.environ.get("REACHER_TIMEOUT_SECONDS", "45"))
 ACCEPT_RISKY = os.environ.get("REACHER_ACCEPT_RISKY", "false").lower() == "true"
+logger = get_node_logger("verify_emails")
 
 
 async def _verify_email_candidates(
@@ -66,9 +68,12 @@ async def _verify_email_candidates(
         else:
             verdict_str = "DISCARDED (Unreachable or rejected)"
 
-        print(f"    - Email: {email_str} [source: {ce.source}]")
-        print(f"      Reacher result -> is_reachable: '{reacher_res.is_reachable}', catch_all: {reacher_res.is_catch_all}, role_account: {reacher_res.is_role_account}, disposable: {reacher_res.is_disposable}")
-        print(f"      Verdict: {verdict_str}")
+        logger.item(f"- Email: {email_str} [source: {ce.source}]")
+        logger.item(f"  Reacher result -> is_reachable: '{reacher_res.is_reachable}', catch_all: {reacher_res.is_catch_all}, role_account: {reacher_res.is_role_account}, disposable: {reacher_res.is_disposable}")
+        if acceptable:
+            logger.success(f"      Verdict: {verdict_str}")
+        else:
+            logger.error(f"      Verdict: {verdict_str}")
 
     return verified
 
@@ -97,7 +102,7 @@ async def verify_single_company_emails(
             exclude_emails=checked_emails,
         )
         if assumed_emails:
-            print(f"  [EMAIL FALLBACK] {company.name} ({company.domain}) -> checking backend generic domain email assumption(s) via Reacher...")
+            logger.info(f"  [EMAIL FALLBACK] {company.name} ({company.domain}) -> checking backend generic domain email assumption(s) via Reacher...")
             verified_reachable_emails = await _verify_email_candidates(
                 client,
                 assumed_emails,
@@ -128,9 +133,7 @@ async def verify_emails_node(state: GraphState) -> Dict[str, Any]:
             },
         }
 
-    print(f"\n========================================================")
-    print(f"[PHASE 5: REACHER EMAIL VERIFICATION] Checking emails for {len(scraped_companies)} companies (concurrency: {REACHER_CONCURRENCY})...")
-    print(f"========================================================")
+    logger.banner(f"[PHASE 5: REACHER EMAIL VERIFICATION] Checking emails for {len(scraped_companies)} companies (concurrency: {REACHER_CONCURRENCY})...")
 
     semaphore = asyncio.Semaphore(REACHER_CONCURRENCY)
     email_cache: Dict[str, ReacherResult] = {}
@@ -154,13 +157,13 @@ async def verify_emails_node(state: GraphState) -> Dict[str, Any]:
                 # If company has at least 1 reachable email, keep it!
                 if len(res.emails) > 0:
                     verified_companies.append(res)
-                    print(f"  [REACHER KEPT] {res.name} ({res.domain}) -> {len(res.emails)} reachable email(s) verified.")
+                    logger.success(f"  [REACHER KEPT] {res.name} ({res.domain}) -> {len(res.emails)} reachable email(s) verified.")
                 else:
                     discarded_no_email_count += 1
-                    print(f"  [REACHER DISCARDED] {res.name} ({res.domain}) -> 0 reachable emails found. Discarding company.")
+                    logger.error(f"  [REACHER DISCARDED] {res.name} ({res.domain}) -> 0 reachable emails found. Discarding company.")
             else:
                 discarded_no_email_count += 1
-                print(f"  [REACHER ERROR] Exception checking company: {str(res)}")
+                logger.error(f"  [REACHER ERROR] Exception checking company: {str(res)}")
 
         # Check if all Reacher calls returned unknown (port 25 blocked heuristic)
         for r_res in email_cache.values():
@@ -172,11 +175,11 @@ async def verify_emails_node(state: GraphState) -> Dict[str, Any]:
                 "Reacher email verification warning: All verified emails returned 'unknown'. "
                 "Outbound TCP port 25 may be blocked by your ISP or hosting provider."
             )
-            print(f"  [WARNING] {warning_msg}")
+            logger.warning(f"  [WARNING] {warning_msg}")
             if warning_msg not in errors:
                 errors.append(warning_msg)
 
-    print(f"[PHASE 5: REACHER] Summary: {len(verified_companies)} companies kept (with >=1 reachable email), {discarded_no_email_count} discarded.")
+    logger.header(f"[PHASE 5: REACHER] Summary: {len(verified_companies)} companies kept (with >=1 reachable email), {discarded_no_email_count} discarded.")
 
     return {
         "verified_companies": verified_companies,
