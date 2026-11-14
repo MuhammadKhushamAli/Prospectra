@@ -1,9 +1,21 @@
 CREATE TABLE domain_verifications (
     org_id UUID PRIMARY KEY NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     domain TEXT NOT NULL,
+    esp_provider esp_provider DEFAULT 'google_workspace',
+    sender_email TEXT,
+    email_provider TEXT,
+    smtp_used TEXT,
+    smtp_server TEXT,
+    smtp_port INTEGER,
+    smtp_username TEXT,
+    smtp_password TEXT,
+    dkim_selector TEXT,
     dns_records JSONB NOT NULL DEFAULT '{}'::jsonb,
     verification_status domain_verification_status NOT NULL DEFAULT 'pending',
     verified_at TIMESTAMPTZ,
+    email_verification_status domain_verification_status NOT NULL DEFAULT 'pending',
+    email_verified_at TIMESTAMPTZ,
+    email_verification_details JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (org_id, domain)
 );

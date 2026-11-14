@@ -5,15 +5,16 @@ from fastapi import HTTPException, status
 from app.services.supabase import get_supabase_client
 
 
-async def authorize_org_member(token: str, org_id: str) -> str:
-    """Resolve the user from a Supabase token and ensure they belong to the org.
+async def authorize_org_member_with_email(token: str, org_id: str) -> tuple[str, str | None]:
+    """Resolve the user and their email from a Supabase token and ensure they belong to the org.
 
-    Returns the user id. Raises 401 for an invalid token, 403 for non-members.
+    Returns ``(user_id, user_email)``. Raises 401 for an invalid token, 403 for non-members.
     """
     supabase = await get_supabase_client()
     try:
         user_response = await supabase.auth.get_user(token)
         user_id = user_response.user.id
+        user_email = getattr(user_response.user, "email", None)
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,4 +30,13 @@ async def authorize_org_member(token: str, org_id: str) -> str:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User is not a member of this organization",
         )
+    return user_id, user_email
+
+
+async def authorize_org_member(token: str, org_id: str) -> str:
+    """Resolve the user from a Supabase token and ensure they belong to the org.
+
+    Returns the user id. Raises 401 for an invalid token, 403 for non-members.
+    """
+    user_id, _ = await authorize_org_member_with_email(token, org_id)
     return user_id

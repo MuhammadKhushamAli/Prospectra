@@ -11,6 +11,10 @@ import httpx
 from arq.connections import ArqRedis, RedisSettings, create_pool
 from arq.jobs import Job, JobStatus
 
+from app.core.logging_config import get_node_logger
+
+logger = get_node_logger("arq_worker")
+
 ARQ_QUEUE_NAME: str = os.getenv("ARQ_QUEUE_NAME", "prospectra:arq:queue")
 ARQ_JOB_TIMEOUT_SECONDS: int = int(os.getenv("ARQ_JOB_TIMEOUT_SECONDS", "1800"))  # 30m timeout for multi-pass search
 ARQ_KEEP_RESULT_SECONDS: int = int(os.getenv("ARQ_KEEP_RESULT_SECONDS", "86400"))  # 24h TTL in Redis
@@ -64,7 +68,7 @@ async def get_arq_pool() -> ArqRedis | None:
         await _arq_pool.ping()
         return _arq_pool
     except Exception as exc:
-        print(f"[ARQ] Redis connection unavailable ({exc}).")
+        logger.error(f"[ARQ] Redis connection unavailable ({exc}).")
         _arq_pool = None
         return None
 
@@ -109,7 +113,7 @@ async def update_job_status(
             json.dumps(record),
         )
     except Exception as exc:
-        print(f"[ARQ] Failed to update job status for {job_id}: {exc}")
+        logger.error(f"[ARQ] Failed to update job status for {job_id}: {exc}")
 
 
 async def trigger_job_webhook(
@@ -140,7 +144,7 @@ async def trigger_job_webhook(
         async with httpx.AsyncClient(timeout=5.0) as client:
             await client.post(url, json=payload)
     except Exception as exc:
-        print(f"[ARQ WEBHOOK] Could not POST webhook to {url} for job {job_id}: {exc}")
+        logger.error(f"[ARQ WEBHOOK] Could not POST webhook to {url} for job {job_id}: {exc}")
 
 
 async def get_job_status(job_id: str) -> dict[str, Any]:
@@ -210,5 +214,5 @@ async def enqueue_arq_job(
         )
         return effective_id
     except Exception as exc:
-        print(f"[ARQ] Enqueue error for {function_name}: {exc}")
+        logger.error(f"[ARQ] Enqueue error for {function_name}: {exc}")
         return None

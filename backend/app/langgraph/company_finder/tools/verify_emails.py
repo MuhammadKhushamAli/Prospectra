@@ -9,6 +9,7 @@ import httpx
 from ..state.state import GraphState
 from .scrape_companies import GUESS_GENERIC_EMAILS, build_assumed_company_emails
 from app.core.logging_config import get_node_logger
+from app.langgraph.company_finder.tools.store_search_progress import update_search_page_progress
 from app.models.company import Company, CompanyEmail
 from app.services.reacher import (
     ReacherResult,
@@ -180,6 +181,10 @@ async def verify_emails_node(state: GraphState) -> Dict[str, Any]:
                 errors.append(warning_msg)
 
     logger.header(f"[PHASE 5: REACHER] Summary: {len(verified_companies)} companies kept (with >=1 reachable email), {discarded_no_email_count} discarded.")
+
+    if not verified_companies:
+        logger.info("[PHASE 5: REACHER] 0 verified reachable emails. Updating search progress in DB (resetting to page 1)...")
+        await update_search_page_progress(state, success_count=0)
 
     return {
         "verified_companies": verified_companies,

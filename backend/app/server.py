@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from app.core.logging_config import setup_colored_logging  # noqa: E402
+setup_colored_logging()
+
 from fastapi import FastAPI  # noqa: E402
 
 from app.api.routes.company_search import router as company_search_router  # noqa: E402

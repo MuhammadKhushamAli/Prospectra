@@ -21,12 +21,16 @@ from app.services.domain_filters import (
 )
 from app.services.searxng import search_searxng
 from app.core.logging_config import get_node_logger
-from app.langgraph.company_finder.tools.store_search_progress import store_search_progress
+from app.langgraph.company_finder.tools.store_search_progress import (
+    MIN_SEARCH_ACCEPT_RATE,
+    PAGES_PER_QUERY,
+    store_search_progress,
+    update_search_page_progress,
+)
 from app.services.supabase import get_supabase_client
 
 SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
 COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
-PAGES_PER_QUERY = int(os.environ.get("SEARXNG_PAGES_PER_QUERY", "2"))
 MAX_CANDIDATES = int(os.environ.get("SEARXNG_MAX_CANDIDATES", "40"))
 logger = get_node_logger("company_search")
 
@@ -126,13 +130,13 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
         getattr(user_context, "org_id", "")
         if user_context and not isinstance(user_context, dict)
         else (user_context or {}).get("org_id", "")
-    ) or state.get("org_id", "")
+    )
 
     user_id = (
         getattr(user_context, "user_id", "")
         if user_context and not isinstance(user_context, dict)
         else (user_context or {}).get("user_id", "")
-    ) or state.get("user_id", "")
+    )
 
     queries = search_prompt.searxng.queries
     seen_domains: Set[str] = set(state.get("seen_domains", []))
@@ -140,7 +144,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
 
     supabase = await get_supabase_client()
     last_page = await fetch_last_search_page(supabase, str(org_id), str(user_id))
-    start_page = (last_page % 5) + 1  # Cycle across pages 1..5
+    start_page = max(1, last_page + 1)
 
     logger.banner(f"[PHASE 2: SEARXNG SEARCH] Executing {len(queries)} queries across {PAGES_PER_QUERY} pages (start_page: {start_page})")
 
@@ -254,17 +258,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
         logger.item(f"      Domain: {c.domain} | URL: {c.website} | LinkedIn: {c.linkedin_url} | Industry: {c.industry}")
         logger.item(f"      Search Snippet: {c.search_snippet[:120]}...")
 
-    # Persist search progress
-    new_last_page = start_page + PAGES_PER_QUERY - 1
-    if is_valid_uuid(org_id):
-        progress = SearchProgress(
-            user_id=str(user_id) if is_valid_uuid(user_id) else None,
-            org_id=str(org_id),
-            last_page_fetched=new_last_page,
-            last_fetched_at=datetime.now(timezone.utc),
-            source=SearchProgressSource.SEARXNG,
-        )
-        await store_search_progress([progress])
+    target_last_page = start_page + PAGES_PER_QUERY - 1
 
     return {
         "searched_companies": discovered_companies,
@@ -275,6 +269,7 @@ async def search_companies_node(state: GraphState) -> Dict[str, Any]:
             "jobs_rejected": jobs_count,
             "blocked": blocked_count,
             "db_duplicates": len(existing_db_domains),
-            "candidates": len(discovered_companies),
+            "start_page": start_page,
+            "target_last_page": target_last_page,
         },
     }

@@ -10,11 +10,7 @@ from app.models.user_context import UserContext
 
 class GraphState(TypedDict, total=False):
     """The state of the Prospectra company-finder LangGraph workflow."""
-    user_id: str
-    org_id: str
     user_context: UserContext
-    target_industries: List[str]
-    skill_target_id: str
 
     # Workflow artifacts
     search_prompt: PromptGenerationResponse
@@ -29,5 +25,7 @@ class GraphState(TypedDict, total=False):
     search_feedback: str
     seen_domains: List[str]
     search_attempts: int
+    same_prompt_retries: int
+    same_prompt_retry_active: bool
     pipeline_stats: Dict[str, Any]
     errors: List[str]

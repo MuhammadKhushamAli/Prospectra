@@ -8,12 +8,6 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -51,8 +45,6 @@ export default function AuthScreen() {
     variant: NotificationVariant;
     message: string;
   } | null>(null);
-  const opacity = useSharedValue(1);
-  const translateX = useSharedValue(0);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -78,14 +70,6 @@ export default function AuthScreen() {
   const changeMode = (next: AuthMode) => {
     setMode(next);
     setNotification(null);
-    opacity.value = reducedMotion ? 1 : 0;
-    translateX.value = reducedMotion ? 0 : next === authMode.login ? -4 : 4;
-    opacity.value = reducedMotion
-      ? 1
-      : withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) });
-    translateX.value = reducedMotion
-      ? 0
-      : withTiming(0, { duration: 150, easing: Easing.out(Easing.cubic) });
   };
 
   const handleLogin = async (credentials: LoginCredentials) => {
@@ -140,11 +124,6 @@ export default function AuthScreen() {
     }
   };
 
-  const animatedForm = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ translateX: translateX.value }],
-  }));
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       {notification ? (
@@ -179,13 +158,13 @@ export default function AuthScreen() {
               onChange={changeMode}
               reducedMotion={reducedMotion}
             />
-            <Animated.View style={animatedForm}>
+            <View>
               {mode === authMode.login ? (
                 <LoginForm onSubmit={handleLogin} isLoading={isLoggingIn} />
               ) : (
                 <SignupForm onSubmit={handleSignup} />
               )}
-            </Animated.View>
+            </View>
           </View>
 
           <AuthFooterLink

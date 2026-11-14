@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,7 +10,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
+import * as Clipboard from "expo-clipboard";
+import { Check, Copy } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -26,8 +29,6 @@ import Button from "../ui/Button";
 import DomainVerificationHeader from "./DomainVerificationHeader";
 import DomainVerificationForm from "./DomainVerificationForm";
 import DomainVerificationFooterLink from "./DomainVerificationFooterLink";
-import * as Clipboard from "expo-clipboard";
-import { Check, Copy } from "lucide-react-native";
 import {
   buttonVariant,
   domainVerificationCopy,
@@ -39,11 +40,13 @@ export default function DomainVerificationScreen() {
   const { verifyDomain, checkDomainStatus, isLoading, isCheckingStatus } =
     useDomainVerification();
 
+  const [isInitializing, setIsInitializing] = useState(true);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
     message: string;
   } | null>(null);
 
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [activeDomain, setActiveDomain] = useState<string>("");
   const [token, setToken] = useState<string | null>(null);
   const [dnsInstructions, setDnsInstructions] =
@@ -52,54 +55,70 @@ export default function DomainVerificationScreen() {
   const [copied, setCopied] = useState(false);
   const [copiedHost, setCopiedHost] = useState(false);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function init() {
-      try {
-        const status = await checkUserOnboardingStatus();
-        if (!isMounted) return;
-        if (status.targetRoute !== "/domain-verification") {
-          router.replace(status.targetRoute as any);
-          return;
-        }
-        const orgId = await resolveUserOrgId().catch(() => null);
-        if (orgId) {
-          const supabase = getSupabaseClient();
-          const { data: rec } = await supabase
-            .from(TABLES.DOMAIN_VERIFICATIONS)
-            .select(
-              `${DB_KEYS.DOMAIN}, ${DB_KEYS.VERIFICATION_STATUS}, ${DB_KEYS.DNS_RECORDS}`,
-            )
-            .eq(DB_KEYS.ORG_ID, orgId)
-            .maybeSingle();
-
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+      async function init() {
+        try {
+          const status = await checkUserOnboardingStatus();
           if (!isMounted) return;
-          if (rec) {
-            setActiveDomain(rec.domain || "");
-            setCurrentStatus(rec.verification_status);
-            const dns = rec.dns_records as any;
-            if (dns?.value) {
-              setToken(dns.value);
+          if (status.targetRoute !== "/domain-verification") {
+            router.replace(status.targetRoute as any);
+            return;
+          }
+
+          const supabase = getSupabaseClient();
+          const [{ data: authData }, orgId] = await Promise.all([
+            supabase.auth.getUser(),
+            resolveUserOrgId().catch(() => null),
+          ]);
+          if (!isMounted) return;
+          if (authData?.user?.email) {
+            setUserEmail(authData.user.email);
+          }
+
+          if (orgId) {
+            const { data: rec } = await supabase
+              .from(TABLES.DOMAIN_VERIFICATIONS)
+              .select("*")
+              .eq(DB_KEYS.ORG_ID, orgId)
+              .maybeSingle();
+
+            if (!isMounted) return;
+            if (rec) {
+              const recAny = rec as Record<string, any>;
+              setActiveDomain(recAny.domain || "");
+              setCurrentStatus(recAny.verification_status);
+              const dns = (recAny.dns_records || {}) as Record<string, any>;
+              if (dns?.value) {
+                setToken(dns.value);
+              }
+              setDnsInstructions({
+                title: "Add this DNS record to your domain provider:",
+                type: dns?.type || "TXT",
+                host:
+                  dns?.name ||
+                  `_prospectra${recAny.domain ? `.${recAny.domain}` : ""}`,
+                value: dns?.value || "",
+              });
             }
-            setDnsInstructions({
-              title: "Add this DNS record to your domain provider:",
-              type: dns?.type || "TXT",
-              host:
-                dns?.name ||
-                `_prospectra${rec.domain ? `.${rec.domain}` : ""}`,
-              value: dns?.value || "",
-            });
+          }
+        } catch {
+          if (isMounted) {
+            router.replace("/auth");
+          }
+        } finally {
+          if (isMounted) {
+            setIsInitializing(false);
           }
         }
-      } catch {
-        // ignore
       }
-    }
-    init();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      init();
+      return () => {
+        isMounted = false;
+      };
+    }, []),
+  );
 
   const handleVerify = async (domain: string) => {
     setNotification(null);
@@ -118,11 +137,12 @@ export default function DomainVerificationScreen() {
         (result.verified ? "verified" : "pending");
       setCurrentStatus(status);
 
-      if (result.verified) {
+      if (result.verified || status === "verified") {
         setNotification({
           variant: notificationVariant.success,
           message: domainVerificationCopy.success,
         });
+        router.replace("/email-verification" as any);
       } else {
         setNotification({
           variant: notificationVariant.success,
@@ -156,12 +176,16 @@ export default function DomainVerificationScreen() {
       if (statusResult.domain) {
         setActiveDomain(statusResult.domain);
       }
+      if (statusResult.user_email) {
+        setUserEmail(statusResult.user_email);
+      }
 
       if (statusResult.verification_status === "verified") {
         setNotification({
           variant: notificationVariant.success,
-          message: "Domain verified successfully!",
+          message: domainVerificationCopy.success,
         });
+        router.replace("/email-verification" as any);
       } else {
         setNotification({
           variant: notificationVariant.success,
@@ -231,6 +255,16 @@ export default function DomainVerificationScreen() {
   const isVerified = currentStatus === "verified";
   const isFailed = currentStatus === "failed";
 
+  if (isInitializing) {
+    return (
+      <View
+        style={[styles.loadingScreen, { backgroundColor: colors.background }]}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       {notification ? (
@@ -253,6 +287,8 @@ export default function DomainVerificationScreen() {
           <DomainVerificationForm
             onSubmit={handleVerify}
             isLoading={isLoading}
+            userEmail={userEmail}
+            initialDomain={activeDomain}
           />
 
           {token || currentStatus ? (
@@ -477,9 +513,9 @@ export default function DomainVerificationScreen() {
               {isVerified ? (
                 <View style={styles.continueWrap}>
                   <Button
-                    label={domainVerificationCopy.actions.continueToDashboard}
+                    label={domainVerificationCopy.actions.continueToEmail}
                     variant={buttonVariant.primary}
-                    onPress={() => router.replace("/home")}
+                    onPress={() => router.replace("/email-verification" as any)}
                   />
                 </View>
               ) : null}
@@ -494,6 +530,11 @@ export default function DomainVerificationScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   safe: {
     flex: 1,
   },

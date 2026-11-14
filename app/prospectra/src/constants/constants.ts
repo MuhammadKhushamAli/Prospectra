@@ -44,6 +44,8 @@ const authCopy = {
 
 const authValidationMessages = {
   invalidEmail: "Enter a valid email address.",
+  freeEmailNotAllowed:
+    "Free email providers (e.g. Gmail, Yahoo, Outlook) are not allowed on sign up. Please use your organization domain email.",
   invalidPassword:
     "Password must be at least 8 characters with uppercase, lowercase, number, and special character.",
   missingFullName: "Enter your full name.",
@@ -51,8 +53,9 @@ const authValidationMessages = {
 } as const;
 
 const domainVerificationCopy = {
+  badge: "Domain Auth",
   title: "Verify your domain",
-  subtitle: "Connect and authenticate your business domain.",
+  subtitle: "Authenticate your organization domain to unlock email verification and outreach.",
   fields: {
     domain: "Domain name",
   },
@@ -64,16 +67,50 @@ const domainVerificationCopy = {
     verifying: "Verifying domain...",
     checkStatus: "Verify status",
     checkingStatus: "Checking status...",
+    continueToEmail: "Continue to Email Verification",
+    backToLogin: "Back to login",
+  },
+  success: "Domain verified successfully. Continuing to email verification...",
+} as const;
+
+const emailVerificationCopy = {
+  badge: "Email Auth",
+  title: "Verify your email",
+  subtitle: "Select your email provider and confirm your SMTP details to enable sending.",
+  fields: {
+    senderEmail: "Verified account email",
+    emailProvider: "Email Service Provider (ESP)",
+    customEmailProvider: "Other Email Provider Name",
+    smtpServer: "SMTP Server Host",
+    smtpPort: "SMTP Port",
+    dkimSelector: "DKIM Selector (optional)",
+    smtpPassword: "SMTP App Password (optional)",
+  },
+  placeholders: {
+    customEmailProvider: "e.g. Fastmail, PrivateEmail, GoDaddy",
+    smtpServer: "e.g. smtp.hostinger.com",
+    smtpPort: "e.g. 465 or 587",
+    dkimSelector: "e.g. google, selector1, default",
+    smtpPassword: "Enter SMTP password or API token for sending",
+  },
+  actions: {
+    verifyEmail: "Verify Email & Save SMTP",
+    verifyingEmail: "Verifying DNS, AuthRes & SMTP...",
     continueToDashboard: "Continue to Dashboard",
     backToLogin: "Back to login",
   },
-  success: "Domain verified successfully.",
+  emailVerifiedSuccess: "Email and SMTP configuration verified and saved successfully!",
 } as const;
 
 const domainValidationMessages = {
   missingDomain: "Enter your domain name.",
   invalidDomain: "Enter a valid domain name (e.g. yourcompany.com).",
   freeEmailProvider: "Free email providers (e.g. Gmail, Yahoo, Outlook) are not allowed. Please enter your business domain.",
+  domainEmailMismatch: "The domain entered must match the domain of the email address you signed in with.",
+  missingProvider: "Select your email provider before verifying your email.",
+  missingCustomProvider: "Enter your custom email provider name.",
+  missingSmtpServer: "Enter the SMTP server hostname.",
+  invalidSmtpPort: "Enter a valid SMTP port between 1 and 65535.",
 } as const;
 
 const organizationRegistrationCopy = {
@@ -233,6 +270,7 @@ export {
   buttonVariant,
   domainValidationMessages,
   domainVerificationCopy,
+  emailVerificationCopy,
   homeCopy,
   notificationVariant,
   organizationRegistrationCopy,

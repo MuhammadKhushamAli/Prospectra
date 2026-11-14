@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict, List
 
 from app.core.logging_config import get_node_logger
+from app.langgraph.company_finder.tools.store_search_progress import update_search_page_progress
 from ..state.state import GraphState
 from app.models.company import Company
 from app.services.domain_filters import count_agency_keyword_hits
@@ -66,6 +67,10 @@ async def prefilter_companies_node(state: GraphState) -> Dict[str, Any]:
         logger.info(f"  [PREFILTER PASSED] {company.name} ({company.domain})")
 
     logger.header(f"[PHASE 4: PRE-FILTER] Summary: {len(survivors)} passed, {dropped_count} dropped (agencies: {agency_dropped}, parked: {parked_dropped}).")
+
+    if not survivors:
+        logger.info("[PHASE 4: PRE-FILTER] No companies remaining after prefilter. Updating search progress in DB (resetting to page 1)...")
+        await update_search_page_progress(state, success_count=0)
 
     return {
         "scraped_companies": survivors,

@@ -59,7 +59,15 @@ export function isFreeEmailProvider(domain: string): boolean {
 
 const domainRegex = /^(?!:\/\/)([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,}$/;
 
-export function validateDomain(domain: string): string | null {
+export function extractDomainFromEmail(email: string): string {
+  if (!email || !email.includes("@")) return "";
+  return sanitizeDomainInput(email);
+}
+
+export function validateDomain(
+  domain: string,
+  userEmail?: string | null,
+): string | null {
   const trimmed = domain.trim();
   if (!trimmed) {
     return domainValidationMessages.missingDomain;
@@ -70,6 +78,12 @@ export function validateDomain(domain: string): string | null {
   const sanitized = sanitizeDomainInput(trimmed);
   if (!domainRegex.test(sanitized)) {
     return domainValidationMessages.invalidDomain;
+  }
+  if (userEmail && userEmail.includes("@")) {
+    const expectedDomain = extractDomainFromEmail(userEmail);
+    if (expectedDomain && sanitized !== expectedDomain) {
+      return `${domainValidationMessages.domainEmailMismatch} Expected: ${expectedDomain}`;
+    }
   }
   return null;
 }

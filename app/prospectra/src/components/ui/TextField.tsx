@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
@@ -8,15 +8,48 @@ import type { TextFieldProps } from "../../types/ui";
 
 export type { TextFieldProps };
 
+interface FocusBorderHandle {
+  setFocused: (focused: boolean) => void;
+}
+
+const FocusBorderOverlay = forwardRef<
+  FocusBorderHandle,
+  { borderColor: string }
+>(function FocusBorderOverlay({ borderColor }, ref) {
+  const [focused, setFocused] = useState(false);
+
+  useImperativeHandle(ref, () => ({ setFocused }), []);
+
+  return (
+    <View
+      pointerEvents="none"
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+      style={[
+        styles.focusBorder,
+        {
+          borderColor,
+          opacity: focused ? 1 : 0,
+        },
+      ]}
+    />
+  );
+});
+
 export default function TextField({
   label,
   rightSlot,
   error,
   inputWrapStyle,
+  style,
+  accessibilityLabel,
+  textAlignVertical,
+  onFocus,
+  onBlur,
   ...props
 }: TextFieldProps) {
   const colors = useTheme();
-  const [focused, setFocused] = useState(false);
+  const focusBorderRef = useRef<FocusBorderHandle>(null);
   const isMultiline = Boolean(props.multiline);
 
   return (
@@ -30,42 +63,38 @@ export default function TextField({
           isMultiline && styles.inputWrapMultiline,
           {
             backgroundColor: error ? colors.errorSoft : colors.surface,
-            borderColor: error
-              ? colors.error
-              : focused
-                ? colors.primary
-                : colors.border,
+            borderColor: error ? colors.error : colors.border,
           },
-          focused && [
-            styles.focusedRing,
-            { shadowColor: error ? colors.error : colors.primary },
-          ],
           inputWrapStyle,
         ]}
       >
         <TextInput
           {...props}
-          accessibilityLabel={props.accessibilityLabel ?? label}
+          accessibilityLabel={accessibilityLabel ?? label}
           textAlignVertical={
-            props.textAlignVertical ?? (isMultiline ? "top" : "center")
+            textAlignVertical ?? (isMultiline ? "top" : "center")
           }
           onFocus={(event) => {
-            setFocused(true);
-            props.onFocus?.(event);
+            focusBorderRef.current?.setFocused(true);
+            onFocus?.(event);
           }}
           onBlur={(event) => {
-            setFocused(false);
-            props.onBlur?.(event);
+            focusBorderRef.current?.setFocused(false);
+            onBlur?.(event);
           }}
           placeholderTextColor={colors.placeholder}
           style={[
             styles.input,
             isMultiline && styles.inputMultiline,
             { color: colors.text },
-            props.style,
+            style,
           ]}
         />
         {rightSlot}
+        <FocusBorderOverlay
+          ref={focusBorderRef}
+          borderColor={error ? colors.error : colors.primary}
+        />
       </View>
       {error ? (
         <Text
@@ -89,17 +118,21 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   inputWrap: {
+    position: "relative",
     height: 40,
     borderWidth: 1,
     borderRadius: tokens.radius.md,
     flexDirection: "row",
     alignItems: "center",
   },
-  focusedRing: {
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.16,
-    shadowRadius: 4,
-    elevation: 1,
+  focusBorder: {
+    position: "absolute",
+    top: -1,
+    left: -1,
+    right: -1,
+    bottom: -1,
+    borderWidth: 1.5,
+    borderRadius: tokens.radius.md,
   },
   inputWrapMultiline: {
     height: undefined,

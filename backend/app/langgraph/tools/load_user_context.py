@@ -3,10 +3,13 @@
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.core.logging_config import get_node_logger
 from app.models.skills import Skill
 from app.models.user_context import UserContext
 from app.services.supabase import get_supabase_client
 from ..company_finder.state.state import GraphState
+
+logger = get_node_logger("load_user_context")
 
 USER_PROFILES_TABLE = os.environ.get("SUPABASE_USER_PROFILES_TABLE_NAME", "user_profiles")
 USER_SKILLS_TABLE = os.environ.get("SUPABASE_USER_SKILLS_TABLE_NAME", "user_skills")
@@ -19,8 +22,13 @@ DOMAIN_VERIFICATIONS_TABLE = os.environ.get("SUPABASE_DOMAIN_VERIFICATIONS_TABLE
 
 def validate_state_ids(state: Dict[str, Any]) -> Tuple[str, str]:
     """Extract and validate user_id and org_id from graph state."""
-    user_id = state.get("user_id")
-    org_id = state.get("org_id")
+    user_context = state.get("user_context")
+    if user_context:
+        user_id = getattr(user_context, "user_id", None) or (user_context.get("user_id") if isinstance(user_context, dict) else None)
+        org_id = getattr(user_context, "org_id", None) or (user_context.get("org_id") if isinstance(user_context, dict) else None)
+    else:
+        user_id = state.get("user_id")
+        org_id = state.get("org_id")
 
     if not user_id or not org_id:
         raise ValueError("user_id and org_id are required to load user context.")
@@ -45,7 +53,7 @@ async def fetch_user_profile(
         )
         return response.data or {}
     except Exception as e:
-        print(f"Warning: Failed to fetch profile for user {user_id}: {str(e)}")
+        logger.warning(f"Warning: Failed to fetch profile for user {user_id}: {str(e)}")
         return {}
 
 
@@ -80,7 +88,7 @@ async def fetch_user_skills(
         )
         return [Skill(**skill) for skill in (skills_response.data or [])]
     except Exception as e:
-        print(f"Warning: Failed to fetch skills for user {user_id}: {str(e)}")
+        logger.warning(f"Warning: Failed to fetch skills for user {user_id}: {str(e)}")
         return []
 
 
@@ -144,7 +152,7 @@ async def fetch_user_target_industries(
                     target_industries.append(val.strip())
 
     except Exception as e:
-        print(f"Warning: Failed to load target industries for user {user_id}: {str(e)}")
+        logger.warning(f"Warning: Failed to load target industries for user {user_id}: {str(e)}")
 
     return target_industries
 
@@ -169,7 +177,7 @@ async def fetch_organization_info(
         if org_response.data and org_response.data.get("name"):
             org_name = org_response.data["name"]
     except Exception as e:
-        print(f"Warning: Failed to fetch organization name for {org_id}: {str(e)}")
+        logger.warning(f"Warning: Failed to fetch organization name for {org_id}: {str(e)}")
 
     if not org_domain:
         try:
@@ -184,7 +192,7 @@ async def fetch_organization_info(
             if data and data[0].get("domain"):
                 org_domain = data[0]["domain"]
         except Exception as e:
-            print(f"Warning: Failed to fetch organization domain for {org_id}: {str(e)}")
+            logger.warning(f"Warning: Failed to fetch organization domain for {org_id}: {str(e)}")
 
     return org_name, org_domain
 
@@ -217,12 +225,19 @@ def build_user_context(
 async def load_user_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """Load the user's profile, skills, target industries, and org info into a UserContext in graph state."""
     user_id, org_id = validate_state_ids(state)
+    logger.banner(f"[PHASE 0: LOAD USER CONTEXT] User: {user_id} | Org: {org_id}")
     supabase = await get_supabase_client()
 
     profile = await fetch_user_profile(supabase, user_id, org_id)
     skills = await fetch_user_skills(supabase, user_id, org_id)
 
-    state_target_industries = state.get("target_industries")
+    user_context_in = state.get("user_context")
+    state_target_industries = None
+    if user_context_in:
+        state_target_industries = getattr(user_context_in, "target_industries", None) or (user_context_in.get("target_industries") if isinstance(user_context_in, dict) else None)
+    if not state_target_industries:
+        state_target_industries = state.get("target_industries")
+
     target_industries = await fetch_user_target_industries(
         supabase=supabase,
         user_id=user_id,
@@ -230,7 +245,11 @@ async def load_user_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
         state_target_industries=state_target_industries,
     )
 
-    override_domain = state.get("org_domain")
+    override_domain = (
+        getattr(user_context_in, "org_domain", None)
+        if user_context_in
+        else state.get("org_domain")
+    )
     org_name, org_domain = await fetch_organization_info(
         supabase=supabase,
         org_id=org_id,
@@ -247,8 +266,8 @@ async def load_user_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
         org_domain=org_domain,
     )
 
+    logger.info(f"Loaded context for '{user_context.full_name}' | Skills: {len(skills)} | Target industries: {len(target_industries)}")
+
     return {
         "user_context": user_context,
-        "target_industries": target_industries,
-        "org_domain": org_domain,
     }

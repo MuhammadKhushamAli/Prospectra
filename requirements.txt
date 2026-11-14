@@ -106,3 +106,8 @@ yarl==1.25.1
 zstandard==0.25.0
 beautifulsoup4>=4.13.0
 lxml>=5.0.0
+checkdmarc>=5.0.0
+dkimpy>=1.1.0
+pyspf>=2.0.14
+authres>=1.2.0
+dnspython>=2.6.0

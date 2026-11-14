@@ -6,7 +6,8 @@ import Button from "../ui/Button";
 import PasswordField from "../ui/PasswordField";
 import TextField from "../ui/TextField";
 import type { SignupFormProps } from "../../types/auth";
-import { authCopy } from "../../constants/constants";
+import { authCopy, authValidationMessages } from "../../constants/constants";
+import { isFreeEmailProvider } from "../../validation/domainValidation";
 
 export type { SignupFormProps };
 
@@ -15,6 +16,11 @@ export default function SignupForm({ onSubmit }: SignupFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const emailError =
+    email.trim().includes("@") && isFreeEmailProvider(email)
+      ? authValidationMessages.freeEmailNotAllowed
+      : null;
 
   return (
     <View style={styles.form}>
@@ -32,6 +38,7 @@ export default function SignupForm({ onSubmit }: SignupFormProps) {
         autoCapitalize="none"
         value={email}
         onChangeText={setEmail}
+        error={emailError}
       />
       <PasswordField
         label={authCopy.fields.password}

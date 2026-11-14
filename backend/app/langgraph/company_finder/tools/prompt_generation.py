@@ -23,9 +23,8 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     if not user_context:
         raise ValueError("user_context is missing from the state.")
 
-    state_target_industries = state.get("target_industries")
-    if state_target_industries and not user_context.target_industries:
-        user_context.target_industries = list(state_target_industries)
+    if not getattr(user_context, "target_industries", None):
+        raise ValueError("Target Industries are missing from the state.")
 
     skills_names = [
         s.name if hasattr(s, "name") else str(s)
@@ -52,6 +51,8 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     return {
         "search_prompt": result,
         "search_attempts": attempts,
+        "same_prompt_retries": 0,
+        "same_prompt_retry_active": False,
         # Reset downstream iteration artifacts
         "searched_companies": [],
         "scraped_companies": [],

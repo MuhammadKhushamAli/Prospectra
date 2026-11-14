@@ -23,7 +23,7 @@ BEGIN
 END;
 $$;
 
--- Overload 2: View domain status by domain_id
+-- Overload 2: View domain status by org_id
 CREATE OR REPLACE PROCEDURE public.view_domain_status(
     p_domain_id UUID,
     INOUT p_verification_status domain_verification_status DEFAULT NULL,
@@ -39,7 +39,7 @@ BEGIN
     SELECT verification_status, dns_records, verified_at, esp_provider
     INTO p_verification_status, p_dns_records, p_verified_at, p_esp_provider
     FROM public.domain_verifications
-    WHERE id = p_domain_id;
+    WHERE org_id = p_domain_id;
 END;
 $$;
 

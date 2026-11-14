@@ -8,7 +8,7 @@ import {
 } from "@expo-google-fonts/dm-sans";
 import { DarkTheme, DefaultTheme, Slot, ThemeProvider } from "expo-router";
 import * as NativeSplashScreen from "expo-splash-screen";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { StyleSheet, useColorScheme, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -28,8 +28,11 @@ export default function RootLayout() {
     DMSansBold: DMSans_700Bold,
   });
   const [showSplash, setShowSplash] = useState(true);
+  const splashHiddenRef = useRef(false);
 
   const hideNativeSplash = useCallback(() => {
+    if (splashHiddenRef.current) return;
+    splashHiddenRef.current = true;
     void NativeSplashScreen.hideAsync();
   }, []);
 

@@ -22,7 +22,7 @@ BEGIN
             WHEN p_verification_status IN ('pending', 'failed') AND p_verified_at IS NULL THEN NULL
             ELSE COALESCE(p_verified_at, domain_verifications.verified_at)
         END
-    WHERE id = p_domain_id;
+    WHERE org_id = p_domain_id;
 END;
 $$;
 

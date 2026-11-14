@@ -3,7 +3,7 @@ import type { UserOnboardingStatus } from "../../types/onboarding";
 import { createDefaultUnauthenticatedStatus } from "./createDefaultUnauthenticatedStatus";
 import { resolveUserOrgMembership } from "./resolveUserOrgMembership";
 import { fetchUserHeadline } from "./fetchUserHeadline";
-import { isDomainVerified } from "./isDomainVerified";
+import { getVerificationCompletionStatus } from "./isDomainVerified";
 
 /**
  * Evaluates the full onboarding checklist for an authenticated user,
@@ -48,12 +48,21 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       };
     }
 
-    // 3. Domain verification check
-    const verified = await isDomainVerified(supabase, orgId);
+    // 3. Domain & Email verification checks
+    const { domainVerified, emailVerified } =
+      await getVerificationCompletionStatus(supabase, orgId);
 
-    if (!verified) {
+    if (!domainVerified) {
       return {
         targetRoute: "/domain-verification",
+        headline,
+        orgName,
+      };
+    }
+
+    if (!emailVerified) {
+      return {
+        targetRoute: "/email-verification",
         headline,
         orgName,
       };

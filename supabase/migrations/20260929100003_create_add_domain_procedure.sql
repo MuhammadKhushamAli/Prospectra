@@ -31,12 +31,13 @@ BEGIN
         COALESCE(p_verification_status, 'pending'::domain_verification_status),
         p_verified_at
     )
-    ON CONFLICT (org_id, domain) DO UPDATE SET
+    ON CONFLICT (org_id) DO UPDATE SET
+        domain = EXCLUDED.domain,
         esp_provider = EXCLUDED.esp_provider,
         dns_records = EXCLUDED.dns_records,
         verification_status = EXCLUDED.verification_status,
         verified_at = EXCLUDED.verified_at
-    RETURNING id INTO p_domain_id;
+    RETURNING org_id INTO p_domain_id;
 END;
 $$;
 

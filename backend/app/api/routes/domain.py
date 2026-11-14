@@ -1,13 +1,15 @@
-"""Routes: verify a domain and read its verification status."""
+"""Routes: verify a domain, verify sender email & SMTP config, and read verification status."""
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from app.api.auth import authorize_org_member
+from app.api.auth import authorize_org_member_with_email
 from app.domain.verification.service import (
     DOMAIN_VERIFICATION_TABLE,
     add_domain_to_verify,
     domain_verification,
+    get_available_email_providers,
+    verify_and_save_email_smtp,
 )
 from app.services.supabase import get_supabase_client
 
@@ -25,18 +27,45 @@ class OrgAuthRequest(BaseModel):
     org_id: str
 
 
+class EmailSmtpVerifyRequest(BaseModel):
+    token: str
+    org_id: str
+    email: str | None = None
+    email_provider: str = Field(..., min_length=1, description="Selected email provider identifier or 'other'")
+    custom_email_provider: str | None = None
+    smtp_server: str = Field(..., min_length=1, description="SMTP server hostname")
+    smtp_port: int = Field(default=587, ge=1, le=65535, description="SMTP server port")
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    dkim_selector: str | None = None
+
+
+@router.get("/email-providers")
+async def get_email_providers():
+    """Return built-in email providers merged with any verified custom ESPs in DB."""
+    return {"providers": await get_available_email_providers()}
+
+
 @router.post("/verify-domain")
 async def verify_domain(body: DomainVerifyRequest):
-    await authorize_org_member(body.token, body.org_id)
+    _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
     if not body.domain:
         raise HTTPException(status_code=400, detail="Domain is required")
-    result = await add_domain_to_verify(body.org_id, body.domain)
-    return result
+    try:
+        result = await add_domain_to_verify(
+            body.org_id,
+            body.domain,
+            user_email=user_email,
+        )
+        result["user_email"] = user_email
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/domain-status")
 async def domain_status(body: OrgAuthRequest):
-    await authorize_org_member(body.token, body.org_id)
+    _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
 
     # Re-check verification via DNS before returning status
     try:
@@ -48,13 +77,13 @@ async def domain_status(body: OrgAuthRequest):
     response = await (
         supabase
         .table(DOMAIN_VERIFICATION_TABLE)
-        .select("domain, verification_status, dns_records, verified_at")
+        .select("*")
         .eq("org_id", body.org_id)
         .execute()
     )
     if not response.data:
         raise HTTPException(status_code=404, detail="No domain verification found")
-    data = response.data[0]
+    data = dict(response.data[0])
     dns_records = data.get("dns_records") or {}
     data["dns_instructions"] = {
         "title": "Add this DNS record to your domain provider:",
@@ -62,4 +91,28 @@ async def domain_status(body: OrgAuthRequest):
         "host": dns_records.get("name", "_prospectra"),
         "value": dns_records.get("value", ""),
     }
+    data["user_email"] = user_email
     return data
+
+
+@router.post("/verify-email")
+async def verify_email_endpoint(body: EmailSmtpVerifyRequest):
+    """Verify the user's email & SMTP configuration after domain verification succeeds."""
+    _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
+    try:
+        result = await verify_and_save_email_smtp(
+            org_id=body.org_id,
+            sender_email=body.email or user_email or "",
+            user_email=user_email,
+            email_provider=body.email_provider,
+            custom_email_provider=body.custom_email_provider,
+            smtp_server=body.smtp_server,
+            smtp_port=body.smtp_port,
+            smtp_username=body.smtp_username,
+            smtp_password=body.smtp_password,
+            dkim_selector=body.dkim_selector,
+        )
+        return result.to_dict()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+

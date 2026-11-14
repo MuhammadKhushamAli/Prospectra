@@ -3,5 +3,6 @@ export const onboardingRoutes = [
   "/profile-setup",
   "/organization-registration",
   "/domain-verification",
+  "/email-verification",
   "/home",
 ] as const;

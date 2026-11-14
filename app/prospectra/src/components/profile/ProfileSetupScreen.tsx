@@ -49,7 +49,8 @@ export default function ProfileSetupScreen() {
           if (
             status.targetRoute === "/auth" ||
             status.targetRoute === "/organization-registration" ||
-            status.targetRoute === "/domain-verification"
+            status.targetRoute === "/domain-verification" ||
+            status.targetRoute === "/email-verification"
           ) {
             router.replace(status.targetRoute as any);
             return;

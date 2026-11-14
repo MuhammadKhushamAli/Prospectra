@@ -20,6 +20,11 @@ from app.core.arq_config import (
     trigger_job_webhook,
     update_job_status,
 )
+from app.core.logging_config import get_node_logger, setup_colored_logging
+
+# Initialize colored logging for ARQ worker process
+setup_colored_logging()
+logger = get_node_logger("arq_worker")
 
 # Windows compatibility for arq.worker.Worker.close() which references signal.SIGUSR1
 if not hasattr(signal, "SIGUSR1"):
@@ -41,7 +46,7 @@ async def search_companies_arq_task(
 
     job_id = str(ctx.get("job_id") or f"search-company-{org_id}")
     redis_conn = ctx.get("redis")
-    print(f"[ARQ WORKER] Picked up job '{job_id}' -> search_companies_arq_task (org_id={org_id}, threshold={threshold})")
+    logger.info(f"[ARQ WORKER] Picked up job '{job_id}' -> search_companies_arq_task (org_id={org_id}, threshold={threshold})")
 
     await update_job_status(
         job_id=job_id,
@@ -85,6 +90,7 @@ async def search_companies_arq_task(
         )
         return "done"
     except asyncio.CancelledError as exc:
+        logger.error(f"[ARQ WORKER] Job {job_id} cancelled or timed out: {exc}", exc=exc)
         await update_job_status(
             job_id=job_id,
             task_name="search_companies_arq_task",
@@ -102,6 +108,7 @@ async def search_companies_arq_task(
         )
         raise exc
     except Exception as exc:
+        logger.error(f"[ARQ WORKER] Job {job_id} failed: {exc}", exc=exc)
         await update_job_status(
             job_id=job_id,
             task_name="search_companies_arq_task",
@@ -143,7 +150,7 @@ async def write_email_arq_task(
 
     job_id = str(ctx.get("job_id") or f"write-email-{target_company_id}")
     redis_conn = ctx.get("redis")
-    print(f"[ARQ WORKER] Picked up job '{job_id}' -> write_email_arq_task (org_id={org_id}, company_id={target_company_id})")
+    logger.info(f"[ARQ WORKER] Picked up job '{job_id}' -> write_email_arq_task (org_id={org_id}, company_id={target_company_id})")
 
     await update_job_status(
         job_id=job_id,
@@ -252,12 +259,12 @@ async def write_email_arq_task(
 
 async def on_worker_startup(ctx: dict[str, Any]) -> None:
     """Lifecycle hook executed when the ARQ worker starts."""
-    print(f"[ARQ WORKER] Started listening on queue '{ARQ_QUEUE_NAME}'.")
+    logger.info(f"[ARQ WORKER] Started listening on queue '{ARQ_QUEUE_NAME}'.")
 
 
 async def on_worker_shutdown(ctx: dict[str, Any]) -> None:
     """Lifecycle hook executed when the ARQ worker shuts down."""
-    print(f"[ARQ WORKER] Shutting down worker for queue '{ARQ_QUEUE_NAME}'.")
+    logger.info(f"[ARQ WORKER] Shutting down worker for queue '{ARQ_QUEUE_NAME}'.")
 
 
 class WorkerSettings:

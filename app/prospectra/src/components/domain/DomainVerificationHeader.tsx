@@ -4,8 +4,14 @@ import { Globe } from "lucide-react-native";
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import { appName, domainVerificationCopy } from "../../constants/constants";
+import type { VerificationHeaderProps } from "../../types/domain";
 
-export default function DomainVerificationHeader() {
+export default function DomainVerificationHeader({
+  badgeLabel = domainVerificationCopy.badge,
+  title = domainVerificationCopy.title,
+  subtitle = domainVerificationCopy.subtitle,
+  icon: BadgeIcon = Globe,
+}: VerificationHeaderProps = {}) {
   const colors = useTheme();
   return (
     <View style={styles.container}>
@@ -40,21 +46,19 @@ export default function DomainVerificationHeader() {
             },
           ]}
         >
-          <Globe size={12} color={colors.textSecondary} strokeWidth={1.75} />
+          <BadgeIcon size={12} color={colors.textSecondary} strokeWidth={1.75} />
           <Text
             style={[styles.stepBadgeText, { color: colors.textSecondary }]}
           >
-            Domain Auth
+            {badgeLabel}
           </Text>
         </View>
       </View>
 
       <View style={styles.titleBlock}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          {domainVerificationCopy.title}
-        </Text>
+        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {domainVerificationCopy.subtitle}
+          {subtitle}
         </Text>
       </View>
     </View>

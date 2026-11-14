@@ -1,17 +1,4 @@
-import { useEffect } from "react";
-import {
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from "react-native-reanimated";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -23,36 +10,14 @@ export type { AuthModeSwitchProps };
 export default function AuthModeSwitch({
   mode,
   onChange,
-  reducedMotion = false,
 }: AuthModeSwitchProps) {
   const colors = useTheme();
-  const width = useSharedValue(0);
-  const translateX = useSharedValue(0);
-
-  useEffect(() => {
-    translateX.value = reducedMotion
-      ? mode === authMode.login
-        ? 0
-        : (width.value - 8) / 2
-      : withTiming(mode === authMode.login ? 0 : (width.value - 8) / 2, {
-          duration: 180,
-          easing: Easing.out(Easing.cubic),
-        });
-  }, [mode, reducedMotion, translateX, width]);
-
-  const indicator = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
-
-  const onLayout = (event: LayoutChangeEvent) => {
-    width.value = event.nativeEvent.layout.width;
-    translateX.value = mode === authMode.login ? 0 : (width.value - 8) / 2;
-  };
+  const isLogin = mode === authMode.login;
+  const isSignup = mode === authMode.signup;
 
   return (
     <View
       accessibilityRole="tablist"
-      onLayout={onLayout}
       style={[
         styles.container,
         {
@@ -61,31 +26,27 @@ export default function AuthModeSwitch({
         },
       ]}
     >
-      <Animated.View
-        style={[
-          styles.indicator,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            width: "50%",
-          },
-          indicator,
-        ]}
-      />
       <Pressable
         accessibilityRole="tab"
-        accessibilityState={{ selected: mode === authMode.login }}
+        accessibilityState={{ selected: isLogin }}
         onPress={() => onChange(authMode.login)}
-        style={styles.option}
+        style={[
+          styles.option,
+          isLogin && [
+            styles.activeOption,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ],
+        ]}
       >
         <Text
           style={[
             styles.text,
             {
-              color:
-                mode === authMode.login ? colors.text : colors.textSecondary,
-              fontFamily:
-                mode === authMode.login ? "DMSansSemiBold" : "DMSansMedium",
+              color: isLogin ? colors.text : colors.textSecondary,
+              fontFamily: isLogin ? "DMSansSemiBold" : "DMSansMedium",
             },
           ]}
         >
@@ -94,18 +55,25 @@ export default function AuthModeSwitch({
       </Pressable>
       <Pressable
         accessibilityRole="tab"
-        accessibilityState={{ selected: mode === authMode.signup }}
+        accessibilityState={{ selected: isSignup }}
         onPress={() => onChange(authMode.signup)}
-        style={styles.option}
+        style={[
+          styles.option,
+          isSignup && [
+            styles.activeOption,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+            },
+          ],
+        ]}
       >
         <Text
           style={[
             styles.text,
             {
-              color:
-                mode === authMode.signup ? colors.text : colors.textSecondary,
-              fontFamily:
-                mode === authMode.signup ? "DMSansSemiBold" : "DMSansMedium",
+              color: isSignup ? colors.text : colors.textSecondary,
+              fontFamily: isSignup ? "DMSansSemiBold" : "DMSansMedium",
             },
           ]}
         >
@@ -123,24 +91,19 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radius.md,
     flexDirection: "row",
     overflow: "hidden",
-    position: "relative",
     marginBottom: tokens.spacing.lg,
-    padding: tokens.spacing.xs,
-  },
-  indicator: {
-    position: "absolute",
-    top: tokens.spacing.xs - 1,
-    bottom: tokens.spacing.xs - 1,
-    left: tokens.spacing.xs,
-    borderWidth: 1,
-    borderRadius: 6,
-    ...tokens.shadow.sm,
+    padding: tokens.spacing.xs - 1,
   },
   option: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    zIndex: 1,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  activeOption: {
+    ...tokens.shadow.sm,
   },
   text: {
     fontSize: tokens.fontSize.xs,

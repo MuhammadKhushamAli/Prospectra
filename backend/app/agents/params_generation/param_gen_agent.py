@@ -158,12 +158,16 @@ async def generate_params(
         f"Generate 3 to 5 high-precision SearXNG queries targeting client businesses that need these solutions."
     )
 
-    if search_feedback and previous_prompt:
+    if search_feedback or previous_prompt:
+        user_input += "\n\n=== FEEDBACK FROM PREVIOUS SEARCH RUN ===\n"
+        if search_feedback:
+            user_input += f"{search_feedback}\n\n"
+        if previous_prompt and "PREVIOUS QUERIES" not in (search_feedback or ""):
+            user_input += (
+                f"PREVIOUS QUERIES:\n{previous_prompt.model_dump_json(indent=2)}\n\n"
+            )
         user_input += (
-            f"\n\n=== FEEDBACK FROM PREVIOUS SEARCH RUN ===\n"
-            f"{search_feedback}\n\n"
-            f"PREVIOUS QUERIES:\n{previous_prompt.model_dump_json(indent=2)}\n\n"
-            f"Adjust search angles, try different business sub-niches, or alter operational keywords to avoid previously rejected domains."
+            "Adjust search angles, try different business sub-niches, or alter operational keywords to avoid previously rejected domains."
         )
 
     response = await parse_structured_response(

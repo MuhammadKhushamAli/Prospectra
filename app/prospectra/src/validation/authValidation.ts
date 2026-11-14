@@ -3,6 +3,7 @@ import type {
   SignupCredentials,
 } from "../types/auth";
 import { authValidationMessages } from "../constants/constants";
+import { isFreeEmailProvider } from "./domainValidation";
 
 export const passwordRegex =
   /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/;
@@ -24,6 +25,8 @@ export function validateSignup(
     return authValidationMessages.missingFullName;
   if (!emailRegex.test(credentials.email.trim()))
     return authValidationMessages.invalidEmail;
+  if (isFreeEmailProvider(credentials.email.trim()))
+    return authValidationMessages.freeEmailNotAllowed;
   if (!passwordRegex.test(credentials.password))
     return authValidationMessages.invalidPassword;
   if (credentials.password !== confirmPassword)

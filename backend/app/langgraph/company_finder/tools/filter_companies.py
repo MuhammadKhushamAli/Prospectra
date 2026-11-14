@@ -4,6 +4,11 @@ import os
 from typing import Any, Dict, List
 
 from app.core.logging_config import get_node_logger
+from app.langgraph.company_finder.tools.store_search_progress import (
+    MIN_SEARCH_ACCEPT_RATE,
+    force_reset_search_page_to_zero,
+    update_search_page_progress,
+)
 from ..state.state import GraphState
 from app.models.company import Company
 
@@ -36,7 +41,12 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
     """Filter authenticated companies into accepted prospects and build feedback for regeneration."""
     verified_companies = state.get("verified_companies", [])
     company_auth_scores = state.get("company_auth_scores", {})
-    target_industries = state.get("target_industries", [])
+    user_context = state.get("user_context")
+    target_industries = (
+        (getattr(user_context, "target_industries", None) or [])
+        if user_context
+        else (state.get("target_industries") or [])
+    )
     pipeline_stats = state.get("pipeline_stats", {})
 
     accepted_companies: List[Company] = []
@@ -161,8 +171,78 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
 
     search_feedback = "\n\n".join(feedback_parts)
 
+    if not pipeline_stats.get("progress_updated_in_db"):
+        await update_search_page_progress(state, success_count=len(accepted_companies))
+
+    # Evaluate success rate against minimum threshold
+    success_rate = pipeline_stats.get("success_rate", 0.0)
+    has_low_rate = (len(accepted_companies) == 0) or (success_rate < MIN_SEARCH_ACCEPT_RATE)
+
+    same_prompt_retries = state.get("same_prompt_retries", 0)
+    same_prompt_retry_active = False
+
+    if has_low_rate:
+        if same_prompt_retries == 0:
+            # First time success rate is below min rate:
+            # Reset page to 0 in DB and search with the SAME prompt again (do not regenerate prompt yet)
+            same_prompt_retry_active = True
+            same_prompt_retries = 1
+            logger.info(
+                f"  [PAGE 0 RETRY] Success rate {success_rate:.1%} < {MIN_SEARCH_ACCEPT_RATE:.0%}. "
+                f"Resetting DB search progress to page 0 to retry with SAME prompt."
+            )
+            await force_reset_search_page_to_zero(state)
+            search_feedback = state.get("search_feedback", "")
+        else:
+            # Same prompt failed again after page 0 retry:
+            # Go for prompt generation with reformation prompt indicating skill, targeted industry, and that prompt is not providing unique companies now
+            same_prompt_retry_active = False
+            same_prompt_retries = 0
+            logger.info(
+                f"  [REFORMATION PROMPT] Low success rate repeated after page 0 retry. "
+                f"Constructing reformation prompt with skill, industry, and previous queries."
+            )
+
+            skills_names = [s.name if hasattr(s, "name") else str(s) for s in (user_context.skills or [])] if user_context else []
+            skills_str = ", ".join(skills_names) if skills_names else "Technical solutions"
+            industries_str = ", ".join(user_context.target_industries or []) if (user_context and getattr(user_context, "target_industries", None)) else "Not specified"
+
+            search_prompt = state.get("search_prompt")
+            last_prompt_text = ""
+            if search_prompt and getattr(search_prompt, "searxng", None):
+                queries = getattr(search_prompt.searxng, "queries", [])
+                last_prompt_text = "\n".join(f"- Industry: {q.target_industry} | Query: {q.query}" for q in queries)
+            elif search_prompt and hasattr(search_prompt, "model_dump_json"):
+                last_prompt_text = search_prompt.model_dump_json(indent=2)
+            else:
+                last_prompt_text = str(search_prompt or "None")
+
+            reformation_parts = [
+                "=== REFORMATION PROMPT ===",
+                f"Targeted Industry: {industries_str}",
+                f"User Skill(s): {skills_str}",
+                f"Status: The generated prompt is not providing unique companies now for skill(s) '{skills_str}' and targeted industry '{industries_str}'. "
+                f"Low acceptance/success rate ({success_rate:.1%}) repeated even after resetting search progress to page 0.",
+                "",
+                "=== LAST GENERATED PROMPT (PREVIOUS QUERIES) ===",
+                last_prompt_text,
+                "",
+                "=== MANDATE FOR REGENERATION ===",
+                f"Formulate completely new, distinct search queries for {industries_str} and {skills_str}. "
+                f"Pivot to alternative operational business niches, non-technical commercial workflows, or different search phrasing to discover unique, authentic companies without repeating the last queries above.",
+            ]
+            if rejection_feedbacks:
+                reformation_parts.append("\nSample Rejection Reasons:\n" + "\n".join(f"- {r}" for r in rejection_feedbacks[:5]))
+
+            search_feedback = "\n".join(reformation_parts)
+    else:
+        same_prompt_retries = 0
+        same_prompt_retry_active = False
+
     return {
         "accepted_companies": accepted_companies,
         "rejected_companies": rejected_companies,
         "search_feedback": search_feedback,
+        "same_prompt_retries": same_prompt_retries,
+        "same_prompt_retry_active": same_prompt_retry_active,
     }

@@ -3,7 +3,7 @@
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.core.logging_config import get_node_logger
 from app.models.search_progress import SearchProgress, SearchProgressSource
@@ -12,6 +12,8 @@ from app.services.supabase import get_supabase_client
 SEARCH_PROGRESS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_TABLE_NAME", "search_progress")
 SEARCH_PROGRESS_SKILLS_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_SKILLS_TABLE_NAME", "search_progress_skills")
 SEARCH_PROGRESS_INDUSTRIES_TABLE = os.environ.get("SUPABASE_SEARCH_PROGRESS_INDUSTRIES_TABLE_NAME", "search_progress_industries")
+PAGES_PER_QUERY = int(os.environ.get("SEARXNG_PAGES_PER_QUERY", "2"))
+MIN_SEARCH_ACCEPT_RATE = float(os.environ.get("SEARCH_MIN_ACCEPT_RATE", "0.25"))
 logger = get_node_logger("company_search")
 
 
@@ -162,3 +164,102 @@ async def store_search_progress(search_progress: List[SearchProgress]) -> None:
             await save_single_search_progress(supabase, progress)
     except Exception as e:
         logger.warning(f"Warning: Failed to store search progress to Supabase: {str(e)}")
+
+
+async def update_search_page_progress(
+    state: Any,
+    success_count: int = 0,
+    total_count: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Calculate the search success rate and persist the new last page in Supabase.
+
+    If success_rate < MIN_SEARCH_ACCEPT_RATE (25%), resets last_page_fetched to 0
+    (so the next search cycle restarts at page 1). Otherwise, advances to target_last_page.
+    """
+    pipeline_stats = state.get("pipeline_stats")
+    if not isinstance(pipeline_stats, dict):
+        pipeline_stats = {}
+
+    if pipeline_stats.get("progress_updated_in_db"):
+        return {
+            "last_page_fetched": pipeline_stats.get("last_page_fetched", 0),
+            "success_rate": pipeline_stats.get("success_rate", 0.0),
+        }
+
+    user_context = state.get("user_context")
+    org_id = (
+        getattr(user_context, "org_id", "")
+        if user_context and not isinstance(user_context, dict)
+        else (user_context or {}).get("org_id", "")
+    )
+
+    user_id = (
+        getattr(user_context, "user_id", "")
+        if user_context and not isinstance(user_context, dict)
+        else (user_context or {}).get("user_id", "")
+    )
+    target_last_page = pipeline_stats.get("target_last_page", 0)
+
+    if total_count is None:
+        total_count = pipeline_stats.get("searched", 0)
+
+    success_rate = (success_count / total_count) if total_count > 0 else 0.0
+
+    if total_count == 0 or success_rate < MIN_SEARCH_ACCEPT_RATE:
+        new_last_page = 0
+        logger.info(
+            f"  [PAGINATION DB UPDATE] Success rate: {success_rate:.1%} ({success_count}/{total_count}) "
+            f"< {MIN_SEARCH_ACCEPT_RATE:.0%}. Resetting search page progress to 1."
+        )
+    else:
+        new_last_page = target_last_page
+        logger.info(
+            f"  [PAGINATION DB UPDATE] Success rate: {success_rate:.1%} ({success_count}/{total_count}) "
+            f">= {MIN_SEARCH_ACCEPT_RATE:.0%}. Advancing search page progress to {new_last_page}."
+        )
+
+    if is_valid_uuid(org_id):
+        progress = SearchProgress(
+            user_id=str(user_id) if is_valid_uuid(user_id) else None,
+            org_id=str(org_id),
+            last_page_fetched=new_last_page,
+            last_fetched_at=datetime.now(timezone.utc),
+            source=SearchProgressSource.SEARXNG,
+        )
+        await store_search_progress([progress])
+
+    pipeline_stats["progress_updated_in_db"] = True
+    pipeline_stats["last_page_fetched"] = new_last_page
+    pipeline_stats["success_rate"] = round(success_rate, 4)
+
+    return {
+        "last_page_fetched": new_last_page,
+        "success_rate": round(success_rate, 4),
+    }
+
+
+async def force_reset_search_page_to_zero(state: Any) -> None:
+    """Explicitly force last_page_fetched to 0 in Supabase so the next search cycle restarts from page 1."""
+    user_context = state.get("user_context") if isinstance(state, dict) else getattr(state, "user_context", None)
+    org_id = (
+        getattr(user_context, "org_id", "")
+        if user_context and not isinstance(user_context, dict)
+        else (user_context or {}).get("org_id", "")
+    )
+
+    user_id = (
+        getattr(user_context, "user_id", "")
+        if user_context and not isinstance(user_context, dict)
+        else (user_context or {}).get("user_id", "")
+    )
+
+    if is_valid_uuid(org_id):
+        progress = SearchProgress(
+            user_id=str(user_id) if is_valid_uuid(user_id) else None,
+            org_id=str(org_id),
+            last_page_fetched=0,
+            last_fetched_at=datetime.now(timezone.utc),
+            source=SearchProgressSource.SEARXNG,
+        )
+        await store_search_progress([progress])
+        logger.info(f"  [PAGINATION RETRY] Forced search page progress to 0 in DB (org={org_id}, user={user_id}).")

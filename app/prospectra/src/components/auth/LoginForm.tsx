@@ -27,12 +27,19 @@ export default function LoginForm({
         placeholder={authCopy.placeholders.email}
         keyboardType="email-address"
         autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="off"
+        textContentType="none"
+        importantForAutofill="no"
         value={email}
         onChangeText={setEmail}
       />
       <PasswordField
         label={authCopy.fields.password}
         placeholder={authCopy.placeholders.loginPassword}
+        autoComplete="off"
+        textContentType="none"
+        importantForAutofill="no"
         value={password}
         onChangeText={setPassword}
       />
