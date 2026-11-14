@@ -37,9 +37,20 @@ export async function getVerificationCompletionStatus(
 }
 
 /**
- * Check whether both domain ownership and email/SMTP verification are completed for an organization.
+ * Check whether domain ownership is verified for an organization.
  */
 export async function isDomainVerified(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  orgId: string,
+): Promise<boolean> {
+  const status = await getVerificationCompletionStatus(supabase, orgId);
+  return status.domainVerified;
+}
+
+/**
+ * Check whether both domain ownership and email/SMTP verification are completed for an organization.
+ */
+export async function isDomainAndEmailVerified(
   supabase: ReturnType<typeof getSupabaseClient>,
   orgId: string,
 ): Promise<boolean> {

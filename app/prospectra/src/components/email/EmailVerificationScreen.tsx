@@ -42,6 +42,7 @@ export default function EmailVerificationScreen() {
   const { verifyEmail, isVerifyingEmail } = useDomainVerification();
 
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isDomainVerified, setIsDomainVerified] = useState(false);
   const [notification, setNotification] = useState<{
     variant: NotificationVariant;
     message: string;
@@ -103,12 +104,17 @@ export default function EmailVerificationScreen() {
       let isMounted = true;
       async function init() {
         try {
+          setIsInitializing(true);
+          setIsDomainVerified(false);
+
           const status = await checkUserOnboardingStatus();
           if (!isMounted) return;
-          if (status.targetRoute !== "/email-verification") {
+          if (status.targetRoute !== "/email-verification" || !status.isDomainVerified) {
             router.replace(status.targetRoute as any);
             return;
           }
+
+          setIsDomainVerified(true);
 
           const supabase = getSupabaseClient();
           const [{ data: authData }, loadedProviders, orgId] =
@@ -119,6 +125,7 @@ export default function EmailVerificationScreen() {
             ]);
 
           if (!isMounted) return;
+
           if (authData?.user?.email) {
             setUserEmail(authData.user.email);
           }
@@ -173,7 +180,7 @@ export default function EmailVerificationScreen() {
           }
         } catch {
           if (isMounted) {
-            router.replace("/auth");
+            router.replace("/domain-verification");
           }
         } finally {
           if (isMounted) {
@@ -292,7 +299,7 @@ export default function EmailVerificationScreen() {
     router.replace("/auth");
   };
 
-  if (isInitializing) {
+  if (isInitializing || !isDomainVerified) {
     return (
       <View
         style={[styles.loadingScreen, { backgroundColor: colors.background }]}

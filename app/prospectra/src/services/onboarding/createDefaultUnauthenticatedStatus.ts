@@ -8,5 +8,7 @@ export function createDefaultUnauthenticatedStatus(): UserOnboardingStatus {
     targetRoute: "/auth",
     headline: null,
     orgName: null,
+    isDomainVerified: false,
+    isEmailVerified: false,
   };
 }

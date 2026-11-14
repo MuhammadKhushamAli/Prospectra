@@ -33,6 +33,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         targetRoute: "/organization-registration",
         headline: null,
         orgName: null,
+        isDomainVerified: false,
+        isEmailVerified: false,
       };
     }
 
@@ -45,6 +47,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         targetRoute: "/home",
         headline,
         orgName,
+        isDomainVerified: true,
+        isEmailVerified: true,
       };
     }
 
@@ -57,6 +61,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         targetRoute: "/domain-verification",
         headline,
         orgName,
+        isDomainVerified: false,
+        isEmailVerified: false,
       };
     }
 
@@ -65,6 +71,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
         targetRoute: "/email-verification",
         headline,
         orgName,
+        isDomainVerified: true,
+        isEmailVerified: false,
       };
     }
 
@@ -73,6 +81,8 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       targetRoute: "/home",
       headline,
       orgName,
+      isDomainVerified: true,
+      isEmailVerified: true,
     };
   } catch (error) {
     console.error("Error checking onboarding status:", error);

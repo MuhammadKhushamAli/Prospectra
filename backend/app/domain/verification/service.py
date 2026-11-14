@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import datetime, timezone
+import json
+import logging
 import os
 from typing import Any
 
@@ -26,6 +28,7 @@ DOMAIN_VERIFICATION_TABLE = (
     or os.environ.get("SUPABASE_DOMAIN_VERIFICATIONS_TABLE_NAME", "domain_verifications")
 )
 ESP_PROVIDERS_TABLE = os.environ.get("ESP_PROVIDERS_TABLE", "esp_providers")
+logger = logging.getLogger(__name__)
 
 
 async def add_domain_to_verify(
@@ -33,10 +36,12 @@ async def add_domain_to_verify(
     domain: str,
     user_email: str | None = None,
 ) -> dict[str, Any]:
-    """Store a pending domain verification and return its DNS token.
+    """Store or retrieve domain verification and return its DNS token.
 
     Enforces that free email domains are rejected and, when ``user_email`` is
     provided, that ``domain`` matches the domain of the signed-in user's email.
+    If a verification token already exists in DB for this organization,
+    reuses the existing token from DB instead of generating a new one.
     """
     if user_email:
         _, normalized_domain = validate_email_domain_match(user_email, domain)
@@ -47,44 +52,117 @@ async def add_domain_to_verify(
                 f"Free email provider domains ({normalized_domain}) cannot be verified."
             )
 
-    token = new_token()
-    verification = DomainVerification(
-        org_id=org_id,
-        domain=normalized_domain,
-        dns_records=asdict(
-            DNSRecord(
-                type="TXT",
-                name=_VERIFICATION_HOST,
-                value=token,
-            )
-        ),
-        verification_status="pending",
-        verified_at=None,
-        created_at=None,
-    )
-
-    row = asdict(verification)
-    row.pop("created_at")
     supabase_client = await get_supabase_client()
+
+    # Query DB to check if a domain verification record already exists for this org
+    existing_record: dict[str, Any] | None = None
     try:
-        await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
-            row,
-            on_conflict="org_id",
-        ).execute()
-    except Exception:
-        await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
-            row,
-            on_conflict="org_id,domain",
-        ).execute()
+        resp = await (
+            supabase_client
+            .table(DOMAIN_VERIFICATION_TABLE)
+            .select("*")
+            .eq("org_id", org_id)
+            .limit(1)
+            .execute()
+        )
+        if resp and resp.data:
+            existing_record = dict(resp.data[0])
+    except Exception as exc:
+        logger.warning("Could not query existing domain verification for org %s: %s", org_id, exc)
+
+    existing_dns = (
+        existing_record.get("dns_records")
+        if (existing_record and isinstance(existing_record.get("dns_records"), (dict, str)))
+        else None
+    )
+    if isinstance(existing_dns, str):
+        try:
+            existing_dns = json.loads(existing_dns)
+        except Exception:
+            existing_dns = {}
+    elif not isinstance(existing_dns, dict):
+        existing_dns = {}
+
+    existing_token = existing_dns.get("value")
+    has_existing_token = bool(existing_token and str(existing_token).strip())
+
+    # Reuse existing token from DB if present; otherwise generate a new token
+    if has_existing_token:
+        token = str(existing_token).strip()
+        host = str(existing_dns.get("name") or _VERIFICATION_HOST)
+    else:
+        token = new_token()
+        host = _VERIFICATION_HOST
+
+    current_status = (
+        existing_record.get("verification_status")
+        if existing_record
+        else "pending"
+    ) or "pending"
+    verified = current_status == "verified"
+
+    # If domain already has a token in DB, run a live DNS check to see if it just propagated
+    if not verified and has_existing_token:
+        try:
+            if await is_verified(normalized_domain, token):
+                current_status = "verified"
+                verified = True
+                now_iso = datetime.now(timezone.utc).isoformat()
+                await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update({
+                    "verification_status": "verified",
+                    "verified_at": now_iso,
+                    "domain": normalized_domain,
+                }).eq("org_id", org_id).execute()
+        except Exception:
+            pass
+
+    # If first time (no record or no token), create and persist the record
+    if not existing_record or not has_existing_token:
+        verification = DomainVerification(
+            org_id=org_id,
+            domain=normalized_domain,
+            dns_records=asdict(
+                DNSRecord(
+                    type="TXT",
+                    name=host,
+                    value=token,
+                )
+            ),
+            verification_status="pending",
+            verified_at=None,
+            created_at=None,
+        )
+
+        row = asdict(verification)
+        row.pop("created_at")
+        try:
+            await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
+                row,
+                on_conflict="org_id",
+            ).execute()
+        except Exception:
+            await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
+                row,
+                on_conflict="org_id,domain",
+            ).execute()
+    elif existing_record.get("domain") != normalized_domain and not verified:
+        # If user updated domain before verification, keep the token and update the domain
+        try:
+            await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update({
+                "domain": normalized_domain,
+            }).eq("org_id", org_id).execute()
+        except Exception:
+            pass
 
     return {
         "domain": normalized_domain,
         "token": token,
-        "verification_status": "pending",
+        "verification_status": current_status,
+        "verified": verified,
         "dns_instructions": {
             "title": "Add this DNS record to your domain provider:",
             "type": "TXT",
-            "host": _VERIFICATION_HOST,
+            "host": host,
             "value": token,
         },
     }

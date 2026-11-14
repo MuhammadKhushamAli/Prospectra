@@ -267,16 +267,18 @@ export default function EmailVerificationForm({
         </View>
       ) : null}
 
-      <Button
-        label={
-          isVerifyingEmail
-            ? emailVerificationCopy.actions.verifyingEmail
-            : emailVerificationCopy.actions.verifyEmail
-        }
-        variant={isEmailVerified ? buttonVariant.ghost : buttonVariant.primary}
-        onPress={onVerifyEmail}
-        disabled={isVerifyingEmail}
-      />
+      {!isEmailVerified ? (
+        <Button
+          label={
+            isVerifyingEmail
+              ? emailVerificationCopy.actions.verifyingEmail
+              : emailVerificationCopy.actions.verifyEmail
+          }
+          variant={buttonVariant.primary}
+          onPress={onVerifyEmail}
+          disabled={isVerifyingEmail}
+        />
+      ) : null}
 
       {isEmailVerified ? (
         <View style={styles.continueWrap}>
@@ -303,13 +305,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: tokens.spacing.md,
   },
   sectionTitle: {
+    flex: 1,
     fontFamily: "DMSansSemiBold",
     fontSize: tokens.fontSize.md,
     letterSpacing: -0.2,
   },
   statusBadge: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 6,

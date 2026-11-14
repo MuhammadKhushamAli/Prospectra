@@ -6,6 +6,8 @@ interface UserOnboardingStatus {
   targetRoute: tOnboardingRoute;
   headline: string | null;
   orgName: string | null;
+  isDomainVerified?: boolean;
+  isEmailVerified?: boolean;
 }
 
 export type { tOnboardingRoute, UserOnboardingStatus };
