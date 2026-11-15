@@ -37,6 +37,7 @@ import {
   initiateCompanyFinder,
   requestEmailGeneration,
   sendMobileJobNotification,
+  sendOutreachEmailViaBackend,
   subscribeToJobWebhooks,
   subscribeToProspectingRealtime,
   updateCompanyStatusInDb,
@@ -257,6 +258,21 @@ export default function ProspectingScreen() {
           );
           void loadData();
         }
+      } else if (
+        event.task_name === "email_reply_detected" ||
+        event.task_name === "check_email_replies_arq_task"
+      ) {
+        if (event.status === "done") {
+          void sendMobileJobNotification(
+            "Prospect Response Received!",
+            event.message || "A new reply was received to your outreach email!",
+          );
+          pushAppNotification(
+            "success",
+            event.message || "New reply received from prospect!",
+          );
+          void loadData();
+        }
       }
     });
 
@@ -361,58 +377,41 @@ export default function ProspectingScreen() {
     selectedEmails?: string[],
   ) => {
     if (processingCompanyId === company.id) return;
+
+    // Immutability guard: once accepted or rejected, status cannot be changed again
+    if (company.status === "rejected") {
+      pushAppNotification("error", `${company.name} is rejected and cannot be accepted.`);
+      return;
+    }
+    const acceptedStatuses = ["approved", "email_drafted", "pending_send_approval", "sent", "replied"];
+    if (acceptedStatuses.includes(company.status)) {
+      pushAppNotification("error", `${company.name} has already been accepted.`);
+      return;
+    }
+
     setProcessingCompanyId(company.id);
 
-    const updatedCompany: CompanyProspect = {
-      ...company,
-      status: "approved",
-    };
-
-    setCompanies((prev) =>
-      prev.map((c) => (c.id === company.id ? updatedCompany : c)),
-    );
-    setSelectedCompany(updatedCompany);
-
     try {
-      await updateCompanyStatusInDb(company.id, "approved");
-      void loadData();
-
-      // Send email generation request to backend.
-      // Notifications and DB updates are handled via the ARQ job webhook and Realtime.
-      requestEmailGeneration(company.id, {
-        targetOrgId: orgId || undefined,
+      // Send request immediately to the single backend endpoint.
+      // Backend validates pending status, updates DB, triggers email generation agent,
+      // and triggers company search workflow if pending < threshold.
+      const res = await updateCompanyStatusInDb(company.id, "approved", {
+        orgId: orgId || undefined,
         recipientEmails: selectedEmails,
         orgDomain: orgDomain || undefined,
-      })
-        .then((res) => {
-          if (res && res.status === "error") {
-            pushAppNotification(
-              "error",
-              `Could not start outreach draft generation for ${company.name}.`,
-            );
-            void loadData();
-          }
-        })
-        .catch(() => {
-          pushAppNotification(
-            "error",
-            `Could not reach email generation service for ${company.name}.`,
-          );
-          void loadData();
-        });
+      });
 
-      initiateCompanyFinder(undefined, orgId || undefined)
-        .then((res) => {
-          if (res.status === "queued" || res.status === "started") {
-            setIsFindingCompanies(true);
-          }
-        })
-        .catch((err) => {
-          console.warn("Could not refill company queue:", err?.message || err);
-        });
-    } catch (err) {
-      console.warn("Failed to approve company in DB:", err);
-      pushAppNotification("error", `Failed to approve ${company.name}.`);
+      pushAppNotification(
+        "success",
+        res.message || `${company.name} accepted! Outreach email generation started.`,
+      );
+      void loadData();
+    } catch (err: any) {
+      console.warn("Failed to accept company:", err);
+      pushAppNotification(
+        "error",
+        err?.message || `Failed to accept ${company.name}.`,
+      );
       void loadData();
     } finally {
       setProcessingCompanyId(null);
@@ -421,59 +420,81 @@ export default function ProspectingScreen() {
 
   const handleRejectCompany = async (company: CompanyProspect) => {
     if (processingCompanyId === company.id) return;
+
+    // Immutability guard: once accepted or rejected, status cannot be changed again
+    if (company.status === "rejected") {
+      pushAppNotification("error", `${company.name} is already rejected.`);
+      return;
+    }
+    const acceptedStatuses = ["approved", "email_drafted", "pending_send_approval", "sent", "replied"];
+    if (acceptedStatuses.includes(company.status)) {
+      pushAppNotification("error", `${company.name} has already been accepted and cannot be rejected.`);
+      return;
+    }
+
     setProcessingCompanyId(company.id);
 
-    const updatedCompany: CompanyProspect = {
-      ...company,
-      status: "rejected",
-    };
-
-    setCompanies((prev) =>
-      prev.map((c) => (c.id === company.id ? updatedCompany : c)),
-    );
-    setSelectedCompany(updatedCompany);
-
-    setEmails((prev) =>
-      prev.map((e) =>
-        e.company_id === company.id ? { ...e, status: "rejected" } : e,
-      ),
-    );
-
     try {
-      await updateCompanyStatusInDb(company.id, "rejected");
+      // Send request immediately to the single backend endpoint.
+      // Backend validates pending status, updates DB, marks draft emails rejected,
+      // and triggers company search workflow if pending < threshold.
+      const res = await updateCompanyStatusInDb(company.id, "rejected", {
+        orgId: orgId || undefined,
+      });
 
-      initiateCompanyFinder(undefined, orgId || undefined)
-        .then((res) => {
-          if (res.status === "queued" || res.status === "started") {
-            setIsFindingCompanies(true);
-          }
-        })
-        .catch((err) => {
-          console.warn("Could not refill company queue:", err?.message || err);
-        });
-    } catch (err) {
-      console.warn("Failed to reject company in DB:", err);
-    } finally {
+      pushAppNotification(
+        "success",
+        res.message || `${company.name} rejected.`,
+      );
       void loadData();
+    } catch (err: any) {
+      console.warn("Failed to reject company:", err);
+      pushAppNotification(
+        "error",
+        err?.message || `Failed to reject ${company.name}.`,
+      );
+      void loadData();
+    } finally {
       setProcessingCompanyId(null);
     }
   };
 
-  const handleSendEmail = async (email: EmailProspect) => {
-    const updatedEmail: EmailProspect = {
-      ...email,
-      status: "sent",
-    };
-
-    setEmails((prev) =>
-      prev.map((e) => (e.id === email.id ? updatedEmail : e)),
-    );
-    setSelectedEmail(updatedEmail);
-
+  const handleSendEmail = async (
+    email: EmailProspect,
+    selectedRecipients?: string[],
+  ) => {
     try {
-      await updateEmailStatusInDb(email.id, "sent");
-    } catch {
-      // Non-fatal; fresh DB fetch below reconciles state
+      const res = await sendOutreachEmailViaBackend(
+        email.id,
+        orgId || undefined,
+        selectedRecipients,
+        email.company_id,
+        email.subject,
+        email.body,
+      );
+
+      const updatedEmail: EmailProspect = {
+        ...email,
+        status: "sent",
+        recipient_emails: res.recipients_sent,
+        recipient_email: res.recipients_sent[0] || email.recipient_email,
+      };
+
+      setEmails((prev) =>
+        prev.map((e) => (e.id === email.id ? updatedEmail : e)),
+      );
+      setSelectedEmail(updatedEmail);
+
+      pushAppNotification(
+        "success",
+        res.message || "Outreach email sent successfully!",
+      );
+    } catch (err: any) {
+      const errMsg =
+        err?.response?.data?.detail ||
+        err?.message ||
+        "Failed to send email. Please verify your SMTP settings.";
+      pushAppNotification("error", errMsg);
     } finally {
       void loadData();
     }

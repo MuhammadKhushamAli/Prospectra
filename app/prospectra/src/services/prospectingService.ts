@@ -1,7 +1,10 @@
+import axios from "axios";
+
 import { getSupabaseClient } from "../config/supabaseClient";
 import { TABLES } from "../constants/tables";
 import { DB_KEYS } from "../constants/dbKeys";
 import { resolveUserOrgMembership } from "./onboarding/resolveUserOrgMembership";
+import { resolveAuthToken, resolveOrganizationId } from "./emailGenerationService";
 import type {
   CompanyProspect,
   EmailProspect,
@@ -104,7 +107,15 @@ export function mapEmailRow(
     sent_by_user_id: r.sent_by_user_id || r.user_id,
     user_id: r.sent_by_user_id || r.user_id,
     from_email: r.from_email || "outreach@prospectra.com",
-    to_email: r.to_email || "prospect@target.com",
+    to_email: r.recipient_email || r.to_email || "prospect@target.com",
+    recipient_email: r.recipient_email || r.to_email,
+    recipient_emails: Array.isArray(r.recipient_emails) ? r.recipient_emails : undefined,
+    message_id: r.message_id,
+    reply_snippet: r.reply_snippet,
+    reply_from: r.reply_from,
+    reply_subject: r.reply_subject,
+    replied_at: r.replied_at,
+    sent_at: r.sent_at,
     email_body: {
       subject,
       body,
@@ -386,28 +397,76 @@ export async function fetchProspectingData(): Promise<ProspectingData> {
   };
 }
 
+export interface CompanyStatusChangeOptions {
+  orgId?: string;
+  recipientEmails?: string[];
+  orgDomain?: string;
+  feedback?: string;
+}
+
 /**
- * Updates a company's status directly in the database (e.g. 'approved' or 'rejected').
+ * Updates a company's review status via the single backend endpoint:
+ * Every DB change occurs strictly in the backend, not in the app.
  */
 export async function updateCompanyStatusInDb(
   companyId: string,
-  status: CompanyProspect["status"],
-): Promise<boolean> {
+  status: "approved" | "rejected",
+  options?: CompanyStatusChangeOptions,
+): Promise<{ success: boolean; message?: string }> {
   try {
     const supabase = getSupabaseClient();
-    const { error } = await supabase
-      .from(TABLES.COMPANIES)
-      .update({ [DB_KEYS.STATUS]: status })
-      .eq(DB_KEYS.ID, companyId);
-
-    if (error) {
-      console.warn("Could not update company status in DB:", error.message);
-      return false;
+    let orgId = options?.orgId;
+    if (!orgId) {
+      const { data: currentComp } = await supabase
+        .from(TABLES.COMPANIES)
+        .select(DB_KEYS.ORG_ID)
+        .eq(DB_KEYS.ID, companyId)
+        .maybeSingle();
+      orgId = currentComp?.org_id;
     }
-    return true;
-  } catch (err) {
-    console.warn("Error updating company status in DB:", err);
-    return false;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+    const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+    if (!baseURL) {
+      throw new Error("Backend URL (EXPO_PUBLIC_BACKEND_URL) is not configured.");
+    }
+    if (!token) {
+      throw new Error("User session token is missing.");
+    }
+    if (!orgId) {
+      throw new Error("Organization ID could not be resolved.");
+    }
+
+    const response = await axios.post(
+      `${baseURL}/api/v1/company-status`,
+      {
+        token,
+        org_id: orgId,
+        company_id: companyId,
+        status,
+        recipient_emails: options?.recipientEmails,
+        org_domain: options?.orgDomain,
+        feedback: options?.feedback,
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        timeout: 15000,
+      },
+    );
+
+    return {
+      success: true,
+      message: response.data?.message,
+    };
+  } catch (err: any) {
+    const detail =
+      err?.response?.data?.detail ||
+      err?.message ||
+      "Failed to update company review status.";
+    console.warn("Backend rejected company status change:", detail);
+    throw new Error(detail);
   }
 }
 
@@ -496,4 +555,46 @@ export async function updateEmailContentInDb(
     console.warn("Error updating email content in DB:", err);
     return false;
   }
+}
+
+/**
+ * Dispatches an outreach email to the selected contact(s) via the backend SMTP service (aiosmtplib).
+ */
+export async function sendOutreachEmailViaBackend(
+  emailId: string,
+  targetOrgId?: string,
+  recipientEmails?: string[],
+  companyId?: string,
+  customSubject?: string,
+  customBody?: string,
+): Promise<{ status: string; message: string; recipients_sent: string[] }> {
+  const token = await resolveAuthToken();
+  const orgId = await resolveOrganizationId(targetOrgId);
+  const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
+  if (!baseURL) {
+    throw new Error("Backend URL (EXPO_PUBLIC_BACKEND_URL) is not configured.");
+  }
+
+  const response = await axios.post(
+    `${baseURL}/api/v1/send-email`,
+    {
+      token,
+      org_id: orgId,
+      email_id: emailId,
+      company_id: companyId,
+      recipient_emails:
+        recipientEmails && recipientEmails.length > 0 ? recipientEmails : undefined,
+      custom_subject: customSubject,
+      custom_body: customBody,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      timeout: 25000,
+    },
+  );
+
+  return response.data;
 }

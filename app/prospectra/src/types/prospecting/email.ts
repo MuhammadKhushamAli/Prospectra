@@ -35,6 +35,14 @@ export interface EmailProspect {
 
   company_name?: string;
   company_domain?: string;
+  recipient_email?: string;
+  recipient_emails?: string[];
+  message_id?: string;
+  reply_snippet?: string;
+  reply_from?: string;
+  reply_subject?: string;
+  replied_at?: string;
+  sent_at?: string;
   status: "draft" | "approved" | "sent" | "replied" | "rejected";
   created_at?: string;
 
@@ -47,7 +55,10 @@ export interface EmailDetailModalProps {
   onClose: () => void;
   onViewCompany?: (company: CompanyProspect) => void;
   associatedCompany?: CompanyProspect | null;
-  onSendEmail?: (email: EmailProspect) => void | Promise<void>;
+  onSendEmail?: (
+    email: EmailProspect,
+    selectedRecipients?: string[],
+  ) => void | Promise<void>;
   onRegenerateEmail?: (
     email: EmailProspect,
     feedback?: string,

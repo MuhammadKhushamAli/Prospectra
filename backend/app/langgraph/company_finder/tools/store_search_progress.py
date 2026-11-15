@@ -201,7 +201,13 @@ async def update_search_page_progress(
     target_last_page = pipeline_stats.get("target_last_page", 0)
 
     if total_count is None:
-        total_count = pipeline_stats.get("searched", 0)
+        total_count = (
+            pipeline_stats.get("searched")
+            or pipeline_stats.get("candidates")
+            or len(state.get("searched_companies", []))
+            or len(state.get("verified_companies", []))
+            or 0
+        )
 
     success_rate = (success_count / total_count) if total_count > 0 else 0.0
 

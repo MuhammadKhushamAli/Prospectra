@@ -86,7 +86,7 @@ def format_write_email_response(result: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.post("/write-email")
 async def write_email(body: WriteEmailRequest):
-    """Authenticate member, enqueue email generation job to ARQ worker, and send 'started' webhook."""
+    """Authenticate member, verify company can have email written, and enqueue email generation job."""
     try:
         authenticated_user_id = await authorize_org_member(body.token, body.org_id)
     except Exception as auth_err:
@@ -95,6 +95,55 @@ async def write_email(body: WriteEmailRequest):
         raise HTTPException(status_code=401, detail=f"Unauthorized: {str(auth_err)}")
 
     effective_user_id = body.user_id or authenticated_user_id
+
+    # 1. Guard against rejected companies and already generated emails
+    supabase = await get_supabase_client()
+    companies_table = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
+    emails_table = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "emails")
+
+    try:
+        comp_res = await (
+            supabase.table(companies_table)
+            .select("id, org_id, status, name")
+            .eq("id", body.target_company_id)
+            .eq("org_id", body.org_id)
+            .limit(1)
+            .execute()
+        )
+        company_data = comp_res.data[0] if (comp_res and comp_res.data) else None
+    except Exception:
+        company_data = None
+
+    if company_data:
+        comp_status = str(company_data.get("status") or "").strip().lower()
+        if comp_status == "rejected":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Company '{company_data.get('name', body.target_company_id)}' is rejected. Email generation cannot be triggered.",
+            )
+        if comp_status in {"email_drafted", "pending_send_approval", "sent", "replied"}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Outreach email for '{company_data.get('name', body.target_company_id)}' has already been generated. The email writer agent cannot be triggered again.",
+            )
+
+    try:
+        email_res = await (
+            supabase.table(emails_table)
+            .select("id, status, subject")
+            .eq("company_id", body.target_company_id)
+            .limit(1)
+            .execute()
+        )
+        if email_res and email_res.data and len(email_res.data) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Outreach email has already been generated for this company. The email writer agent cannot be triggered again.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     job_id = await enqueue_arq_job(
         "write_email_arq_task",

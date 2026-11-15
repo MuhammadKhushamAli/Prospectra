@@ -7,6 +7,8 @@ from app.langgraph.email_writer.state.state import EmailGraphState
 from app.services.supabase import get_supabase_client
 
 ALREADY_SENT_ERROR = "Email has already been sent and cannot be regenerated."
+ALREADY_GENERATED_ERROR = "Email has already been generated for this company and agent cannot be triggered again."
+REJECTED_COMPANY_ERROR = "Company has been rejected and email generation is not allowed."
 
 
 def is_email_sent(email_record: Optional[Dict[str, Any]]) -> bool:
@@ -14,6 +16,13 @@ def is_email_sent(email_record: Optional[Dict[str, Any]]) -> bool:
     if not email_record or not isinstance(email_record, dict):
         return False
     return str(email_record.get("status") or "").strip().lower() == "sent"
+
+
+def is_email_already_generated(email_record: Optional[Dict[str, Any]]) -> bool:
+    """Return True when an email record already exists for the company."""
+    if not email_record or not isinstance(email_record, dict):
+        return False
+    return bool(email_record.get("id"))
 
 
 async def query_existing_company_email(
@@ -108,8 +117,14 @@ async def get_existing_email_node(state: EmailGraphState) -> Dict[str, Any]:
             "existing_email_id": existing_record.get("id"),
             "existing_email": existing_payload,
         }
+        errors = list(state.get("errors", []))
         if is_email_sent(existing_payload):
-            result["errors"] = list(state.get("errors", [])) + [ALREADY_SENT_ERROR]
+            if ALREADY_SENT_ERROR not in errors:
+                errors.append(ALREADY_SENT_ERROR)
+        else:
+            if ALREADY_GENERATED_ERROR not in errors:
+                errors.append(ALREADY_GENERATED_ERROR)
+        result["errors"] = errors
         return result
 
     return {"existing_email_id": None, "existing_email": None}

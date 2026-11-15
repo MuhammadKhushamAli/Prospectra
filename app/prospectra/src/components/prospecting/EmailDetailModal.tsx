@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -19,16 +19,19 @@ import {
   Clock,
   Copy,
   Mail,
+  MessageSquare,
   RefreshCw,
   Send,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Users,
   X,
 } from "lucide-react-native";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
+import { extractSelectableEmails } from "./CompanyDetailModal";
 import type { EmailDetailModalProps } from "../../types/prospecting";
 
 export default function EmailDetailModal({
@@ -49,6 +52,56 @@ export default function EmailDetailModal({
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
 
+  const availableRecipients = useMemo(() => {
+    const list = extractSelectableEmails(associatedCompany || null);
+    if (
+      list.length === 0 &&
+      email?.to_email &&
+      email.to_email !== "prospect@target.com"
+    ) {
+      list.push({ email: email.to_email, role: "Target Contact" });
+    }
+    return list;
+  }, [associatedCompany, email?.to_email]);
+
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
+    new Set(),
+  );
+
+  useEffect(() => {
+    if (availableRecipients.length > 0) {
+      setSelectedRecipients(new Set(availableRecipients.map((e) => e.email)));
+    } else if (email?.to_email && email.to_email !== "prospect@target.com") {
+      setSelectedRecipients(new Set([email.to_email]));
+    } else {
+      setSelectedRecipients(new Set());
+    }
+  }, [availableRecipients, email?.to_email]);
+
+  const isAllRecipientsSelected =
+    availableRecipients.length > 0 &&
+    selectedRecipients.size === availableRecipients.length;
+
+  const handleToggleSelectAllRecipients = () => {
+    if (isAllRecipientsSelected) {
+      setSelectedRecipients(new Set());
+    } else {
+      setSelectedRecipients(new Set(availableRecipients.map((e) => e.email)));
+    }
+  };
+
+  const handleToggleRecipient = (emailStr: string) => {
+    setSelectedRecipients((prev) => {
+      const next = new Set(prev);
+      if (next.has(emailStr)) {
+        next.delete(emailStr);
+      } else {
+        next.add(emailStr);
+      }
+      return next;
+    });
+  };
+
   if (!email) return null;
 
   const handleSend = async () => {
@@ -56,12 +109,14 @@ export default function EmailDetailModal({
       !onSendEmail ||
       isSending ||
       isRegenerating ||
-      email.status === "sent"
+      email.status === "sent" ||
+      selectedRecipients.size === 0
     )
       return;
     try {
       setIsSending(true);
-      await onSendEmail(email);
+      const chosen = Array.from(selectedRecipients);
+      await onSendEmail(email, chosen);
       setActionMessage("Outreach email sent successfully!");
       setTimeout(() => setActionMessage(null), 3000);
     } finally {
@@ -405,6 +460,207 @@ export default function EmailDetailModal({
               </View>
             ) : null}
 
+            {/* Target Recipients Card */}
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.cardHeader}>
+                <View style={styles.cardHeaderLeft}>
+                  <Users size={15} color={colors.text} strokeWidth={1.75} />
+                  <Text style={[styles.cardSectionTitle, { color: colors.text }]}>
+                    Target Recipients ({selectedRecipients.size}/{availableRecipients.length})
+                  </Text>
+                </View>
+
+                {email.status !== "sent" &&
+                email.status !== "replied" &&
+                availableRecipients.length > 1 ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={handleToggleSelectAllRecipients}
+                    hitSlop={6}
+                    style={({ pressed }) => [
+                      styles.toggleSelectAllBtn,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.border,
+                        opacity: pressed ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.toggleSelectAllText,
+                        { color: colors.textSecondary },
+                      ]}
+                    >
+                      {isAllRecipientsSelected ? "Deselect All" : "Select All"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {/* Recipient Checkbox Options List */}
+              {availableRecipients.length > 0 ? (
+                <View style={styles.recipientList}>
+                  {availableRecipients.map((item) => {
+                    const isSelected = selectedRecipients.has(item.email);
+                    const isDecided =
+                      email.status === "sent" || email.status === "replied";
+                    return (
+                      <Pressable
+                        key={item.email}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: isSelected }}
+                        disabled={isDecided}
+                        onPress={() => handleToggleRecipient(item.email)}
+                        style={[
+                          styles.recipientOptionRow,
+                          {
+                            backgroundColor: isSelected
+                              ? colors.surface
+                              : colors.surfaceElevated,
+                            borderColor: isSelected
+                              ? colors.primary
+                              : colors.border,
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.checkboxBox,
+                            {
+                              borderColor: isSelected
+                                ? colors.primary
+                                : colors.border,
+                              backgroundColor: isSelected
+                                ? colors.primary
+                                : "transparent",
+                            },
+                          ]}
+                        >
+                          {isSelected && (
+                            <Check
+                              size={11}
+                              color={colors.onPrimary}
+                              strokeWidth={2.5}
+                            />
+                          )}
+                        </View>
+
+                        <View style={styles.recipientInfo}>
+                          <Text
+                            style={[
+                              styles.recipientEmailText,
+                              {
+                                color: isSelected
+                                  ? colors.text
+                                  : colors.textSecondary,
+                              },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {item.email}
+                          </Text>
+                          {item.role || item.name ? (
+                            <Text
+                              style={[
+                                styles.recipientMetaText,
+                                { color: colors.textSecondary },
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {[item.name, item.role].filter(Boolean).join(" • ")}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text
+                  style={[
+                    styles.feedbackNotice,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  {email.to_email || "No direct contact email resolved yet."}
+                </Text>
+              )}
+            </View>
+
+            {/* Prospect Reply Detected Card (if status is 'replied') */}
+            {email.status === "replied" ? (
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.successSoft,
+                    borderColor: colors.successBorder,
+                  },
+                ]}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.cardHeaderLeft}>
+                    <MessageSquare size={16} color={colors.success} strokeWidth={2} />
+                    <Text
+                      style={[
+                        styles.cardSectionTitle,
+                        { color: colors.success, fontWeight: "700" },
+                      ]}
+                    >
+                      Prospect Response Received
+                    </Text>
+                  </View>
+                  {email.replied_at ? (
+                    <Text style={[styles.dateText, { color: colors.success }]}>
+                      {new Date(email.replied_at).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </Text>
+                  ) : null}
+                </View>
+
+                {email.reply_from ? (
+                  <Text style={[styles.replyFromText, { color: colors.text }]}>
+                    From: <Text style={{ fontWeight: "600" }}>{email.reply_from}</Text>
+                  </Text>
+                ) : null}
+
+                {email.reply_subject ? (
+                  <Text style={[styles.replySubjectText, { color: colors.textSecondary }]}>
+                    Subject: {email.reply_subject}
+                  </Text>
+                ) : null}
+
+                {email.reply_snippet ? (
+                  <View
+                    style={[
+                      styles.replySnippetBox,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.successBorder,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.replySnippetText, { color: colors.text }]}>
+                      "{email.reply_snippet}"
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+
             {/* Email Subject Section */}
             <View
               style={[
@@ -593,17 +849,47 @@ export default function EmailDetailModal({
                       Outreach Email Sent
                     </Text>
                   </View>
+                ) : email.status === "replied" ? (
+                  <View
+                    style={[
+                      styles.sentBadge,
+                      {
+                        backgroundColor: colors.successSoft,
+                        borderColor: colors.successBorder,
+                      },
+                    ]}
+                  >
+                    <MessageSquare
+                      size={15}
+                      color={colors.success}
+                      strokeWidth={1.75}
+                    />
+                    <Text
+                      style={[styles.sentBadgeText, { color: colors.success }]}
+                    >
+                      Prospect Replied
+                    </Text>
+                  </View>
                 ) : onSendEmail ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={handleSend}
-                    disabled={isSending || isRegenerating}
+                    disabled={
+                      isSending ||
+                      isRegenerating ||
+                      selectedRecipients.size === 0
+                    }
                     style={({ pressed }) => [
                       styles.sendActionBtn,
                       {
                         backgroundColor: colors.primary,
                         opacity:
-                          pressed || isSending || isRegenerating ? 0.85 : 1,
+                          pressed ||
+                          isSending ||
+                          isRegenerating ||
+                          selectedRecipients.size === 0
+                            ? 0.55
+                            : 1,
                       },
                     ]}
                   >
@@ -622,14 +908,18 @@ export default function EmailDetailModal({
                             { color: colors.onPrimary },
                           ]}
                         >
-                          Send Email
+                          {selectedRecipients.size > 1
+                            ? `Send to ${selectedRecipients.size} Recipients`
+                            : "Send Email"}
                         </Text>
                       </>
                     )}
                   </Pressable>
                 ) : null}
 
-                {onRegenerateEmail && email.status !== "sent" ? (
+                {onRegenerateEmail &&
+                email.status !== "sent" &&
+                email.status !== "replied" ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={handleRegenerate}
@@ -1319,5 +1609,71 @@ const styles = StyleSheet.create({
   feedbackSubmitBtnText: {
     fontFamily: "DMSansMedium",
     fontSize: tokens.fontSize.xs,
+  },
+  toggleSelectAllBtn: {
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: 3,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+  },
+  toggleSelectAllText: {
+    fontFamily: "DMSansMedium",
+    fontSize: 11,
+  },
+  recipientList: {
+    gap: tokens.spacing.xs,
+    marginTop: tokens.spacing.xs,
+  },
+  recipientOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: tokens.spacing.sm,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    gap: tokens.spacing.sm,
+  },
+  checkboxBox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  recipientInfo: {
+    flex: 1,
+  },
+  recipientEmailText: {
+    fontFamily: "DMSansMedium",
+    fontSize: tokens.fontSize.xs + 1,
+    lineHeight: 16,
+  },
+  recipientMetaText: {
+    fontFamily: "DMSansRegular",
+    fontSize: 11,
+    lineHeight: 14,
+    marginTop: 1,
+  },
+  replyFromText: {
+    fontFamily: "DMSansRegular",
+    fontSize: tokens.fontSize.xs,
+    marginBottom: 2,
+  },
+  replySubjectText: {
+    fontFamily: "DMSansRegular",
+    fontSize: tokens.fontSize.xs,
+    marginBottom: tokens.spacing.xs,
+  },
+  replySnippetBox: {
+    padding: tokens.spacing.sm,
+    borderRadius: tokens.radius.sm,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  replySnippetText: {
+    fontFamily: "DMSansItalic",
+    fontSize: tokens.fontSize.xs,
+    lineHeight: 18,
   },
 });

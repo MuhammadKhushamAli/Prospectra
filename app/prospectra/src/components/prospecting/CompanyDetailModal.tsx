@@ -152,8 +152,7 @@ export default function CompanyDetailModal({
   const isPending =
     company.status === "pending_review" ||
     company.status === "discovered" ||
-    company.status === "enriched" ||
-    company.status === "pending_send_approval";
+    company.status === "enriched";
 
   const handleAccept = async () => {
     if (!onAcceptCompany || isAccepting || isRejecting || selectedEmails.size === 0) return;

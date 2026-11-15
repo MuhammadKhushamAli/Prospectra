@@ -159,6 +159,36 @@ async def write_email_arq_task(
         redis_conn=redis_conn,
     )
 
+    # Pre-check: Ensure company is not rejected and email not already generated
+    try:
+        from app.services.supabase import get_supabase_client
+        supabase = await get_supabase_client()
+        comp_res = await supabase.table("companies").select("id, status").eq("id", target_company_id).limit(1).execute()
+        comp_row = comp_res.data[0] if (comp_res and comp_res.data) else None
+        if comp_row and str(comp_row.get("status") or "").strip().lower() == "rejected":
+            logger.warning(f"[ARQ WORKER] Company {target_company_id} is rejected. Aborting email writer task.")
+            await update_job_status(
+                job_id=job_id,
+                task_name="write_email_arq_task",
+                status="not_done",
+                error="Company is rejected. Email generation is not allowed.",
+                redis_conn=redis_conn,
+            )
+            return "not_done"
+
+        email_res = await supabase.table("emails").select("id").eq("company_id", target_company_id).limit(1).execute()
+        if email_res and email_res.data and len(email_res.data) > 0:
+            logger.warning(f"[ARQ WORKER] Email already generated for company {target_company_id}. Aborting email writer task.")
+            await update_job_status(
+                job_id=job_id,
+                task_name="write_email_arq_task",
+                status="done",
+                redis_conn=redis_conn,
+            )
+            return "done"
+    except Exception as precheck_err:
+        logger.warning(f"[ARQ WORKER] Pre-check warning for {target_company_id}: {precheck_err}")
+
     try:
         result = await run_email_writer_workflow(
             user_id=user_id,
@@ -257,6 +287,49 @@ async def write_email_arq_task(
         return "not_done"
 
 
+async def check_email_replies_arq_task(
+    ctx: dict[str, Any],
+    org_id: str,
+) -> str:
+    """
+    ARQ job: Inspect mailbox for an organization using imap-tools.
+    Detects replies, marks database records as 'replied', and broadcasts
+    webhooks to trigger native mobile notifications in the app.
+    """
+    from app.email.imap_checker import detect_replies_for_org
+
+    job_id = str(ctx.get("job_id") or f"check-replies-{org_id}")
+    redis_conn = ctx.get("redis")
+    logger.info(f"[ARQ WORKER] Picked up job '{job_id}' -> check_email_replies_arq_task (org_id={org_id})")
+
+    await update_job_status(
+        job_id=job_id,
+        task_name="check_email_replies_arq_task",
+        status="in_progress",
+        redis_conn=redis_conn,
+    )
+
+    try:
+        detected = await detect_replies_for_org(org_id)
+        await update_job_status(
+            job_id=job_id,
+            task_name="check_email_replies_arq_task",
+            status="done",
+            redis_conn=redis_conn,
+        )
+        return "done"
+    except Exception as exc:
+        logger.error(f"[ARQ WORKER] Reply check failed for org {org_id}: {exc}")
+        await update_job_status(
+            job_id=job_id,
+            task_name="check_email_replies_arq_task",
+            status="not_done",
+            error=str(exc),
+            redis_conn=redis_conn,
+        )
+        return "not_done"
+
+
 async def on_worker_startup(ctx: dict[str, Any]) -> None:
     """Lifecycle hook executed when the ARQ worker starts."""
     logger.info(f"[ARQ WORKER] Started listening on queue '{ARQ_QUEUE_NAME}'.")
@@ -273,6 +346,7 @@ class WorkerSettings:
     functions = [
         search_companies_arq_task,
         write_email_arq_task,
+        check_email_replies_arq_task,
     ]
     redis_settings = get_redis_settings()
     queue_name = ARQ_QUEUE_NAME

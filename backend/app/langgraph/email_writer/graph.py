@@ -12,15 +12,26 @@ from app.langgraph.email_writer.tools.check_email_logic import check_email_logic
 from app.langgraph.email_writer.tools.get_company_tool import get_company_node
 from app.langgraph.email_writer.tools.get_existing_email_tool import (
     get_existing_email_node,
+    is_email_already_generated,
     is_email_sent,
 )
 from app.langgraph.tools.load_user_context import load_user_context_node
 
 
 def route_after_existing_email(state: EmailGraphState) -> str:
-    """Stop workflow immediately when the company's existing email has already been sent."""
-    if is_email_sent(state.get("existing_email")):
+    """Stop workflow immediately when company is rejected or an email has already been generated."""
+    company = state.get("target_company")
+    company_status = (
+        getattr(company, "status", None)
+        if company and not isinstance(company, dict)
+        else (company or {}).get("status")
+    )
+    if str(company_status or "").strip().lower() == "rejected":
         return END
+
+    if is_email_already_generated(state.get("existing_email")):
+        return END
+
     return "email_writer"
 
 
