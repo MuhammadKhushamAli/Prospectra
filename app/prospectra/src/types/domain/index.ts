@@ -37,6 +37,7 @@ interface VerifyDomainResponse {
   verified?: boolean;
   verification_status?: tDomainVerificationStatus | string;
   dns_records?: DnsRecordInfo;
+  smtp_username?: string | null;
 }
 
 interface DomainStatusResponse {
@@ -52,6 +53,7 @@ interface DomainStatusResponse {
   smtp_used?: string | null;
   smtp_server?: string | null;
   smtp_port?: number | null;
+  smtp_username?: string | null;
   dkim_selector?: string | null;
   email_verification_status?: tDomainVerificationStatus | string;
   email_verified_at?: string | null;
@@ -64,8 +66,8 @@ interface EmailVerificationPayload {
   custom_email_provider?: string;
   smtp_server: string;
   smtp_port: number;
-  smtp_username?: string;
-  smtp_password?: string;
+  smtp_username: string;
+  smtp_password: string;
   dkim_selector?: string;
 }
 
@@ -100,10 +102,11 @@ interface EmailVerificationResponse {
 }
 
 interface DomainVerificationFormProps {
-  onSubmit?: (domain: string) => void;
+  onSubmit?: (domain: string, mailboxEmail: string) => void;
   isLoading?: boolean;
   userEmail?: string | null;
   initialDomain?: string;
+  initialMailboxEmail?: string;
 }
 
 interface DomainVerificationFooterLinkProps {
@@ -126,6 +129,7 @@ interface EmailVerificationFormProps {
   smtpServer: string;
   smtpPort: string;
   dkimSelector: string;
+  smtpUsername: string;
   smtpPassword: string;
   emailStatus: string | null;
   emailDetails: Partial<EmailVerificationResponse> | Record<string, any> | null;
@@ -135,6 +139,7 @@ interface EmailVerificationFormProps {
   onChangeSmtpServer: (text: string) => void;
   onChangeSmtpPort: (text: string) => void;
   onChangeDkimSelector: (text: string) => void;
+  onChangeSmtpUsername: (text: string) => void;
   onChangeSmtpPassword: (text: string) => void;
   onVerifyEmail: () => void;
   onContinueToDashboard: () => void;

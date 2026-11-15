@@ -87,3 +87,24 @@ export function validateDomain(
   }
   return null;
 }
+
+const mailboxEmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function validateMailboxEmail(email: string): string | null {
+  const trimmed = (email || "").trim();
+  if (!trimmed) {
+    return domainValidationMessages.missingMailboxEmail;
+  }
+  if (!mailboxEmailRegex.test(trimmed)) {
+    return domainValidationMessages.invalidMailboxEmail;
+  }
+  return null;
+}
+
+export function validateSmtpPassword(password: string): string | null {
+  const trimmed = (password || "").trim();
+  if (!trimmed) {
+    return domainValidationMessages.missingSmtpPassword;
+  }
+  return null;
+}

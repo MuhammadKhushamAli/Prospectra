@@ -22,7 +22,9 @@ import {
   Layers,
   Lightbulb,
   Mail,
+  MessageSquare,
   RefreshCw,
+  Send,
   ShieldCheck,
   Sparkles,
   User,
@@ -41,6 +43,7 @@ import {
   subscribeToJobWebhooks,
   subscribeToProspectingRealtime,
   updateCompanyStatusInDb,
+  updateEmailContentInDb,
   updateEmailStatusInDb,
 } from "../../services/prospectingService";
 import type {
@@ -59,8 +62,8 @@ import type { NotificationVariant } from "../../types/ui";
 export default function ProspectingScreen() {
   const colors = useTheme();
   const [activeTab, setActiveTab] = useState<ProspectingTab>("companies");
-  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("all");
-  const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
+  const [companyFilter, setCompanyFilter] = useState<CompanyFilter>("pending");
+  const [emailFilter, setEmailFilter] = useState<EmailFilter>("pending");
 
   const [userRole, setUserRole] = useState<ProspectingRole>("founder");
   const [orgName, setOrgName] = useState<string | null>(null);
@@ -258,11 +261,130 @@ export default function ProspectingScreen() {
           );
           void loadData();
         }
+      } else if (event.task_name === "send_email_arq_task") {
+        if (event.status === "started") {
+          setEmails((prev) =>
+            prev.map((e) =>
+              (event.email_id && e.id === event.email_id) ||
+              (!event.email_id && event.company_id && e.company_id === event.company_id)
+                ? { ...e, status: "approved" }
+                : e,
+            ),
+          );
+          setSelectedEmail((prev) => {
+            if (!prev) return prev;
+            if (
+              (event.email_id && prev.id === event.email_id) ||
+              (!event.email_id && event.company_id && prev.company_id === event.company_id)
+            ) {
+              return { ...prev, status: "approved" };
+            }
+            return prev;
+          });
+          pushAppNotification(
+            "success",
+            event.message || "Sending outreach email...",
+          );
+        } else if (event.status === "done") {
+          const nowIso = new Date().toISOString();
+          setEmails((prev) =>
+            prev.map((e) =>
+              (event.email_id && e.id === event.email_id) ||
+              (!event.email_id && event.company_id && e.company_id === event.company_id)
+                ? { ...e, status: "sent", sent_at: nowIso }
+                : e,
+            ),
+          );
+          setSelectedEmail((prev) => {
+            if (!prev) return prev;
+            if (
+              (event.email_id && prev.id === event.email_id) ||
+              (!event.email_id && event.company_id && prev.company_id === event.company_id)
+            ) {
+              return { ...prev, status: "sent", sent_at: nowIso };
+            }
+            return prev;
+          });
+          void sendMobileJobNotification(
+            "Outreach Email Sent",
+            event.message || "Outreach email sent successfully!",
+          );
+          pushAppNotification(
+            "success",
+            event.message || "Outreach email sent successfully!",
+          );
+          void loadData();
+        } else if (event.status === "failed" || event.status === "not_done") {
+          setEmails((prev) =>
+            prev.map((e) =>
+              (event.email_id && e.id === event.email_id) ||
+              (!event.email_id && event.company_id && e.company_id === event.company_id)
+                ? { ...e, status: "draft" }
+                : e,
+            ),
+          );
+          setSelectedEmail((prev) => {
+            if (!prev) return prev;
+            if (
+              (event.email_id && prev.id === event.email_id) ||
+              (!event.email_id && event.company_id && prev.company_id === event.company_id)
+            ) {
+              return { ...prev, status: "draft" };
+            }
+            return prev;
+          });
+          void sendMobileJobNotification(
+            "Email Send Failed",
+            event.message || "Failed to send outreach email.",
+          );
+          pushAppNotification(
+            "error",
+            event.message || "Failed to send outreach email.",
+          );
+          void loadData();
+        }
       } else if (
         event.task_name === "email_reply_detected" ||
         event.task_name === "check_email_replies_arq_task"
       ) {
         if (event.status === "done") {
+          if (event.task_name === "email_reply_detected") {
+            const updateWithReply = (e: EmailProspect): EmailProspect => {
+              const matches =
+                (event.email_id && e.id === event.email_id) ||
+                (!event.email_id && event.company_id && e.company_id === event.company_id);
+              if (!matches) return e;
+              const incomingReplies =
+                event.replies && event.replies.length > 0
+                  ? event.replies
+                  : [
+                      ...(e.replies || []),
+                      {
+                        id: `reply-${e.id}-${Date.now()}`,
+                        sender: event.reply_from || e.recipient_email || "Prospect",
+                        subject: event.reply_subject || `Re: ${e.subject}`,
+                        snippet: event.reply_snippet || event.message || "Reply received.",
+                        date: event.replied_at || new Date().toISOString(),
+                      },
+                    ];
+              const nextCount =
+                typeof event.reply_count === "number" && event.reply_count > 0
+                  ? event.reply_count
+                  : incomingReplies.length;
+              return {
+                ...e,
+                status: "replied",
+                reply_count: nextCount,
+                reply_from: event.reply_from ?? e.reply_from,
+                reply_subject: event.reply_subject ?? e.reply_subject,
+                reply_snippet: event.reply_snippet ?? e.reply_snippet,
+                replied_at: event.replied_at ?? new Date().toISOString(),
+                replies: incomingReplies,
+              };
+            };
+            setEmails((prev) => prev.map(updateWithReply));
+            setSelectedEmail((prev) => (prev ? updateWithReply(prev) : prev));
+          }
           void sendMobileJobNotification(
             "Prospect Response Received!",
             event.message || "A new reply was received to your outreach email!",
@@ -314,38 +436,50 @@ export default function ProspectingScreen() {
     loadData();
   };
 
-  // Filter Companies
+  // Emails are available for all accepted/sent/replied companies
+  const acceptedCompanyStatuses = new Set([
+    "approved",
+    "email_drafted",
+    "pending_send_approval",
+    "sent",
+    "replied",
+  ]);
+  const approvedCompanyIds = new Set(
+    companies
+      .filter((c) => acceptedCompanyStatuses.has(c.status))
+      .map((c) => c.id),
+  );
+
+  // Filter Companies by section: Pending, Approved, Rejected
   const filteredCompanies = companies.filter((c) => {
-    if (companyFilter === "all") return true;
     if (companyFilter === "rejected") return c.status === "rejected";
+    if (companyFilter === "approved") return acceptedCompanyStatuses.has(c.status);
     if (companyFilter === "pending") {
       return (
         c.status === "pending_review" ||
         c.status === "discovered" ||
-        c.status === "enriched" ||
-        c.status === "pending_send_approval"
+        c.status === "enriched"
       );
     }
-    return true;
+    return false;
   });
 
-  // Emails are strictly available for approved companies only
-  const approvedCompanyIds = new Set(
-    companies.filter((c) => c.status === "approved").map((c) => c.id),
+  const approvedEmails = emails.filter(
+    (e) => approvedCompanyIds.size === 0 || approvedCompanyIds.has(e.company_id),
   );
 
-  const approvedEmails = emails.filter((e) =>
-    approvedCompanyIds.has(e.company_id),
-  );
-
-  // Filter Emails
+  // Filter Emails by section: Pending, Sending, Sent
   const filteredEmails = approvedEmails.filter((e) => {
-    if (emailFilter === "all") return true;
-    if (emailFilter === "rejected") return e.status === "rejected";
     if (emailFilter === "pending") {
       return e.status === "draft";
     }
-    return true;
+    if (emailFilter === "sending") {
+      return e.status === "sending" || e.status === "approved";
+    }
+    if (emailFilter === "sent") {
+      return e.status === "sent" || e.status === "replied";
+    }
+    return false;
   });
 
   // Count helpers for badges
@@ -353,22 +487,23 @@ export default function ProspectingScreen() {
     (c) =>
       c.status === "pending_review" ||
       c.status === "discovered" ||
-      c.status === "enriched" ||
-      c.status === "pending_send_approval",
+      c.status === "enriched",
   ).length;
   const rejectedCompaniesCount = companies.filter(
     (c) => c.status === "rejected",
   ).length;
-  const approvedCompaniesCount = approvedCompanyIds.size;
+  const approvedCompaniesCount = companies.filter((c) =>
+    acceptedCompanyStatuses.has(c.status),
+  ).length;
 
   const pendingEmailsCount = approvedEmails.filter(
     (e) => e.status === "draft",
   ).length;
-  const rejectedEmailsCount = approvedEmails.filter(
-    (e) => e.status === "rejected",
+  const sendingEmailsCount = approvedEmails.filter(
+    (e) => e.status === "sending" || e.status === "approved",
   ).length;
-  const sentOrApprovedEmailsCount = approvedEmails.filter(
-    (e) => e.status === "sent" || e.status === "approved",
+  const sentEmailsCount = approvedEmails.filter(
+    (e) => e.status === "sent" || e.status === "replied",
   ).length;
 
   // Handlers for Company Decisions
@@ -400,6 +535,13 @@ export default function ProspectingScreen() {
         recipientEmails: selectedEmails,
         orgDomain: orgDomain || undefined,
       });
+
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === company.id ? { ...c, status: "approved" } : c)),
+      );
+      setSelectedCompany((prev) =>
+        prev && prev.id === company.id ? { ...prev, status: "approved" } : prev,
+      );
 
       pushAppNotification(
         "success",
@@ -442,6 +584,13 @@ export default function ProspectingScreen() {
         orgId: orgId || undefined,
       });
 
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === company.id ? { ...c, status: "rejected" } : c)),
+      );
+      setSelectedCompany((prev) =>
+        prev && prev.id === company.id ? { ...prev, status: "rejected" } : prev,
+      );
+
       pushAppNotification(
         "success",
         res.message || `${company.name} rejected.`,
@@ -463,6 +612,21 @@ export default function ProspectingScreen() {
     email: EmailProspect,
     selectedRecipients?: string[],
   ) => {
+    // Optimistically move email to the 'Sending' section immediately
+    const sendingEmail: EmailProspect = {
+      ...email,
+      status: "approved",
+      recipient_emails: selectedRecipients || email.recipient_emails,
+      recipient_email:
+        (selectedRecipients && selectedRecipients[0]) || email.recipient_email,
+    };
+
+    setEmails((prev) =>
+      prev.map((e) => (e.id === email.id ? sendingEmail : e)),
+    );
+    setSelectedEmail(sendingEmail);
+    pushAppNotification("success", "Sending outreach email...");
+
     try {
       const res = await sendOutreachEmailViaBackend(
         email.id,
@@ -473,11 +637,16 @@ export default function ProspectingScreen() {
         email.body,
       );
 
+      // If queued on worker, keep status as 'approved' (Sending section) until worker finishes;
+      // if synchronous success, mark 'sent'.
+      const nextStatus = res.status === "queued" ? "approved" : "sent";
       const updatedEmail: EmailProspect = {
-        ...email,
-        status: "sent",
-        recipient_emails: res.recipients_sent,
-        recipient_email: res.recipients_sent[0] || email.recipient_email,
+        ...sendingEmail,
+        status: nextStatus,
+        recipient_emails: res.recipients_sent || sendingEmail.recipient_emails,
+        recipient_email:
+          (res.recipients_sent && res.recipients_sent[0]) ||
+          sendingEmail.recipient_email,
       };
 
       setEmails((prev) =>
@@ -487,16 +656,24 @@ export default function ProspectingScreen() {
 
       pushAppNotification(
         "success",
-        res.message || "Outreach email sent successfully!",
+        res.message || "Sending outreach email...",
       );
     } catch (err: any) {
+      // Revert back to Pending ('draft') if queuing failed
+      const revertedEmail: EmailProspect = {
+        ...email,
+        status: "draft",
+      };
+      setEmails((prev) =>
+        prev.map((e) => (e.id === email.id ? revertedEmail : e)),
+      );
+      setSelectedEmail(revertedEmail);
+
       const errMsg =
         err?.response?.data?.detail ||
         err?.message ||
         "Failed to send email. Please verify your SMTP settings.";
       pushAppNotification("error", errMsg);
-    } finally {
-      void loadData();
     }
   };
 
@@ -504,7 +681,13 @@ export default function ProspectingScreen() {
     email: EmailProspect,
     feedback?: string,
   ) => {
-    if (email.status === "sent") return;
+    if (
+      email.status === "sent" ||
+      email.status === "replied" ||
+      email.status === "sending" ||
+      email.status === "approved"
+    )
+      return;
 
     try {
       const response = await requestEmailGeneration(email.company_id, {
@@ -531,13 +714,61 @@ export default function ProspectingScreen() {
     }
   };
 
+  const handleSaveEditedEmail = async (
+    email: EmailProspect,
+    newSubject: string,
+    newBody: string,
+  ) => {
+    const ok = await updateEmailContentInDb(email.id, newSubject, newBody);
+    if (!ok) {
+      pushAppNotification(
+        "error",
+        "Failed to save edited email to database.",
+      );
+      throw new Error("Failed to save edited email to database.");
+    }
+
+    setEmails((prev) =>
+      prev.map((item) =>
+        item.id === email.id
+          ? {
+              ...item,
+              subject: newSubject,
+              body: newBody,
+              email_body: {
+                subject: newSubject,
+                body: newBody,
+              },
+            }
+          : item,
+      ),
+    );
+    setSelectedEmail((prev) =>
+      prev && prev.id === email.id
+        ? {
+            ...prev,
+            subject: newSubject,
+            body: newBody,
+            email_body: {
+              subject: newSubject,
+              body: newBody,
+            },
+          }
+        : prev,
+    );
+
+    pushAppNotification(
+      "success",
+      `Email changes saved for ${email.company_name}.`,
+    );
+  };
+
   const getCompanyStatusColor = (status: CompanyProspect["status"]) => {
     if (status === "rejected") return colors.error;
     if (
       status === "pending_review" ||
       status === "discovered" ||
-      status === "enriched" ||
-      status === "pending_send_approval"
+      status === "enriched"
     ) {
       return colors.warning;
     }
@@ -549,8 +780,7 @@ export default function ProspectingScreen() {
     if (
       status === "pending_review" ||
       status === "discovered" ||
-      status === "enriched" ||
-      status === "pending_send_approval"
+      status === "enriched"
     ) {
       return colors.warningSoft;
     }
@@ -562,8 +792,7 @@ export default function ProspectingScreen() {
     if (
       status === "pending_review" ||
       status === "discovered" ||
-      status === "enriched" ||
-      status === "pending_send_approval"
+      status === "enriched"
     ) {
       return colors.warningBorder;
     }
@@ -572,29 +801,34 @@ export default function ProspectingScreen() {
 
   const getCompanyStatusLabel = (status: CompanyProspect["status"]) => {
     if (status === "rejected") return "Rejected";
-    if (status === "pending_review") return "Pending Review";
-    if (status === "discovered") return "Pending Discovery";
-    if (status === "enriched") return "Pending Review";
-    if (status === "pending_send_approval") return "Pending Send";
-    if (status === "approved") return "Approved";
-    return status.toUpperCase();
+    if (
+      status === "pending_review" ||
+      status === "discovered" ||
+      status === "enriched"
+    ) {
+      return "Pending";
+    }
+    return "Approved";
   };
 
   const getEmailStatusColor = (status: EmailProspect["status"]) => {
     if (status === "rejected") return colors.error;
     if (status === "draft") return colors.warning;
+    if (status === "sending" || status === "approved") return colors.primary;
     return colors.success;
   };
 
   const getEmailStatusSoftBg = (status: EmailProspect["status"]) => {
     if (status === "rejected") return colors.errorSoft;
     if (status === "draft") return colors.warningSoft;
+    if (status === "sending" || status === "approved") return colors.primarySoft;
     return colors.successSoft;
   };
 
   const getEmailStatusBorder = (status: EmailProspect["status"]) => {
     if (status === "rejected") return colors.errorBorder;
     if (status === "draft") return colors.warningBorder;
+    if (status === "sending" || status === "approved") return colors.primaryBorder;
     return colors.successBorder;
   };
 
@@ -840,14 +1074,28 @@ export default function ProspectingScreen() {
     const statusColor = getEmailStatusColor(item.status);
     const statusSoft = getEmailStatusSoftBg(item.status);
     const statusBorder = getEmailStatusBorder(item.status);
+    const isSendingStatus =
+      item.status === "sending" || item.status === "approved";
+    const isSentOrReplied =
+      item.status === "sent" || item.status === "replied";
+    const replyCount =
+      typeof item.reply_count === "number" && item.reply_count > 0
+        ? item.reply_count
+        : item.replies && item.replies.length > 0
+          ? item.replies.length
+          : item.status === "replied" || item.reply_snippet
+            ? 1
+            : 0;
     const statusLabel =
       item.status === "draft"
-        ? "Pending Draft"
-        : item.status === "rejected"
-          ? "Rejected"
-          : item.status === "sent"
-            ? "Sent"
-            : "Approved";
+        ? "Pending"
+        : isSendingStatus
+          ? "Sending..."
+          : item.status === "replied"
+            ? "Replied"
+            : item.status === "sent"
+              ? "Sent"
+              : "Rejected";
     const verificationScore = item.verification?.score;
     const subject = item.email_body?.subject || item.subject || "No Subject";
     const bodyPreview = item.email_body?.body || item.body || "";
@@ -967,7 +1215,41 @@ export default function ProspectingScreen() {
           </Text>
 
           <View style={styles.cardMetaRightGroup}>
-            {verificationScore !== undefined ? (
+            {isSentOrReplied || replyCount > 0 ? (
+              <View
+                style={[
+                  styles.miniMatchBadge,
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 4,
+                    backgroundColor:
+                      replyCount > 0 ? colors.successSoft : colors.surfaceElevated,
+                    borderColor:
+                      replyCount > 0 ? colors.successBorder : colors.border,
+                  },
+                ]}
+              >
+                <MessageSquare
+                  size={11}
+                  color={replyCount > 0 ? colors.success : colors.textSecondary}
+                  strokeWidth={2}
+                />
+                <Text
+                  style={[
+                    styles.miniMatchText,
+                    {
+                      color:
+                        replyCount > 0 ? colors.success : colors.textSecondary,
+                    },
+                  ]}
+                >
+                  {replyCount} {replyCount === 1 ? "Reply" : "Replies"}
+                </Text>
+              </View>
+            ) : null}
+
+            {verificationScore !== undefined && !isSentOrReplied ? (
               <View
                 style={[
                   styles.miniMatchBadge,
@@ -1003,17 +1285,30 @@ export default function ProspectingScreen() {
               style={[
                 styles.cardShowDetailBtn,
                 {
-                  backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
+                  backgroundColor:
+                    replyCount > 0 ? colors.successSoft : colors.surfaceElevated,
+                  borderColor:
+                    replyCount > 0 ? colors.successBorder : colors.border,
                 },
               ]}
             >
-              <Text style={[styles.cardShowDetailText, { color: colors.text }]}>
-                Open Draft
+              <Text
+                style={[
+                  styles.cardShowDetailText,
+                  { color: replyCount > 0 ? colors.success : colors.text },
+                ]}
+              >
+                {replyCount > 0
+                  ? `View ${replyCount === 1 ? "Reply" : "Replies"}`
+                  : isSentOrReplied
+                    ? "View Sent"
+                    : isSendingStatus
+                      ? "Sending..."
+                      : "Open Draft"}
               </Text>
               <ChevronRight
                 size={12}
-                color={colors.textSecondary}
+                color={replyCount > 0 ? colors.success : colors.textSecondary}
                 strokeWidth={1.75}
               />
             </View>
@@ -1147,45 +1442,6 @@ export default function ProspectingScreen() {
                 <View
                   style={[
                     styles.kpiIconWrap,
-                    { backgroundColor: colors.surfaceElevated },
-                  ]}
-                >
-                  <Layers
-                    size={14}
-                    color={colors.textSecondary}
-                    strokeWidth={1.75}
-                  />
-                </View>
-                <View style={styles.kpiTextWrap}>
-                  <Text
-                    style={[styles.kpiValue, { color: colors.text }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    {companies.length}
-                  </Text>
-                  <Text
-                    style={[styles.kpiLabel, { color: colors.textSecondary }]}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                  >
-                    Total
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={[
-                  styles.kpiCard,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.kpiIconWrap,
                     { backgroundColor: colors.warningSoft },
                   ]}
                 >
@@ -1247,9 +1503,7 @@ export default function ProspectingScreen() {
                   </Text>
                 </View>
               </View>
-            </>
-          ) : (
-            <>
+
               <View
                 style={[
                   styles.kpiCard,
@@ -1262,12 +1516,12 @@ export default function ProspectingScreen() {
                 <View
                   style={[
                     styles.kpiIconWrap,
-                    { backgroundColor: colors.surfaceElevated },
+                    { backgroundColor: colors.errorSoft },
                   ]}
                 >
-                  <Mail
+                  <XCircle
                     size={14}
-                    color={colors.textSecondary}
+                    color={colors.error}
                     strokeWidth={1.75}
                   />
                 </View>
@@ -1277,18 +1531,20 @@ export default function ProspectingScreen() {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    {approvedEmails.length}
+                    {rejectedCompaniesCount}
                   </Text>
                   <Text
                     style={[styles.kpiLabel, { color: colors.textSecondary }]}
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    Drafts
+                    Rejected
                   </Text>
                 </View>
               </View>
-
+            </>
+          ) : (
+            <>
               <View
                 style={[
                   styles.kpiCard,
@@ -1319,7 +1575,42 @@ export default function ProspectingScreen() {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    Ready
+                    Pending
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={[
+                  styles.kpiCard,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.kpiIconWrap,
+                    { backgroundColor: colors.primarySoft },
+                  ]}
+                >
+                  <Send size={14} color={colors.primary} strokeWidth={1.75} />
+                </View>
+                <View style={styles.kpiTextWrap}>
+                  <Text
+                    style={[styles.kpiValue, { color: colors.text }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    {sendingEmailsCount}
+                  </Text>
+                  <Text
+                    style={[styles.kpiLabel, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                  >
+                    Sending
                   </Text>
                 </View>
               </View>
@@ -1351,7 +1642,7 @@ export default function ProspectingScreen() {
                     numberOfLines={1}
                     adjustsFontSizeToFit
                   >
-                    {sentOrApprovedEmailsCount}
+                    {sentEmailsCount}
                   </Text>
                   <Text
                     style={[styles.kpiLabel, { color: colors.textSecondary }]}
@@ -1375,38 +1666,6 @@ export default function ProspectingScreen() {
           >
             {activeTab === "companies" ? (
               <>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: companyFilter === "all" }}
-                  onPress={() => setCompanyFilter("all")}
-                  style={[
-                    styles.filterChip,
-                    companyFilter === "all"
-                      ? {
-                          backgroundColor: colors.text,
-                          borderColor: colors.text,
-                        }
-                      : {
-                          backgroundColor: colors.surface,
-                          borderColor: colors.border,
-                        },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      {
-                        color:
-                          companyFilter === "all"
-                            ? colors.background
-                            : colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    All Companies ({companies.length})
-                  </Text>
-                </Pressable>
-
                 <Pressable
                   accessibilityRole="button"
                   accessibilityState={{ selected: companyFilter === "pending" }}
@@ -1445,6 +1704,49 @@ export default function ProspectingScreen() {
                     ]}
                   >
                     Pending ({pendingCompaniesCount})
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    selected: companyFilter === "approved",
+                  }}
+                  onPress={() => setCompanyFilter("approved")}
+                  style={[
+                    styles.filterChip,
+                    companyFilter === "approved"
+                      ? {
+                          backgroundColor: colors.successSoft,
+                          borderColor: colors.successBorder,
+                        }
+                      : {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        },
+                  ]}
+                >
+                  <CheckCircle2
+                    size={12}
+                    strokeWidth={1.75}
+                    color={
+                      companyFilter === "approved"
+                        ? colors.success
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color:
+                          companyFilter === "approved"
+                            ? colors.success
+                            : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    Approved ({approvedCompaniesCount})
                   </Text>
                 </Pressable>
 
@@ -1495,38 +1797,6 @@ export default function ProspectingScreen() {
               <>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ selected: emailFilter === "all" }}
-                  onPress={() => setEmailFilter("all")}
-                  style={[
-                    styles.filterChip,
-                    emailFilter === "all"
-                      ? {
-                          backgroundColor: colors.text,
-                          borderColor: colors.text,
-                        }
-                      : {
-                          backgroundColor: colors.surface,
-                          borderColor: colors.border,
-                        },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      {
-                        color:
-                          emailFilter === "all"
-                            ? colors.background
-                            : colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    All Emails ({approvedEmails.length})
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityRole="button"
                   accessibilityState={{ selected: emailFilter === "pending" }}
                   onPress={() => setEmailFilter("pending")}
                   style={[
@@ -1568,14 +1838,14 @@ export default function ProspectingScreen() {
 
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ selected: emailFilter === "rejected" }}
-                  onPress={() => setEmailFilter("rejected")}
+                  accessibilityState={{ selected: emailFilter === "sending" }}
+                  onPress={() => setEmailFilter("sending")}
                   style={[
                     styles.filterChip,
-                    emailFilter === "rejected"
+                    emailFilter === "sending"
                       ? {
-                          backgroundColor: colors.errorSoft,
-                          borderColor: colors.errorBorder,
+                          backgroundColor: colors.primarySoft,
+                          borderColor: colors.primaryBorder,
                         }
                       : {
                           backgroundColor: colors.surface,
@@ -1583,12 +1853,12 @@ export default function ProspectingScreen() {
                         },
                   ]}
                 >
-                  <XCircle
+                  <Send
                     size={12}
                     strokeWidth={1.75}
                     color={
-                      emailFilter === "rejected"
-                        ? colors.error
+                      emailFilter === "sending"
+                        ? colors.primary
                         : colors.textSecondary
                     }
                   />
@@ -1597,13 +1867,54 @@ export default function ProspectingScreen() {
                       styles.filterChipText,
                       {
                         color:
-                          emailFilter === "rejected"
-                            ? colors.error
+                          emailFilter === "sending"
+                            ? colors.primary
                             : colors.textSecondary,
                       },
                     ]}
                   >
-                    Rejected ({rejectedEmailsCount})
+                    Sending ({sendingEmailsCount})
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: emailFilter === "sent" }}
+                  onPress={() => setEmailFilter("sent")}
+                  style={[
+                    styles.filterChip,
+                    emailFilter === "sent"
+                      ? {
+                          backgroundColor: colors.successSoft,
+                          borderColor: colors.successBorder,
+                        }
+                      : {
+                          backgroundColor: colors.surface,
+                          borderColor: colors.border,
+                        },
+                  ]}
+                >
+                  <CheckCircle2
+                    size={12}
+                    strokeWidth={1.75}
+                    color={
+                      emailFilter === "sent"
+                        ? colors.success
+                        : colors.textSecondary
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      {
+                        color:
+                          emailFilter === "sent"
+                            ? colors.success
+                            : colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    Sent ({sentEmailsCount})
                   </Text>
                 </Pressable>
               </>
@@ -1978,6 +2289,7 @@ export default function ProspectingScreen() {
         }}
         onSendEmail={handleSendEmail}
         onRegenerateEmail={handleRegenerateEmail}
+        onSaveEditedEmail={handleSaveEditedEmail}
       />
     </SafeAreaView>
   );

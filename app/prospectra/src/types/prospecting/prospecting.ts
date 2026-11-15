@@ -1,5 +1,5 @@
 import type { CompanyProspect } from "./company";
-import type { EmailProspect } from "./email";
+import type { EmailProspect, EmailReplyItem } from "./email";
 
 export type ProspectingTab = "companies" | "emails";
 
@@ -53,9 +53,22 @@ export interface WriteEmailResponse {
 
 export interface JobWebhookEvent {
   job_id: string;
-  task_name: "search_companies_arq_task" | "write_email_arq_task" | string;
+  task_name:
+    | "search_companies_arq_task"
+    | "write_email_arq_task"
+    | "send_email_arq_task"
+    | "check_email_replies_arq_task"
+    | "email_reply_detected"
+    | string;
   org_id: string;
   company_id?: string | null;
+  email_id?: string | null;
+  reply_count?: number | null;
+  reply_from?: string | null;
+  reply_subject?: string | null;
+  reply_snippet?: string | null;
+  replied_at?: string | null;
+  replies?: EmailReplyItem[] | null;
   status: "started" | "done" | "failed" | "not_done";
   message: string;
   error?: string | null;

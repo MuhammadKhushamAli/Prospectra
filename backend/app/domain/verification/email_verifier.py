@@ -741,6 +741,15 @@ async def verify_email_and_smtp(
         errors.append("SMTP server host is required.")
     if not (1 <= resolved_smtp_port <= 65535):
         errors.append("SMTP port must be between 1 and 65535.")
+    if not smtp_username or not smtp_username.strip():
+        errors.append("Main mailbox email (SMTP username) is required.")
+    else:
+        try:
+            extract_email_domain(smtp_username.strip())
+        except ValueError:
+            errors.append("Enter a valid main mailbox email address (SMTP username).")
+    if not smtp_password or not smtp_password.strip():
+        errors.append("SMTP app password is required.")
 
     # Run DNS MX check (dnspython), SPF/DMARC check (checkdmarc + pyspf),
     # DKIM check (dkimpy + dnspython), and auto-negotiated SMTP handshake in parallel
@@ -761,8 +770,8 @@ async def verify_email_and_smtp(
         resolved_smtp_server,
         resolved_smtp_port,
         preset.smtp_used,
-        smtp_username or clean_email,
-        smtp_password,
+        (smtp_username or "").strip() or None,
+        (smtp_password or "").strip() or None,
     )
 
     (mx_valid, mx_records, mx_warnings), spf_dmarc_res, (dkim_valid, matched_selector, dkim_record, dkim_warnings), smtp_res = (

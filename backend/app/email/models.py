@@ -22,6 +22,7 @@ class EmailCredentials:
     imap_server: str
     imap_port: int = 993
     esp_provider: str = "google_workspace"
+    sender_name: Optional[str] = None
 
 
 @dataclass(slots=True)
@@ -55,11 +56,12 @@ class SendEmailApiRequest(BaseModel):
 
 
 class SendEmailApiResponse(BaseModel):
-    """API response after sending an outreach email."""
+    """API response after queuing or sending an outreach email."""
 
-    status: str  # "success" | "partial" | "error"
+    status: str  # "queued" | "success" | "partial" | "error"
     email_id: str
     message: str
+    job_id: Optional[str] = None
     recipients_sent: List[str] = []
     recipients_failed: List[dict[str, str]] = []
     message_ids: List[str] = []
@@ -76,5 +78,6 @@ class CheckRepliesApiResponse(BaseModel):
     """API response from reply detection check."""
 
     status: str
-    replies_detected: int
+    job_id: Optional[str] = None
+    replies_detected: int = 0
     details: List[dict[str, Any]] = []

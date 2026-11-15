@@ -23,6 +23,13 @@ class JobWebhookPayload(BaseModel):
     status: str  # "started" | "done" | "failed" | "not_done"
     message: str
     company_id: str | None = None
+    email_id: str | None = None
+    reply_count: int | None = None
+    reply_from: str | None = None
+    reply_subject: str | None = None
+    reply_snippet: str | None = None
+    replied_at: str | None = None
+    replies: list[dict[str, Any]] | None = None
     error: str | None = None
     timestamp: float | None = None
 

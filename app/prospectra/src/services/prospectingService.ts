@@ -99,6 +99,28 @@ export function mapEmailRow(
   const body = r.body || "";
   const company = companyMap?.get(r.company_id);
 
+  const rawReplies = Array.isArray(r.replies) ? r.replies : [];
+  const hasSingleReplyFallback =
+    rawReplies.length === 0 &&
+    (r.status === "replied" || Boolean(r.reply_snippet) || Boolean(r.reply_from));
+
+  const replies = hasSingleReplyFallback
+    ? [
+        {
+          id: `reply-${r.id}-0`,
+          sender: r.reply_from || r.recipient_email || "Prospect",
+          subject: r.reply_subject || `Re: ${subject}`,
+          snippet: r.reply_snippet || "Reply received.",
+          date: r.replied_at || r.sent_at || r.created_at,
+        },
+      ]
+    : rawReplies;
+
+  const replyCount =
+    typeof r.reply_count === "number" && r.reply_count > 0
+      ? r.reply_count
+      : replies.length;
+
   return {
     id: r.id,
     company_id: r.company_id,
@@ -115,6 +137,8 @@ export function mapEmailRow(
     reply_from: r.reply_from,
     reply_subject: r.reply_subject,
     replied_at: r.replied_at,
+    reply_count: replyCount,
+    replies,
     sent_at: r.sent_at,
     email_body: {
       subject,

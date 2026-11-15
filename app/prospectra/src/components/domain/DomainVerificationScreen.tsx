@@ -48,6 +48,7 @@ export default function DomainVerificationScreen() {
 
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [activeDomain, setActiveDomain] = useState<string>("");
+  const [activeMailboxEmail, setActiveMailboxEmail] = useState<string>("");
   const [token, setToken] = useState<string | null>(null);
   const [dnsInstructions, setDnsInstructions] =
     useState<DnsInstructions | null>(null);
@@ -90,6 +91,11 @@ export default function DomainVerificationScreen() {
               setActiveDomain(recAny.domain || "");
               setCurrentStatus(recAny.verification_status);
               const dns = (recAny.dns_records || {}) as Record<string, any>;
+              const savedMailbox =
+                recAny.smtp_username || dns?.smtp_config?.smtp_username || "";
+              if (savedMailbox) {
+                setActiveMailboxEmail(savedMailbox);
+              }
               if (dns?.value) {
                 setToken(dns.value);
               }
@@ -120,12 +126,13 @@ export default function DomainVerificationScreen() {
     }, []),
   );
 
-  const handleVerify = async (domain: string) => {
+  const handleVerify = async (domain: string, mailboxEmail: string) => {
     setNotification(null);
     setCopied(false);
     try {
-      const result = await verifyDomain(domain);
+      const result = await verifyDomain(domain, mailboxEmail);
       setActiveDomain(result.domain || domain);
+      setActiveMailboxEmail(result.smtp_username || mailboxEmail);
       if (result.token) {
         setToken(result.token);
       }
@@ -289,6 +296,7 @@ export default function DomainVerificationScreen() {
             isLoading={isLoading}
             userEmail={userEmail}
             initialDomain={activeDomain}
+            initialMailboxEmail={activeMailboxEmail}
           />
 
           {token || currentStatus ? (

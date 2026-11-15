@@ -58,9 +58,11 @@ const domainVerificationCopy = {
   subtitle: "Authenticate your organization domain to unlock email verification and outreach.",
   fields: {
     domain: "Domain name",
+    mailboxEmail: "Main mailbox email",
   },
   placeholders: {
     domain: "e.g. yourcompany.com",
+    mailboxEmail: "e.g. main-inbox@gmail.com or you@company.com",
   },
   actions: {
     verify: "Verify domain",
@@ -84,14 +86,16 @@ const emailVerificationCopy = {
     smtpServer: "SMTP Server Host",
     smtpPort: "SMTP Port",
     dkimSelector: "DKIM Selector (optional)",
-    smtpPassword: "SMTP App Password (optional)",
+    smtpUsername: "Main Mailbox Email (SMTP Username)",
+    smtpPassword: "SMTP App Password",
   },
   placeholders: {
     customEmailProvider: "e.g. Fastmail, PrivateEmail, GoDaddy",
     smtpServer: "e.g. smtp.hostinger.com",
     smtpPort: "e.g. 465 or 587",
     dkimSelector: "e.g. google, selector1, default",
-    smtpPassword: "Enter SMTP password or API token for sending",
+    smtpUsername: "e.g. main-inbox@gmail.com or you@company.com",
+    smtpPassword: "Enter your SMTP app password for sending",
   },
   actions: {
     verifyEmail: "Verify Email & Save SMTP",
@@ -107,10 +111,13 @@ const domainValidationMessages = {
   invalidDomain: "Enter a valid domain name (e.g. yourcompany.com).",
   freeEmailProvider: "Free email providers (e.g. Gmail, Yahoo, Outlook) are not allowed. Please enter your business domain.",
   domainEmailMismatch: "The domain entered must match the domain of the email address you signed in with.",
+  missingMailboxEmail: "Enter your main mailbox email address.",
+  invalidMailboxEmail: "Enter a valid main mailbox email address.",
   missingProvider: "Select your email provider before verifying your email.",
   missingCustomProvider: "Enter your custom email provider name.",
   missingSmtpServer: "Enter the SMTP server hostname.",
   invalidSmtpPort: "Enter a valid SMTP port between 1 and 65535.",
+  missingSmtpPassword: "Enter your SMTP app password.",
 } as const;
 
 const organizationRegistrationCopy = {

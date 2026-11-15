@@ -20,6 +20,7 @@ class DomainVerifyRequest(BaseModel):
     token: str
     org_id: str
     domain: str | None = None
+    smtp_username: str | None = None
 
 
 class OrgAuthRequest(BaseModel):
@@ -49,13 +50,19 @@ async def get_email_providers():
 @router.post("/verify-domain")
 async def verify_domain(body: DomainVerifyRequest):
     _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
-    if not body.domain:
+    if not body.domain or not body.domain.strip():
         raise HTTPException(status_code=400, detail="Domain is required")
+    if not body.smtp_username or not body.smtp_username.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Main mailbox email is required",
+        )
     try:
         result = await add_domain_to_verify(
             body.org_id,
             body.domain,
             user_email=user_email,
+            smtp_username=body.smtp_username,
         )
         result["user_email"] = user_email
         return result
@@ -99,6 +106,11 @@ async def domain_status(body: OrgAuthRequest):
 async def verify_email_endpoint(body: EmailSmtpVerifyRequest):
     """Verify the user's email & SMTP configuration after domain verification succeeds."""
     _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
+    if not body.smtp_password or not body.smtp_password.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="SMTP app password is required.",
+        )
     try:
         result = await verify_and_save_email_smtp(
             org_id=body.org_id,

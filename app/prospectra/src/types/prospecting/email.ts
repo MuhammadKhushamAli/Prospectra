@@ -1,6 +1,6 @@
 import type { CompanyProspect } from "./company";
 
-export type EmailFilter = "all" | "pending" | "rejected";
+export type EmailFilter = "pending" | "sending" | "sent";
 
 export interface EmailContent {
   subject: string;
@@ -16,6 +16,14 @@ export interface Email {
 export interface EmailVerification {
   score: number;
   feedback: string;
+}
+
+export interface EmailReplyItem {
+  id: string;
+  sender: string;
+  subject: string;
+  snippet: string;
+  date?: string;
 }
 
 export interface EmailProspect {
@@ -42,8 +50,10 @@ export interface EmailProspect {
   reply_from?: string;
   reply_subject?: string;
   replied_at?: string;
+  reply_count?: number;
+  replies?: EmailReplyItem[];
   sent_at?: string;
-  status: "draft" | "approved" | "sent" | "replied" | "rejected";
+  status: "draft" | "sending" | "approved" | "sent" | "replied" | "rejected";
   created_at?: string;
 
   verification?: EmailVerification | null;
@@ -62,5 +72,10 @@ export interface EmailDetailModalProps {
   onRegenerateEmail?: (
     email: EmailProspect,
     feedback?: string,
+  ) => void | Promise<void>;
+  onSaveEditedEmail?: (
+    email: EmailProspect,
+    subject: string,
+    body: string,
   ) => void | Promise<void>;
 }

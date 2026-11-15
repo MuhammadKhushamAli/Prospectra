@@ -194,8 +194,7 @@ export default function CompanyDetailModal({
     if (
       company.status === "pending_review" ||
       company.status === "discovered" ||
-      company.status === "enriched" ||
-      company.status === "pending_send_approval"
+      company.status === "enriched"
     ) {
       return colors.warning;
     }
@@ -207,8 +206,7 @@ export default function CompanyDetailModal({
     if (
       company.status === "pending_review" ||
       company.status === "discovered" ||
-      company.status === "enriched" ||
-      company.status === "pending_send_approval"
+      company.status === "enriched"
     ) {
       return colors.warningSoft;
     }
@@ -220,8 +218,7 @@ export default function CompanyDetailModal({
     if (
       company.status === "pending_review" ||
       company.status === "discovered" ||
-      company.status === "enriched" ||
-      company.status === "pending_send_approval"
+      company.status === "enriched"
     ) {
       return colors.warningBorder;
     }
@@ -230,12 +227,14 @@ export default function CompanyDetailModal({
 
   const getStatusLabel = () => {
     if (company.status === "rejected") return "Rejected";
-    if (company.status === "pending_review") return "Pending Review";
-    if (company.status === "discovered") return "Pending Discovery";
-    if (company.status === "enriched") return "Pending Review";
-    if (company.status === "pending_send_approval") return "Pending Send";
-    if (company.status === "approved") return "Approved";
-    return company.status.toUpperCase();
+    if (
+      company.status === "pending_review" ||
+      company.status === "discovered" ||
+      company.status === "enriched"
+    ) {
+      return "Pending";
+    }
+    return "Approved";
   };
 
   const statusColor = getStatusColor();
@@ -742,7 +741,7 @@ export default function CompanyDetailModal({
 
             {/* Quick Actions (Outreach Draft, Website) */}
             <View style={styles.actionsContainer}>
-              {company.status === "approved" &&
+              {company.status !== "rejected" &&
               associatedEmail &&
               onViewEmail ? (
                 <Pressable
@@ -770,7 +769,11 @@ export default function CompanyDetailModal({
                       ]}
                       numberOfLines={1}
                     >
-                      View Outreach Draft
+                      {associatedEmail.status === "replied"
+                        ? `View Outreach & Replies (${associatedEmail.reply_count || 1})`
+                        : associatedEmail.status === "sent"
+                          ? "View Sent Outreach"
+                          : "View Outreach Draft"}
                     </Text>
                   </View>
                   <ChevronRight

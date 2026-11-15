@@ -32,6 +32,10 @@ import {
   emailVerificationCopy,
   notificationVariant,
 } from "../../constants/constants";
+import {
+  validateMailboxEmail,
+  validateSmtpPassword,
+} from "../../validation/domainValidation";
 import NotificationBanner from "../ui/NotificationBanner";
 import DomainVerificationFooterLink from "../domain/DomainVerificationFooterLink";
 import EmailVerificationHeader from "./EmailVerificationHeader";
@@ -67,6 +71,7 @@ export default function EmailVerificationScreen() {
   const [dkimSelector, setDkimSelector] = useState<string>(
     emailProviderPresets[0].defaultDkimSelector,
   );
+  const [smtpUsername, setSmtpUsername] = useState<string>("");
   const [smtpPassword, setSmtpPassword] = useState<string>("");
   const [emailStatus, setEmailStatus] = useState<string | null>(null);
   const [emailDetails, setEmailDetails] = useState<
@@ -170,6 +175,9 @@ export default function EmailVerificationScreen() {
               if (recAny.dkim_selector || savedSmtp.dkim_selector) {
                 setDkimSelector(recAny.dkim_selector || savedSmtp.dkim_selector);
               }
+              if (recAny.smtp_username || savedSmtp.smtp_username) {
+                setSmtpUsername(recAny.smtp_username || savedSmtp.smtp_username);
+              }
               if (savedEmailStatus) {
                 setEmailStatus(savedEmailStatus);
               }
@@ -242,6 +250,24 @@ export default function EmailVerificationScreen() {
       return;
     }
 
+    const mailboxEmailError = validateMailboxEmail(smtpUsername);
+    if (mailboxEmailError) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: mailboxEmailError,
+      });
+      return;
+    }
+
+    const passwordError = validateSmtpPassword(smtpPassword);
+    if (passwordError) {
+      setNotification({
+        variant: notificationVariant.error,
+        message: passwordError,
+      });
+      return;
+    }
+
     try {
       const result = await verifyEmail({
         email: userEmail || undefined,
@@ -250,8 +276,8 @@ export default function EmailVerificationScreen() {
           emailProvider === "other" ? customEmailProvider.trim() : undefined,
         smtp_server: smtpServer.trim(),
         smtp_port: parsedPort,
-        smtp_username: userEmail || undefined,
-        smtp_password: smtpPassword.trim() || undefined,
+        smtp_username: smtpUsername.trim().toLowerCase(),
+        smtp_password: smtpPassword.trim(),
         dkim_selector: dkimSelector.trim() || undefined,
       });
 
@@ -337,6 +363,7 @@ export default function EmailVerificationScreen() {
             smtpServer={smtpServer}
             smtpPort={smtpPort}
             dkimSelector={dkimSelector}
+            smtpUsername={smtpUsername}
             smtpPassword={smtpPassword}
             emailStatus={emailStatus}
             emailDetails={emailDetails}
@@ -346,6 +373,7 @@ export default function EmailVerificationScreen() {
             onChangeSmtpServer={setSmtpServer}
             onChangeSmtpPort={setSmtpPort}
             onChangeDkimSelector={setDkimSelector}
+            onChangeSmtpUsername={setSmtpUsername}
             onChangeSmtpPassword={setSmtpPassword}
             onVerifyEmail={handleVerifyEmail}
             onContinueToDashboard={() => router.replace("/home")}

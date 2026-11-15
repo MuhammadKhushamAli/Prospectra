@@ -1,6 +1,6 @@
 import type { EmailProspect } from "./email";
 
-export type CompanyFilter = "all" | "pending" | "rejected";
+export type CompanyFilter = "pending" | "approved" | "rejected";
 
 export interface CompanyAuth {
   score: number;

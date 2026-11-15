@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from email.message import EmailMessage
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 import ssl
 from typing import Any, Tuple
 
@@ -28,6 +28,7 @@ def create_outreach_mime_message(
     recipient: str,
     subject: str,
     body_text: str,
+    sender_name: str | None = None,
     reply_to: str | None = None,
     custom_message_id: str | None = None,
 ) -> tuple[EmailMessage, str]:
@@ -38,8 +39,15 @@ def create_outreach_mime_message(
     domain = extract_email_domain(sender)
     message_id = custom_message_id or make_msgid(domain=domain)
 
+    clean_sender = sender.strip()
+    clean_sender_name = (sender_name or "").strip()
+
     message = EmailMessage()
-    message["From"] = sender.strip()
+    message["From"] = (
+        formataddr((clean_sender_name, clean_sender))
+        if clean_sender_name
+        else clean_sender
+    )
     message["To"] = recipient.strip()
     message["Subject"] = subject.strip()
     message["Date"] = formatdate(localtime=True)
@@ -82,6 +90,7 @@ async def send_single_recipient_email(
     recipient: str,
     subject: str,
     body: str,
+    sender_name: str | None = None,
     reply_to: str | None = None,
 ) -> tuple[bool, str, str | None]:
     """
@@ -93,6 +102,7 @@ async def send_single_recipient_email(
         recipient=recipient,
         subject=subject,
         body_text=body,
+        sender_name=sender_name,
         reply_to=reply_to or sender,
     )
 
@@ -137,6 +147,7 @@ async def dispatch_outreach_emails(
             f"(Security: {credentials.smtp_used})..."
         )
         await client.connect()
+        logger.info(f"[SMTP CONNECTED] Connected to {credentials.smtp_server}:{credentials.smtp_port}")
 
         # Handle STARTTLS if configured and port is not implicit SSL (465)
         if credentials.smtp_port != 465 and credentials.smtp_used.upper() == "STARTTLS":
@@ -155,6 +166,7 @@ async def dispatch_outreach_emails(
                 recipient=target_email,
                 subject=subject,
                 body=body,
+                sender_name=credentials.sender_name,
                 reply_to=reply_to,
             )
             if success:

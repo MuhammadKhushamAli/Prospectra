@@ -17,6 +17,7 @@ from .dns import _VERIFICATION_HOST, is_verified, new_token, normalize_domain
 from .email_verifier import (
     BUILTIN_ESP_ENUM_VALUES,
     EmailSmtpVerificationResult,
+    extract_email_domain,
     is_free_email_domain,
     list_email_provider_presets,
     validate_email_domain_match,
@@ -31,18 +32,35 @@ ESP_PROVIDERS_TABLE = os.environ.get("ESP_PROVIDERS_TABLE", "esp_providers")
 logger = logging.getLogger(__name__)
 
 
+def validate_main_mailbox_email(mailbox_email: str | None) -> str:
+    """Validate and normalize the main mailbox email (stored as smtp_username in DB)."""
+    if not mailbox_email or not mailbox_email.strip():
+        raise ValueError("Main mailbox email (SMTP username) is required.")
+    clean = mailbox_email.strip().lower()
+    # Validate email syntax via extract_email_domain
+    extract_email_domain(clean)
+    return clean
+
+
 async def add_domain_to_verify(
     org_id: str,
     domain: str,
     user_email: str | None = None,
+    smtp_username: str | None = None,
 ) -> dict[str, Any]:
     """Store or retrieve domain verification and return its DNS token.
 
     Enforces that free email domains are rejected and, when ``user_email`` is
     provided, that ``domain`` matches the domain of the signed-in user's email.
+    When ``smtp_username`` (main mailbox email) is provided, validates and persists
+    it into ``smtp_username`` in the ``domain_verifications`` table.
     If a verification token already exists in DB for this organization,
     reuses the existing token from DB instead of generating a new one.
     """
+    clean_smtp_username: str | None = None
+    if smtp_username is not None:
+        clean_smtp_username = validate_main_mailbox_email(smtp_username)
+
     if user_email:
         _, normalized_domain = validate_email_domain_match(user_email, domain)
     else:
@@ -118,16 +136,23 @@ async def add_domain_to_verify(
 
     # If first time (no record or no token), create and persist the record
     if not existing_record or not has_existing_token:
+        dns_payload = asdict(
+            DNSRecord(
+                type="TXT",
+                name=host,
+                value=token,
+            )
+        )
+        if clean_smtp_username:
+            dns_payload["smtp_config"] = {
+                **(existing_dns.get("smtp_config") if isinstance(existing_dns.get("smtp_config"), dict) else {}),
+                "smtp_username": clean_smtp_username,
+            }
+
         verification = DomainVerification(
             org_id=org_id,
             domain=normalized_domain,
-            dns_records=asdict(
-                DNSRecord(
-                    type="TXT",
-                    name=host,
-                    value=token,
-                )
-            ),
+            dns_records=dns_payload,
             verification_status="pending",
             verified_at=None,
             created_at=None,
@@ -135,26 +160,67 @@ async def add_domain_to_verify(
 
         row = asdict(verification)
         row.pop("created_at")
+        if clean_smtp_username:
+            row["smtp_username"] = clean_smtp_username
         try:
             await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
                 row,
                 on_conflict="org_id",
             ).execute()
         except Exception:
-            await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
-                row,
-                on_conflict="org_id,domain",
-            ).execute()
-    elif existing_record.get("domain") != normalized_domain and not verified:
-        # If user updated domain before verification, keep the token and update the domain
-        try:
-            await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update({
-                "domain": normalized_domain,
-            }).eq("org_id", org_id).execute()
-        except Exception:
-            pass
+            row_fallback = dict(row)
+            row_fallback.pop("smtp_username", None)
+            try:
+                await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
+                    row_fallback,
+                    on_conflict="org_id",
+                ).execute()
+            except Exception:
+                await supabase_client.table(DOMAIN_VERIFICATION_TABLE).upsert(
+                    row_fallback,
+                    on_conflict="org_id,domain",
+                ).execute()
+    else:
+        update_fields: dict[str, Any] = {}
+        if existing_record.get("domain") != normalized_domain and not verified:
+            update_fields["domain"] = normalized_domain
+        if clean_smtp_username:
+            updated_dns = {
+                **existing_dns,
+                "smtp_config": {
+                    **(existing_dns.get("smtp_config") if isinstance(existing_dns.get("smtp_config"), dict) else {}),
+                    "smtp_username": clean_smtp_username,
+                },
+            }
+            update_fields["dns_records"] = updated_dns
+            update_fields["smtp_username"] = clean_smtp_username
+        if update_fields:
+            try:
+                await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
+                    update_fields
+                ).eq("org_id", org_id).execute()
+            except Exception:
+                fallback_fields = dict(update_fields)
+                fallback_fields.pop("smtp_username", None)
+                if fallback_fields:
+                    try:
+                        await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
+                            fallback_fields
+                        ).eq("org_id", org_id).execute()
+                    except Exception:
+                        pass
 
-    return {
+    stored_smtp_username = (
+        clean_smtp_username
+        or (existing_record.get("smtp_username") if existing_record else None)
+        or (
+            existing_dns.get("smtp_config", {}).get("smtp_username")
+            if isinstance(existing_dns.get("smtp_config"), dict)
+            else None
+        )
+    )
+
+    result_payload: dict[str, Any] = {
         "domain": normalized_domain,
         "token": token,
         "verification_status": current_status,
@@ -166,6 +232,9 @@ async def add_domain_to_verify(
             "value": token,
         },
     }
+    if stored_smtp_username:
+        result_payload["smtp_username"] = stored_smtp_username
+    return result_payload
 
 
 async def domain_verification(org_id: str) -> bool:
@@ -256,6 +325,9 @@ async def verify_and_save_email_smtp(
     if not email_provider or not email_provider.strip():
         raise ValueError("Please select your email provider before verifying your email.")
 
+    if not smtp_password or not smtp_password.strip():
+        raise ValueError("SMTP app password is required.")
+
     effective_email = (sender_email or user_email or "").strip().lower()
     if not effective_email:
         raise ValueError("Sender email address is required.")
@@ -287,6 +359,17 @@ async def verify_and_save_email_smtp(
                 "Your domain ownership must be 'verified' before email & SMTP verification can run."
             )
 
+    existing_dns_records = record.get("dns_records") if isinstance(record.get("dns_records"), dict) else {}
+    existing_smtp_config = existing_dns_records.get("smtp_config") if isinstance(existing_dns_records.get("smtp_config"), dict) else {}
+    raw_smtp_username = (
+        smtp_username
+        or record.get("smtp_username")
+        or existing_smtp_config.get("smtp_username")
+        or ""
+    )
+    clean_smtp_username = validate_main_mailbox_email(raw_smtp_username)
+    clean_smtp_password = smtp_password.strip()
+
     verified_domain = record.get("domain", "")
     result = await verify_email_and_smtp(
         sender_email=effective_email,
@@ -295,8 +378,8 @@ async def verify_and_save_email_smtp(
         custom_email_provider=custom_email_provider,
         smtp_server=smtp_server,
         smtp_port=smtp_port,
-        smtp_username=smtp_username,
-        smtp_password=smtp_password,
+        smtp_username=clean_smtp_username,
+        smtp_password=clean_smtp_password,
         dkim_selector=dkim_selector,
     )
 
@@ -307,7 +390,6 @@ async def verify_and_save_email_smtp(
         else "other"
     )
     stored_provider_value = result.email_provider_label or result.email_provider
-    existing_dns_records = record.get("dns_records") if isinstance(record.get("dns_records"), dict) else {}
     updated_dns_records = {
         **existing_dns_records,
         "smtp_config": {
@@ -319,7 +401,8 @@ async def verify_and_save_email_smtp(
             "smtp_used": result.smtp_used,
             "smtp_server": result.smtp_server,
             "smtp_port": result.smtp_port,
-            "smtp_username": (smtp_username or result.sender_email).strip(),
+            "smtp_username": clean_smtp_username,
+            "smtp_password": clean_smtp_password,
             "dkim_selector": result.dkim_selector,
         },
         "email_verification": {
@@ -353,15 +436,14 @@ async def verify_and_save_email_smtp(
         "smtp_used": result.smtp_used,
         "smtp_server": result.smtp_server,
         "smtp_port": result.smtp_port,
-        "smtp_username": (smtp_username or result.sender_email).strip(),
+        "smtp_username": clean_smtp_username,
+        "smtp_password": clean_smtp_password,
         "dkim_selector": result.dkim_selector,
         "email_verification_status": result.verification_status,
         "email_verified_at": now_iso,
         "email_verification_details": updated_dns_records["email_verification"],
         "dns_records": updated_dns_records,
     }
-    if smtp_password:
-        full_update_payload["smtp_password"] = smtp_password
 
     try:
         await (

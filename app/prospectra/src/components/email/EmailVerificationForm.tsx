@@ -17,6 +17,7 @@ export default function EmailVerificationForm({
   smtpServer,
   smtpPort,
   dkimSelector,
+  smtpUsername,
   smtpPassword,
   emailStatus,
   emailDetails,
@@ -26,6 +27,7 @@ export default function EmailVerificationForm({
   onChangeSmtpServer,
   onChangeSmtpPort,
   onChangeDkimSelector,
+  onChangeSmtpUsername,
   onChangeSmtpPassword,
   onVerifyEmail,
   onContinueToDashboard,
@@ -187,6 +189,17 @@ export default function EmailVerificationForm({
           />
         </View>
       </View>
+
+      <TextField
+        label={emailVerificationCopy.fields.smtpUsername}
+        placeholder={emailVerificationCopy.placeholders.smtpUsername}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={smtpUsername}
+        onChangeText={onChangeSmtpUsername}
+        editable={!isVerifyingEmail}
+      />
 
       <PasswordField
         label={emailVerificationCopy.fields.smtpPassword}

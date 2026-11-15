@@ -27,10 +27,11 @@ export function useDomainVerification() {
   const verifyDomain = useCallback(
     async (
       domain?: string,
+      smtpUsername?: string,
     ): Promise<VerifyDomainResponse> => {
       setIsLoading(true);
       try {
-        const result = await verifyDomainWithBackend(domain);
+        const result = await verifyDomainWithBackend(domain, smtpUsername);
         setVerificationData(result);
         return result;
       } finally {

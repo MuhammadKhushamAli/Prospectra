@@ -14,6 +14,7 @@ import {
   isFreeEmailProvider,
   sanitizeDomainInput,
   validateDomain,
+  validateMailboxEmail,
 } from "../../validation/domainValidation";
 import type { DomainVerificationFormProps } from "../../types/domain";
 
@@ -24,10 +25,13 @@ export default function DomainVerificationForm({
   isLoading,
   userEmail,
   initialDomain,
+  initialMailboxEmail,
 }: DomainVerificationFormProps) {
   const colors = useTheme();
   const [domain, setDomain] = useState(initialDomain || "");
+  const [mailboxEmail, setMailboxEmail] = useState(initialMailboxEmail || "");
   const [error, setError] = useState<string | null>(null);
+  const [mailboxError, setMailboxError] = useState<string | null>(null);
 
   const expectedUserDomain = userEmail ? extractDomainFromEmail(userEmail) : "";
 
@@ -38,6 +42,12 @@ export default function DomainVerificationForm({
       setDomain((prev) => prev || expectedUserDomain);
     }
   }, [initialDomain, expectedUserDomain]);
+
+  useEffect(() => {
+    if (initialMailboxEmail) {
+      setMailboxEmail(initialMailboxEmail);
+    }
+  }, [initialMailboxEmail]);
 
   const handleDomainChange = (text: string) => {
     setDomain(text);
@@ -57,14 +67,32 @@ export default function DomainVerificationForm({
     setError(null);
   };
 
-  const handleSubmit = () => {
-    const validationError = validateDomain(domain, userEmail);
-    if (validationError) {
-      setError(validationError);
+  const handleMailboxEmailChange = (text: string) => {
+    setMailboxEmail(text);
+    if (!text.trim()) {
+      setMailboxError(null);
       return;
     }
-    setError(null);
-    onSubmit?.(sanitizeDomainInput(domain));
+    setMailboxError(validateMailboxEmail(text));
+  };
+
+  const handleSubmit = () => {
+    const validationError = validateDomain(domain, userEmail);
+    const mailboxValidationError = validateMailboxEmail(mailboxEmail);
+    if (validationError) {
+      setError(validationError);
+    } else {
+      setError(null);
+    }
+    if (mailboxValidationError) {
+      setMailboxError(mailboxValidationError);
+    } else {
+      setMailboxError(null);
+    }
+    if (validationError || mailboxValidationError) {
+      return;
+    }
+    onSubmit?.(sanitizeDomainInput(domain), mailboxEmail.trim().toLowerCase());
   };
 
   return (
@@ -111,6 +139,17 @@ export default function DomainVerificationForm({
         editable={!isLoading}
         error={error}
       />
+      <TextField
+        label={domainVerificationCopy.fields.mailboxEmail}
+        placeholder={domainVerificationCopy.placeholders.mailboxEmail}
+        keyboardType="email-address"
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={mailboxEmail}
+        onChangeText={handleMailboxEmailChange}
+        editable={!isLoading}
+        error={mailboxError}
+      />
       <Button
         label={
           isLoading
@@ -118,7 +157,7 @@ export default function DomainVerificationForm({
             : domainVerificationCopy.actions.verify
         }
         onPress={handleSubmit}
-        disabled={isLoading || Boolean(error)}
+        disabled={isLoading || Boolean(error) || Boolean(mailboxError)}
       />
     </View>
   );

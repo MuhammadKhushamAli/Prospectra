@@ -10,6 +10,7 @@ from app.services.supabase import get_supabase_client
 logger = get_node_logger("email_credentials")
 
 DOMAIN_VERIFICATIONS_TABLE = "domain_verifications"
+ORGANIZATIONS_TABLE = "organizations"
 
 # Standard IMAP configurations mapped from known ESP providers
 DEFAULT_IMAP_SERVERS: dict[str, tuple[str, int]] = {
@@ -124,6 +125,27 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
             "Please configure your email credentials in the Onboarding Email Verification settings."
         )
 
+    # Resolve organization / company display name for the From header ("Company Name <email>")
+    sender_name = (
+        row.get("sender_name")
+        or smtp_config.get("sender_name")
+        or ""
+    ).strip() or None
+
+    if not sender_name:
+        try:
+            org_res = await (
+                supabase.table(ORGANIZATIONS_TABLE)
+                .select("name")
+                .eq("id", org_id)
+                .limit(1)
+                .execute()
+            )
+            if org_res.data and org_res.data[0].get("name"):
+                sender_name = str(org_res.data[0]["name"]).strip() or None
+        except Exception as exc:
+            logger.warning(f"Could not fetch organization name for org_id={org_id}: {exc}")
+
     # Resolve IMAP configuration
     explicit_imap = row.get("imap_server") or smtp_config.get("imap_server")
     explicit_imap_port = row.get("imap_port") or smtp_config.get("imap_port")
@@ -145,4 +167,5 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
         imap_server=imap_server,
         imap_port=imap_port,
         esp_provider=esp_provider,
+        sender_name=sender_name,
     )

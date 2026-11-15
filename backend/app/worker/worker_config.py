@@ -11,6 +11,8 @@ import asyncio
 import signal
 from typing import Any
 
+from arq.cron import cron
+
 from app.core.arq_config import (
     ARQ_JOB_TIMEOUT_SECONDS,
     ARQ_KEEP_RESULT_SECONDS,
@@ -287,20 +289,129 @@ async def write_email_arq_task(
         return "not_done"
 
 
-async def check_email_replies_arq_task(
+async def _revert_email_to_draft_safe(email_id: str) -> None:
+    """Revert an email's status back to 'draft' (Pending) if worker SMTP dispatch fails."""
+    try:
+        from app.services.supabase import get_supabase_client
+        supabase = await get_supabase_client()
+        await supabase.table("emails").update({"status": "draft"}).eq("id", email_id).execute()
+    except Exception:
+        pass
+
+
+async def send_email_arq_task(
     ctx: dict[str, Any],
     org_id: str,
+    email_id: str,
+    company_id: str | None = None,
+    recipient_emails: list[str] | None = None,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
 ) -> str:
     """
-    ARQ job: Inspect mailbox for an organization using imap-tools.
-    Detects replies, marks database records as 'replied', and broadcasts
+    ARQ job: Send an outreach email via SMTP (aiosmtplib) using the organization's
+    verified credentials, update database records, mark job status in Redis,
+    and fire the webhook to notify the frontend.
+    """
+    from app.email.service import send_company_outreach_email
+
+    job_id = str(ctx.get("job_id") or f"send-email-{email_id}")
+    redis_conn = ctx.get("redis")
+    logger.info(
+        f"[ARQ WORKER] Picked up job '{job_id}' -> send_email_arq_task "
+        f"(org_id={org_id}, email_id={email_id}, company_id={company_id})"
+    )
+
+    await update_job_status(
+        job_id=job_id,
+        task_name="send_email_arq_task",
+        status="in_progress",
+        redis_conn=redis_conn,
+    )
+
+    try:
+        result = await send_company_outreach_email(
+            org_id=org_id,
+            email_id=email_id,
+            company_id=company_id,
+            recipient_emails=recipient_emails,
+            custom_subject=custom_subject,
+            custom_body=custom_body,
+        )
+        await update_job_status(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            status="done",
+            redis_conn=redis_conn,
+        )
+        await trigger_job_webhook(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            org_id=org_id,
+            company_id=company_id,
+            email_id=email_id,
+            status="done",
+            message=result.message,
+        )
+        return "done"
+    except asyncio.CancelledError as exc:
+        logger.error(f"[ARQ WORKER] Send email job {job_id} timed out or cancelled: {exc}")
+        await _revert_email_to_draft_safe(email_id)
+        await update_job_status(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            status="not_done",
+            error="Outreach email dispatch timed out or was cancelled.",
+            redis_conn=redis_conn,
+        )
+        await trigger_job_webhook(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            org_id=org_id,
+            company_id=company_id,
+            email_id=email_id,
+            status="failed",
+            message="Outreach email dispatch timed out.",
+            error="TimeoutError",
+        )
+        raise exc
+    except Exception as exc:
+        logger.error(f"[ARQ WORKER] Send email job {job_id} failed: {exc}")
+        await _revert_email_to_draft_safe(email_id)
+        await update_job_status(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            status="not_done",
+            error=str(exc),
+            redis_conn=redis_conn,
+        )
+        await trigger_job_webhook(
+            job_id=job_id,
+            task_name="send_email_arq_task",
+            org_id=org_id,
+            company_id=company_id,
+            email_id=email_id,
+            status="failed",
+            message=f"Failed to send outreach email: {exc}",
+            error=str(exc),
+        )
+        return "not_done"
+
+
+async def check_email_replies_arq_task(
+    ctx: dict[str, Any],
+    org_id: str | None = None,
+) -> str:
+    """
+    ARQ job: Inspect mailbox for an organization (or all active orgs when org_id is None)
+    using imap-tools. Detects replies, marks database records as 'replied', and broadcasts
     webhooks to trigger native mobile notifications in the app.
     """
-    from app.email.imap_checker import detect_replies_for_org
+    from app.email.imap_checker import detect_replies_for_all_active_orgs, detect_replies_for_org
 
-    job_id = str(ctx.get("job_id") or f"check-replies-{org_id}")
+    job_id = str(ctx.get("job_id") or f"check-replies-{org_id or 'all'}")
     redis_conn = ctx.get("redis")
-    logger.info(f"[ARQ WORKER] Picked up job '{job_id}' -> check_email_replies_arq_task (org_id={org_id})")
+    logger.info(f"[ARQ WORKER] Picked up job '{job_id}' -> check_email_replies_arq_task (org_id={org_id or 'all'})")
 
     await update_job_status(
         job_id=job_id,
@@ -310,13 +421,25 @@ async def check_email_replies_arq_task(
     )
 
     try:
-        detected = await detect_replies_for_org(org_id)
+        if org_id:
+            detected = await detect_replies_for_org(org_id)
+        else:
+            detected = await detect_replies_for_all_active_orgs()
+
         await update_job_status(
             job_id=job_id,
             task_name="check_email_replies_arq_task",
             status="done",
             redis_conn=redis_conn,
         )
+        if org_id:
+            await trigger_job_webhook(
+                job_id=job_id,
+                task_name="check_email_replies_arq_task",
+                org_id=org_id,
+                status="done",
+                message=f"IMAP reply check complete. {len(detected)} new reply(s) detected.",
+            )
         return "done"
     except Exception as exc:
         logger.error(f"[ARQ WORKER] Reply check failed for org {org_id}: {exc}")
@@ -327,6 +450,15 @@ async def check_email_replies_arq_task(
             error=str(exc),
             redis_conn=redis_conn,
         )
+        if org_id:
+            await trigger_job_webhook(
+                job_id=job_id,
+                task_name="check_email_replies_arq_task",
+                org_id=org_id,
+                status="failed",
+                message=f"Failed to check email replies: {exc}",
+                error=str(exc),
+            )
         return "not_done"
 
 
@@ -346,7 +478,15 @@ class WorkerSettings:
     functions = [
         search_companies_arq_task,
         write_email_arq_task,
+        send_email_arq_task,
         check_email_replies_arq_task,
+    ]
+    cron_jobs = [
+        cron(
+            check_email_replies_arq_task,
+            minute=set(range(0, 60, 2)),
+            run_at_startup=False,
+        ),
     ]
     redis_settings = get_redis_settings()
     queue_name = ARQ_QUEUE_NAME

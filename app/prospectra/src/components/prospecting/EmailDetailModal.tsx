@@ -18,9 +18,11 @@ import {
   ChevronRight,
   Clock,
   Copy,
+  Edit3,
   Mail,
   MessageSquare,
   RefreshCw,
+  Save,
   Send,
   ShieldAlert,
   ShieldCheck,
@@ -42,15 +44,29 @@ export default function EmailDetailModal({
   associatedCompany,
   onSendEmail,
   onRegenerateEmail,
+  onSaveEditedEmail,
 }: EmailDetailModalProps) {
   const colors = useTheme();
   const [copiedSubject, setCopiedSubject] = useState(false);
   const [copiedBody, setCopiedBody] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [showSendingPopup, setShowSendingPopup] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editedSubject, setEditedSubject] = useState("");
+  const [editedBody, setEditedBody] = useState("");
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
+
+  useEffect(() => {
+    if (email) {
+      setEditedSubject(email.email_body?.subject || email.subject || "");
+      setEditedBody(email.email_body?.body || email.body || "");
+      setIsEditing(false);
+    }
+  }, [email?.id, email?.subject, email?.body, email?.email_body]);
 
   const availableRecipients = useMemo(() => {
     const list = extractSelectableEmails(associatedCompany || null);
@@ -104,21 +120,51 @@ export default function EmailDetailModal({
 
   if (!email) return null;
 
+  const isEmailSending =
+    isSending || email.status === "sending" || email.status === "approved";
+  const isEmailSentOrReplied =
+    email.status === "sent" || email.status === "replied";
+
+  const repliesList =
+    email.replies && email.replies.length > 0
+      ? email.replies
+      : email.status === "replied" || email.reply_snippet || email.reply_from
+        ? [
+            {
+              id: `reply-${email.id}-0`,
+              sender: email.reply_from || email.recipient_email || "Prospect",
+              subject: email.reply_subject || `Re: ${email.subject}`,
+              snippet: email.reply_snippet || "Reply received.",
+              date: email.replied_at,
+            },
+          ]
+        : [];
+  const replyCount =
+    typeof email.reply_count === "number" && email.reply_count > 0
+      ? email.reply_count
+      : repliesList.length;
+
   const handleSend = async () => {
     if (
       !onSendEmail ||
-      isSending ||
+      isEmailSending ||
       isRegenerating ||
-      email.status === "sent" ||
+      isEmailSentOrReplied ||
       selectedRecipients.size === 0
     )
       return;
     try {
       setIsSending(true);
+      setShowSendingPopup(true);
       const chosen = Array.from(selectedRecipients);
       await onSendEmail(email, chosen);
-      setActionMessage("Outreach email sent successfully!");
-      setTimeout(() => setActionMessage(null), 3000);
+      setActionMessage("Sending outreach email via worker...");
+      setTimeout(() => {
+        setShowSendingPopup(false);
+        setActionMessage(null);
+      }, 2500);
+    } catch {
+      setShowSendingPopup(false);
     } finally {
       setIsSending(false);
     }
@@ -127,9 +173,9 @@ export default function EmailDetailModal({
   const handleRegenerate = () => {
     if (
       !onRegenerateEmail ||
-      isSending ||
+      isEmailSending ||
       isRegenerating ||
-      email.status === "sent"
+      isEmailSentOrReplied
     )
       return;
     setShowFeedbackModal(true);
@@ -138,9 +184,9 @@ export default function EmailDetailModal({
   const submitRegeneration = async (customFeedback?: string) => {
     if (
       !onRegenerateEmail ||
-      isSending ||
+      isEmailSending ||
       isRegenerating ||
-      email.status === "sent"
+      isEmailSentOrReplied
     )
       return;
     try {
@@ -156,6 +202,27 @@ export default function EmailDetailModal({
     } finally {
       setIsRegenerating(false);
       setFeedbackText("");
+    }
+  };
+
+  const handleSaveManualEdit = async () => {
+    if (
+      !onSaveEditedEmail ||
+      isSavingEdit ||
+      isEmailSending ||
+      isEmailSentOrReplied
+    )
+      return;
+    const nextSubject = editedSubject.trim() || subjectText;
+    const nextBody = editedBody.trim() || bodyText;
+    try {
+      setIsSavingEdit(true);
+      await onSaveEditedEmail(email, nextSubject, nextBody);
+      setIsEditing(false);
+      setActionMessage("Draft changes saved to database!");
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -179,27 +246,31 @@ export default function EmailDetailModal({
   const getStatusColor = () => {
     if (email.status === "rejected") return colors.error;
     if (email.status === "draft") return colors.warning;
+    if (isEmailSending) return colors.primary;
     return colors.success;
   };
 
   const getStatusSoft = () => {
     if (email.status === "rejected") return colors.errorSoft;
     if (email.status === "draft") return colors.warningSoft;
+    if (isEmailSending) return colors.primarySoft;
     return colors.successSoft;
   };
 
   const getStatusBorder = () => {
     if (email.status === "rejected") return colors.errorBorder;
     if (email.status === "draft") return colors.warningBorder;
+    if (isEmailSending) return colors.primaryBorder;
     return colors.successBorder;
   };
 
   const getStatusLabel = () => {
+    if (isEmailSending) return "Sending...";
     if (email.status === "draft") return "Pending Draft";
     if (email.status === "rejected") return "Rejected";
-    if (email.status === "approved") return "Approved";
     if (email.status === "sent") return "Sent";
-    if (email.status === "replied") return "Replied";
+    if (email.status === "replied")
+      return replyCount > 1 ? `Replied (${replyCount})` : "Replied";
     return "Outreach Draft";
   };
 
@@ -478,8 +549,8 @@ export default function EmailDetailModal({
                   </Text>
                 </View>
 
-                {email.status !== "sent" &&
-                email.status !== "replied" &&
+                {!isEmailSending &&
+                !isEmailSentOrReplied &&
                 availableRecipients.length > 1 ? (
                   <Pressable
                     accessibilityRole="button"
@@ -511,8 +582,7 @@ export default function EmailDetailModal({
                 <View style={styles.recipientList}>
                   {availableRecipients.map((item) => {
                     const isSelected = selectedRecipients.has(item.email);
-                    const isDecided =
-                      email.status === "sent" || email.status === "replied";
+                    const isDecided = isEmailSending || isEmailSentOrReplied;
                     return (
                       <Pressable
                         key={item.email}
@@ -596,8 +666,8 @@ export default function EmailDetailModal({
               )}
             </View>
 
-            {/* Prospect Reply Detected Card (if status is 'replied') */}
-            {email.status === "replied" ? (
+            {/* Prospect Reply Detected Card (if replies exist or status is 'replied') */}
+            {replyCount > 0 || email.status === "replied" ? (
               <View
                 style={[
                   styles.card,
@@ -616,48 +686,73 @@ export default function EmailDetailModal({
                         { color: colors.success, fontWeight: "700" },
                       ]}
                     >
-                      Prospect Response Received
+                      Prospect {replyCount === 1 ? "Reply" : "Replies"} ({replyCount})
                     </Text>
                   </View>
-                  {email.replied_at ? (
-                    <Text style={[styles.dateText, { color: colors.success }]}>
-                      {new Date(email.replied_at).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {email.reply_from ? (
-                  <Text style={[styles.replyFromText, { color: colors.text }]}>
-                    From: <Text style={{ fontWeight: "600" }}>{email.reply_from}</Text>
-                  </Text>
-                ) : null}
-
-                {email.reply_subject ? (
-                  <Text style={[styles.replySubjectText, { color: colors.textSecondary }]}>
-                    Subject: {email.reply_subject}
-                  </Text>
-                ) : null}
-
-                {email.reply_snippet ? (
                   <View
                     style={[
-                      styles.replySnippetBox,
+                      styles.scorePill,
                       {
                         backgroundColor: colors.surface,
                         borderColor: colors.successBorder,
                       },
                     ]}
                   >
-                    <Text style={[styles.replySnippetText, { color: colors.text }]}>
-                      "{email.reply_snippet}"
+                    <Text style={[styles.scorePillText, { color: colors.success }]}>
+                      {replyCount} {replyCount === 1 ? "Reply" : "Replies"}
                     </Text>
                   </View>
-                ) : null}
+                </View>
+
+                {repliesList.map((replyItem, idx) => (
+                  <View
+                    key={replyItem.id || idx}
+                    style={[
+                      styles.replySnippetBox,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.successBorder,
+                        marginTop: idx > 0 ? 8 : 2,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text style={[styles.replyFromText, { color: colors.text, marginBottom: 0 }]}>
+                        From: <Text style={{ fontWeight: "600" }}>{replyItem.sender}</Text>
+                      </Text>
+                      {replyItem.date ? (
+                        <Text style={[styles.dateText, { color: colors.success }]}>
+                          {new Date(replyItem.date).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </Text>
+                      ) : null}
+                    </View>
+
+                    {replyItem.subject ? (
+                      <Text style={[styles.replySubjectText, { color: colors.textSecondary }]}>
+                        Subject: {replyItem.subject}
+                      </Text>
+                    ) : null}
+
+                    <Text
+                      style={[styles.replySnippetText, { color: colors.text }]}
+                      selectable
+                    >
+                      "{replyItem.snippet}"
+                    </Text>
+                  </View>
+                ))}
               </View>
             ) : null}
 
@@ -667,7 +762,7 @@ export default function EmailDetailModal({
                 styles.card,
                 {
                   backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
+                  borderColor: isEditing ? colors.primary : colors.border,
                 },
               ]}
             >
@@ -675,56 +770,125 @@ export default function EmailDetailModal({
                 <Text style={[styles.cardSectionTitle, { color: colors.text }]}>
                   Subject Line
                 </Text>
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={handleCopySubject}
-                  hitSlop={6}
-                  style={({ pressed }) => [
-                    styles.copyBtn,
-                    {
-                      backgroundColor: copiedSubject
-                        ? colors.successSoft
-                        : colors.surface,
-                      borderColor: copiedSubject
-                        ? colors.successBorder
-                        : colors.border,
-                      opacity: pressed ? 0.7 : 1,
-                    },
-                  ]}
-                >
-                  {copiedSubject ? (
-                    <Check
-                      size={12}
-                      color={colors.success}
-                      strokeWidth={1.75}
-                    />
-                  ) : (
-                    <Copy
-                      size={12}
-                      color={colors.textSecondary}
-                      strokeWidth={1.75}
-                    />
-                  )}
-                  <Text
-                    style={[
-                      styles.copyBtnText,
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  {!isEmailSending && !isEmailSentOrReplied && onSaveEditedEmail ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => {
+                        if (isEditing) {
+                          setEditedSubject(subjectText);
+                          setEditedBody(bodyText);
+                          setIsEditing(false);
+                        } else {
+                          setEditedSubject(subjectText);
+                          setEditedBody(bodyText);
+                          setIsEditing(true);
+                        }
+                      }}
+                      hitSlop={6}
+                      style={({ pressed }) => [
+                        styles.copyBtn,
+                        {
+                          backgroundColor: isEditing
+                            ? colors.primarySoft
+                            : colors.surface,
+                          borderColor: isEditing
+                            ? colors.primaryBorder
+                            : colors.border,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <Edit3
+                        size={12}
+                        color={isEditing ? colors.primary : colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
+                      <Text
+                        style={[
+                          styles.copyBtnText,
+                          {
+                            color: isEditing
+                              ? colors.primary
+                              : colors.textSecondary,
+                          },
+                        ]}
+                      >
+                        {isEditing ? "Cancel Edit" : "Edit"}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={handleCopySubject}
+                    hitSlop={6}
+                    style={({ pressed }) => [
+                      styles.copyBtn,
                       {
-                        color: copiedSubject
-                          ? colors.success
-                          : colors.textSecondary,
+                        backgroundColor: copiedSubject
+                          ? colors.successSoft
+                          : colors.surface,
+                        borderColor: copiedSubject
+                          ? colors.successBorder
+                          : colors.border,
+                        opacity: pressed ? 0.7 : 1,
                       },
                     ]}
                   >
-                    {copiedSubject ? "Copied" : "Copy"}
-                  </Text>
-                </Pressable>
+                    {copiedSubject ? (
+                      <Check
+                        size={12}
+                        color={colors.success}
+                        strokeWidth={1.75}
+                      />
+                    ) : (
+                      <Copy
+                        size={12}
+                        color={colors.textSecondary}
+                        strokeWidth={1.75}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.copyBtnText,
+                        {
+                          color: copiedSubject
+                            ? colors.success
+                            : colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {copiedSubject ? "Copied" : "Copy"}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-              <Text
-                style={[styles.subjectValueText, { color: colors.text }]}
-                selectable
-              >
-                {subjectText}
-              </Text>
+              {isEditing ? (
+                <TextInput
+                  style={[
+                    styles.feedbackInput,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.primary,
+                      color: colors.text,
+                      minHeight: 42,
+                      marginBottom: 0,
+                    },
+                  ]}
+                  value={editedSubject}
+                  onChangeText={setEditedSubject}
+                  placeholder="Enter email subject..."
+                  placeholderTextColor={colors.textMuted}
+                />
+              ) : (
+                <Text
+                  style={[styles.subjectValueText, { color: colors.text }]}
+                  selectable
+                >
+                  {subjectText}
+                </Text>
+              )}
             </View>
 
             {/* Email Body Section */}
@@ -733,7 +897,7 @@ export default function EmailDetailModal({
                 styles.card,
                 {
                   backgroundColor: colors.surfaceElevated,
-                  borderColor: colors.border,
+                  borderColor: isEditing ? colors.primary : colors.border,
                 },
               ]}
             >
@@ -785,22 +949,109 @@ export default function EmailDetailModal({
                   </Text>
                 </Pressable>
               </View>
-              <View
-                style={[
-                  styles.bodyContainer,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text
-                  style={[styles.bodyText, { color: colors.text }]}
-                  selectable
+              {isEditing ? (
+                <View style={{ gap: 10 }}>
+                  <TextInput
+                    style={[
+                      styles.feedbackInput,
+                      {
+                        backgroundColor: colors.surface,
+                        borderColor: colors.primary,
+                        color: colors.text,
+                        minHeight: 160,
+                        marginBottom: 0,
+                      },
+                    ]}
+                    multiline
+                    value={editedBody}
+                    onChangeText={setEditedBody}
+                    placeholder="Enter outreach email body..."
+                    placeholderTextColor={colors.textMuted}
+                    textAlignVertical="top"
+                  />
+                  <View style={styles.feedbackActionsRow}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => {
+                        setEditedSubject(subjectText);
+                        setEditedBody(bodyText);
+                        setIsEditing(false);
+                      }}
+                      disabled={isSavingEdit}
+                      style={({ pressed }) => [
+                        styles.feedbackCancelBtn,
+                        {
+                          borderColor: colors.border,
+                          backgroundColor: colors.surface,
+                          opacity: pressed || isSavingEdit ? 0.75 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.feedbackCancelBtnText,
+                          { color: colors.textSecondary },
+                        ]}
+                      >
+                        Cancel
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={handleSaveManualEdit}
+                      disabled={isSavingEdit}
+                      style={({ pressed }) => [
+                        styles.feedbackSubmitBtn,
+                        {
+                          backgroundColor: colors.primary,
+                          opacity: pressed || isSavingEdit ? 0.85 : 1,
+                        },
+                      ]}
+                    >
+                      {isSavingEdit ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={colors.onPrimary}
+                        />
+                      ) : (
+                        <>
+                          <Save
+                            size={14}
+                            color={colors.onPrimary}
+                            strokeWidth={2}
+                          />
+                          <Text
+                            style={[
+                              styles.feedbackSubmitBtnText,
+                              { color: colors.onPrimary },
+                            ]}
+                          >
+                            Save Changes
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : (
+                <View
+                  style={[
+                    styles.bodyContainer,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.border,
+                    },
+                  ]}
                 >
-                  {bodyText}
-                </Text>
-              </View>
+                  <Text
+                    style={[styles.bodyText, { color: colors.text }]}
+                    selectable
+                  >
+                    {bodyText}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Email Actions: Send Outreach & Regenerate Draft */}
@@ -828,7 +1079,24 @@ export default function EmailDetailModal({
               ) : null}
 
               <View style={styles.actionButtonsRow}>
-                {email.status === "sent" ? (
+                {isEmailSending ? (
+                  <View
+                    style={[
+                      styles.sentBadge,
+                      {
+                        backgroundColor: colors.primarySoft,
+                        borderColor: colors.primaryBorder,
+                      },
+                    ]}
+                  >
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text
+                      style={[styles.sentBadgeText, { color: colors.primary }]}
+                    >
+                      Sending Outreach Email...
+                    </Text>
+                  </View>
+                ) : email.status === "sent" ? (
                   <View
                     style={[
                       styles.sentBadge,
@@ -867,7 +1135,7 @@ export default function EmailDetailModal({
                     <Text
                       style={[styles.sentBadgeText, { color: colors.success }]}
                     >
-                      Prospect Replied
+                      Prospect Replied ({replyCount})
                     </Text>
                   </View>
                 ) : onSendEmail ? (
@@ -875,7 +1143,6 @@ export default function EmailDetailModal({
                     accessibilityRole="button"
                     onPress={handleSend}
                     disabled={
-                      isSending ||
                       isRegenerating ||
                       selectedRecipients.size === 0
                     }
@@ -885,7 +1152,6 @@ export default function EmailDetailModal({
                         backgroundColor: colors.primary,
                         opacity:
                           pressed ||
-                          isSending ||
                           isRegenerating ||
                           selectedRecipients.size === 0
                             ? 0.55
@@ -893,44 +1159,38 @@ export default function EmailDetailModal({
                       },
                     ]}
                   >
-                    {isSending ? (
-                      <ActivityIndicator size="small" color={colors.onPrimary} />
-                    ) : (
-                      <>
-                        <Send
-                          size={14}
-                          color={colors.onPrimary}
-                          strokeWidth={1.75}
-                        />
-                        <Text
-                          style={[
-                            styles.sendActionBtnText,
-                            { color: colors.onPrimary },
-                          ]}
-                        >
-                          {selectedRecipients.size > 1
-                            ? `Send to ${selectedRecipients.size} Recipients`
-                            : "Send Email"}
-                        </Text>
-                      </>
-                    )}
+                    <Send
+                      size={14}
+                      color={colors.onPrimary}
+                      strokeWidth={1.75}
+                    />
+                    <Text
+                      style={[
+                        styles.sendActionBtnText,
+                        { color: colors.onPrimary },
+                      ]}
+                    >
+                      {selectedRecipients.size > 1
+                        ? `Send to ${selectedRecipients.size} Recipients`
+                        : "Send Email"}
+                    </Text>
                   </Pressable>
                 ) : null}
 
                 {onRegenerateEmail &&
-                email.status !== "sent" &&
-                email.status !== "replied" ? (
+                !isEmailSending &&
+                !isEmailSentOrReplied ? (
                   <Pressable
                     accessibilityRole="button"
                     onPress={handleRegenerate}
-                    disabled={isSending || isRegenerating}
+                    disabled={isRegenerating}
                     style={({ pressed }) => [
                       styles.regenerateActionBtn,
                       {
                         backgroundColor: colors.surfaceElevated,
                         borderColor: colors.border,
                         opacity:
-                          pressed || isSending || isRegenerating ? 0.75 : 1,
+                          pressed || isRegenerating ? 0.75 : 1,
                       },
                     ]}
                   >
@@ -1189,6 +1449,85 @@ export default function EmailDetailModal({
                 </View>
               </View>
             </KeyboardAvoidingView>
+          </Modal>
+
+          {/* Sending Email Popup Modal */}
+          <Modal
+            visible={showSendingPopup}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setShowSendingPopup(false)}
+          >
+            <View style={styles.feedbackModalOverlay}>
+              <Pressable
+                style={styles.feedbackModalBackdrop}
+                onPress={() => setShowSendingPopup(false)}
+              />
+              <View
+                style={[
+                  styles.feedbackModalCard,
+                  {
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    paddingVertical: tokens.spacing.xl,
+                  },
+                ]}
+              >
+                <ActivityIndicator
+                  size="large"
+                  color={colors.primary}
+                  style={{ marginBottom: tokens.spacing.md }}
+                />
+                <Text
+                  style={[
+                    styles.feedbackModalTitle,
+                    { color: colors.text, textAlign: "center", marginBottom: 6 },
+                  ]}
+                >
+                  Sending Outreach Email...
+                </Text>
+                <Text
+                  style={[
+                    styles.feedbackModalSubtitle,
+                    {
+                      color: colors.textSecondary,
+                      textAlign: "center",
+                      marginBottom: tokens.spacing.md,
+                    },
+                  ]}
+                >
+                  Your email to{" "}
+                  {associatedCompany?.name || email.company_name || "the target company"}{" "}
+                  has moved to the Sending section while the background worker dispatches it.
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setShowSendingPopup(false);
+                    onClose();
+                  }}
+                  style={({ pressed }) => [
+                    styles.feedbackSubmitBtn,
+                    {
+                      flex: 0,
+                      width: "100%",
+                      backgroundColor: colors.primary,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.feedbackSubmitBtnText,
+                      { color: colors.onPrimary },
+                    ]}
+                  >
+                    Done
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
           </Modal>
         </View>
       </View>

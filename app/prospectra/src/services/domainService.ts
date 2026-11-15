@@ -44,6 +44,7 @@ export async function resolveUserOrgId(): Promise<string> {
 
 export async function verifyDomainWithBackend(
   domain?: string,
+  smtpUsername?: string,
 ): Promise<VerifyDomainResponse> {
   const baseURL = process.env.EXPO_PUBLIC_BACKEND_URL;
   if (!baseURL) throw new Error("Missing EXPO_PUBLIC_BACKEND_URL.");
@@ -58,7 +59,12 @@ export async function verifyDomainWithBackend(
 
   const { data } = await axios.post<VerifyDomainResponse>(
     `${baseURL}${backendApiPath.verifyDomain}`,
-    { token, org_id: orgId, ...(domain ? { domain } : {}) },
+    {
+      token,
+      org_id: orgId,
+      ...(domain ? { domain } : {}),
+      ...(smtpUsername ? { smtp_username: smtpUsername } : {}),
+    },
   );
   return data;
 }
