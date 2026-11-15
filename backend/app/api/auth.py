@@ -1,42 +1,18 @@
 """Supabase token authentication and organization membership checks."""
 
-from fastapi import HTTPException, status
-
+from app.api.helpers.auth_helpers import extract_user_from_token, verify_org_membership
 from app.services.supabase import get_supabase_client
 
 
 async def authorize_org_member_with_email(token: str, org_id: str) -> tuple[str, str | None]:
-    """Resolve the user and their email from a Supabase token and ensure they belong to the org.
-
-    Returns ``(user_id, user_email)``. Raises 401 for an invalid token, 403 for non-members.
-    """
+    """Resolve the user and their email from a Supabase token and ensure they belong to the org."""
     supabase = await get_supabase_client()
-    try:
-        user_response = await supabase.auth.get_user(token)
-        user_id = user_response.user.id
-        user_email = getattr(user_response.user, "email", None)
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    membership = await supabase.rpc(
-        "is_user_part_of_organization",
-        {"p_user_id": user_id, "p_org_id": org_id},
-    ).execute()
-    if not membership.data:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User is not a member of this organization",
-        )
+    user_id, user_email = await extract_user_from_token(supabase, token)
+    await verify_org_membership(supabase, user_id, org_id)
     return user_id, user_email
 
 
 async def authorize_org_member(token: str, org_id: str) -> str:
-    """Resolve the user from a Supabase token and ensure they belong to the org.
-
-    Returns the user id. Raises 401 for an invalid token, 403 for non-members.
-    """
+    """Resolve the user from a Supabase token and ensure they belong to the org."""
     user_id, _ = await authorize_org_member_with_email(token, org_id)
     return user_id

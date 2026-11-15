@@ -1,21 +1,28 @@
 """Service client for self-hosted Reacher email verification."""
 
 from dataclasses import dataclass
-import os
 from typing import Any, Dict, Optional
+
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
-REACHER_BASE_URL = os.environ.get("REACHER_BASE_URL", "http://localhost:8080").rstrip("/")
-REACHER_SECRET = os.environ.get("REACHER_SECRET", "")
-REACHER_TIMEOUT = float(os.environ.get("REACHER_TIMEOUT_SECONDS", "45"))
-REACHER_ACCEPT_RISKY_DEFAULT = os.environ.get("REACHER_ACCEPT_RISKY", "false").lower() == "true"
-REACHER_ACCEPT_UNKNOWN_IF_MX_VALID = os.environ.get("REACHER_ACCEPT_UNKNOWN_IF_MX_VALID", "true").lower() == "true"
+from app.services.helpers.reacher_helpers import (
+    build_reacher_headers,
+    extract_reacher_fields,
+)
+from app.utils.constants.prospecting_constants import (
+    REACHER_ACCEPT_RISKY_DEFAULT,
+    REACHER_ACCEPT_UNKNOWN_IF_MX_VALID,
+    REACHER_BASE_URL,
+    REACHER_SECRET,
+    REACHER_TIMEOUT,
+)
 
 
 @dataclass
 class ReacherResult:
     """Parsed response from Reacher email verification."""
+
     email: str
     is_reachable: str  # 'safe' | 'risky' | 'invalid' | 'unknown'
     is_catch_all: Optional[bool] = None
@@ -30,14 +37,7 @@ def is_acceptable_email(
     accept_risky: Optional[bool] = None,
     accept_unknown_if_mx: Optional[bool] = None,
 ) -> bool:
-    """Determine whether a Reacher email verification result qualifies as reachable.
-
-    Handles:
-    - 'safe': verified deliverable via SMTP handshake.
-    - 'risky' + catch-all: deliverable if accept_risky is enabled.
-    - 'unknown' + accepts_mail: valid syntax & MX mail records found, but direct SMTP handshake
-      timed out or was blocked (e.g., residential ISP / hosting provider blocking outbound port 25).
-    """
+    """Determine whether a Reacher email verification result qualifies as reachable."""
     if result.is_disposable:
         return False
 
@@ -71,10 +71,7 @@ async def check_email_reacher(
     timeout: Optional[float] = None,
 ) -> ReacherResult:
     """Query self-hosted Reacher to verify a single email address."""
-    headers: Dict[str, str] = {"Content-Type": "application/json"}
-    if REACHER_SECRET:
-        headers["x-reacher-secret"] = REACHER_SECRET
-
+    headers = build_reacher_headers()
     request_timeout = timeout or REACHER_TIMEOUT
 
     response = await client.post(
@@ -85,20 +82,12 @@ async def check_email_reacher(
     )
     response.raise_for_status()
     data = response.json()
-
-    is_reachable = data.get("is_reachable", "unknown")
-    smtp_info = data.get("smtp") or {}
-    misc_info = data.get("misc") or {}
-    mx_info = data.get("mx") or {}
+    fields = extract_reacher_fields(data)
 
     return ReacherResult(
         email=email,
-        is_reachable=is_reachable,
-        is_catch_all=smtp_info.get("is_catch_all"),
-        is_role_account=misc_info.get("is_role_account"),
-        is_disposable=misc_info.get("is_disposable"),
-        accepts_mail=mx_info.get("accepts_mail"),
         raw=data,
+        **fields,
     )
 
 
@@ -106,7 +95,19 @@ async def check_reacher_health(client: httpx.AsyncClient) -> bool:
     """Quick check to confirm Reacher container connectivity."""
     try:
         res = await client.get(f"{REACHER_BASE_URL}/v0/check_email", timeout=5.0)
-        # Even a 405 Method Not Allowed confirms service is up and listening
         return res.status_code in (200, 400, 405)
     except Exception:
         return False
+
+
+__all__ = [
+    "REACHER_ACCEPT_RISKY_DEFAULT",
+    "REACHER_ACCEPT_UNKNOWN_IF_MX_VALID",
+    "REACHER_BASE_URL",
+    "REACHER_SECRET",
+    "REACHER_TIMEOUT",
+    "ReacherResult",
+    "check_email_reacher",
+    "check_reacher_health",
+    "is_acceptable_email",
+]

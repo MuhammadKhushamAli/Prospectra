@@ -1,83 +1,28 @@
 """Tool to check if an email already exists for a target company in Supabase and fetch it."""
 
-import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 from app.langgraph.email_writer.state.state import EmailGraphState
+from app.langgraph.email_writer.tools.helpers.existing_email_helpers import (
+    build_existing_email_state_result,
+    query_existing_company_email,
+)
 from app.services.supabase import get_supabase_client
-
-ALREADY_SENT_ERROR = "Email has already been sent and cannot be regenerated."
-ALREADY_GENERATED_ERROR = "Email has already been generated for this company and agent cannot be triggered again."
-REJECTED_COMPANY_ERROR = "Company has been rejected and email generation is not allowed."
-
-
-def is_email_sent(email_record: Optional[Dict[str, Any]]) -> bool:
-    """Return True when an email record's status is 'sent'."""
-    if not email_record or not isinstance(email_record, dict):
-        return False
-    return str(email_record.get("status") or "").strip().lower() == "sent"
-
-
-def is_email_already_generated(email_record: Optional[Dict[str, Any]]) -> bool:
-    """Return True when an email record already exists for the company."""
-    if not email_record or not isinstance(email_record, dict):
-        return False
-    return bool(email_record.get("id"))
-
-
-async def query_existing_company_email(
-    supabase: Any,
-    emails_table: str,
-    company_id: str,
-    user_id: Optional[str] = None,
-    org_id: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """Query the emails table for an existing draft or email for this company."""
-    try:
-        # First query: filter by company_id and user/org context if available
-        query = (
-            supabase.table(emails_table)
-            .select("id, subject, body, review_score, review_feedback, status, sent_by_user_id, sent_by_org_id, contact_id, created_at")
-            .eq("company_id", company_id)
-        )
-        if user_id:
-            query = query.eq("sent_by_user_id", user_id)
-        if org_id:
-            query = query.eq("sent_by_org_id", org_id)
-
-        response = await query.order("created_at", desc=True).limit(1).execute()
-        if response.data and len(response.data) > 0:
-            return response.data[0]
-
-        # Fallback query: filter by company_id only
-        fallback_query = (
-            supabase.table(emails_table)
-            .select("id, subject, body, review_score, review_feedback, status, sent_by_user_id, sent_by_org_id, contact_id, created_at")
-            .eq("company_id", company_id)
-            .order("created_at", desc=True)
-            .limit(1)
-        )
-        fallback_res = await fallback_query.execute()
-        if fallback_res.data and len(fallback_res.data) > 0:
-            return fallback_res.data[0]
-
-        return None
-    except Exception as e:
-        print(f"Warning: Failed to query existing email for company {company_id}: {e}")
-        return None
-
-
-def resolve_state_company_id(state: EmailGraphState) -> Optional[str]:
-    """Resolve target company ID from state or target_company object."""
-    company_id = state.get("target_company_id")
-    if company_id:
-        return str(company_id)
-    target_company = state.get("target_company")
-    if target_company:
-        if isinstance(target_company, dict):
-            return str(target_company.get("id") or "")
-        return str(getattr(target_company, "id", "") or "")
-    return None
+from app.utils.constants.db_tables import EMAILS_TABLE
+from app.utils.constants.email_constants import (
+    ALREADY_GENERATED_ERROR,
+    ALREADY_SENT_ERROR,
+    REJECTED_COMPANY_ERROR,
+)
+from app.utils.helpers.db_status_helpers import (
+    is_email_already_generated,
+    is_email_sent,
+)
+from app.utils.helpers.state_helpers import (
+    resolve_org_id,
+    resolve_state_company_id,
+    resolve_user_id,
+)
 
 
 async def get_existing_email_node(state: EmailGraphState) -> Dict[str, Any]:
@@ -87,45 +32,34 @@ async def get_existing_email_node(state: EmailGraphState) -> Dict[str, Any]:
         return {"existing_email_id": None, "existing_email": None}
 
     user_context = state.get("user_context")
-    user_id = state.get("user_id")
-    if not user_id and user_context:
-        user_id = getattr(user_context, "user_id", None)
-
-    org_id = state.get("org_id")
-    if not org_id and user_context:
-        org_id = getattr(user_context, "org_id", None)
+    user_id = state.get("user_id") or resolve_user_id(user_context)
+    org_id = state.get("org_id") or resolve_org_id(user_context)
 
     supabase = await get_supabase_client()
-    emails_table = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "emails")
-
     existing_record = await query_existing_company_email(
         supabase=supabase,
-        emails_table=emails_table,
+        emails_table=EMAILS_TABLE,
         company_id=company_id,
         user_id=str(user_id) if user_id else None,
         org_id=str(org_id) if org_id else None,
     )
 
     if existing_record:
-        existing_payload = {
-            "id": existing_record.get("id"),
-            "subject": existing_record.get("subject"),
-            "body": existing_record.get("body"),
-            "status": existing_record.get("status"),
-        }
-        result: Dict[str, Any] = {
-            "existing_email_id": existing_record.get("id"),
-            "existing_email": existing_payload,
-        }
-        errors = list(state.get("errors", []))
-        if is_email_sent(existing_payload):
-            if ALREADY_SENT_ERROR not in errors:
-                errors.append(ALREADY_SENT_ERROR)
-        else:
-            if ALREADY_GENERATED_ERROR not in errors:
-                errors.append(ALREADY_GENERATED_ERROR)
-        result["errors"] = errors
-        return result
+        return build_existing_email_state_result(
+            existing_record=existing_record,
+            current_errors=list(state.get("errors", [])),
+        )
 
     return {"existing_email_id": None, "existing_email": None}
 
+
+__all__ = [
+    "ALREADY_SENT_ERROR",
+    "ALREADY_GENERATED_ERROR",
+    "REJECTED_COMPANY_ERROR",
+    "is_email_sent",
+    "is_email_already_generated",
+    "query_existing_company_email",
+    "resolve_state_company_id",
+    "get_existing_email_node",
+]

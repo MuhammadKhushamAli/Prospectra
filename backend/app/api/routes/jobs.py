@@ -1,19 +1,19 @@
-"""Webhook and WebSocket routes for pushing ARQ job lifecycle events ('started', 'done', 'failed') to the frontend without polling."""
+"""Webhook and WebSocket routes for pushing ARQ job lifecycle events ('started', 'done', 'failed') to the frontend."""
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
+from app.api.routes.helpers.jobs_helpers import (
+    _ORG_WEBHOOK_CLIENTS,
+    broadcast_job_webhook,
+)
 from app.core.arq_config import get_job_status
 
 router = APIRouter()
-
-# Connected frontend WebSocket clients indexed by org_id
-_ORG_WEBHOOK_CLIENTS: dict[str, set[WebSocket]] = defaultdict(set)
 
 
 class JobWebhookPayload(BaseModel):
@@ -34,36 +34,9 @@ class JobWebhookPayload(BaseModel):
     timestamp: float | None = None
 
 
-async def broadcast_job_webhook(payload: dict[str, Any]) -> int:
-    """Push a job webhook event immediately to all connected frontend clients for `org_id`."""
-    org_id = str(payload.get("org_id") or "")
-    if not org_id:
-        return 0
-
-    clients = list(_ORG_WEBHOOK_CLIENTS.get(org_id, set()))
-    delivered = 0
-    stale: list[WebSocket] = []
-
-    for ws in clients:
-        try:
-            await ws.send_json(payload)
-            delivered += 1
-        except Exception:
-            stale.append(ws)
-
-    for ws in stale:
-        _ORG_WEBHOOK_CLIENTS[org_id].discard(ws)
-
-    return delivered
-
-
 @router.post("/webhooks/job-status")
 async def receive_job_webhook(body: JobWebhookPayload):
-    """
-    Webhook endpoint invoked by the ARQ worker (or job scheduler) when a job is
-    scheduled ('started'), completed ('done'), or failed ('failed' / 'not_done').
-    Immediately hooks the connected frontend client(s).
-    """
+    """Webhook endpoint invoked by the ARQ worker when a job changes status."""
     payload = body.model_dump()
     delivered = await broadcast_job_webhook(payload)
     return {
@@ -76,16 +49,11 @@ async def receive_job_webhook(body: JobWebhookPayload):
 
 @router.websocket("/ws/webhooks/{org_id}")
 async def frontend_webhook_socket(websocket: WebSocket, org_id: str):
-    """
-    Real-time webhook stream for the frontend app.
-    Delivers 'started', 'done', and 'failed' job notifications for company search and email writing
-    without any frontend polling or Google Play Services dependency.
-    """
+    """Real-time webhook stream for the frontend app."""
     await websocket.accept()
     _ORG_WEBHOOK_CLIENTS[org_id].add(websocket)
     try:
         while True:
-            # Keep connection open; ignore client ping frames
             await websocket.receive_text()
     except WebSocketDisconnect:
         pass
@@ -106,3 +74,14 @@ async def get_job_result(job_id: str):
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found in Redis")
 
     return job_info
+
+
+__all__ = [
+    "JobWebhookPayload",
+    "_ORG_WEBHOOK_CLIENTS",
+    "broadcast_job_webhook",
+    "frontend_webhook_socket",
+    "get_job_result",
+    "receive_job_webhook",
+    "router",
+]

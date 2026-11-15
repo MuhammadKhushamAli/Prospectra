@@ -1,35 +1,21 @@
 """LangGraph node for company authentication."""
 
 import asyncio
-import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from app.agents.company_authenticator.company_auth_agent import authenticate_company
 from app.core.logging_config import get_node_logger
+from app.langgraph.company_finder.state.state import GraphState
+from app.langgraph.company_finder.tools.helpers.company_auth_node_helpers import (
+    auth_single_company,
+    count_qualified_authenticated_companies,
+)
 from app.langgraph.company_finder.tools.store_search_progress import update_search_page_progress
-from app.models.company import Company
-from ..state.state import GraphState
+from app.utils.constants.prospecting_constants import (
+    COMPANY_AUTH_CONCURRENCY,
+    MIN_AUTH_SCORE,
+)
 
-COMPANY_AUTH_CONCURRENCY = int(os.environ.get("COMPANY_AUTH_CONCURRENCY", "5"))
-MIN_AUTH_SCORE = int(os.environ.get("COMPANY_AUTH_MIN_SCORE", "70"))
 logger = get_node_logger("company_auth")
-
-
-async def auth_single_company(
-    user_context: Any,
-    company: Company,
-    semaphore: asyncio.Semaphore,
-) -> tuple[str, Any, str | None]:
-    """Score a single company with concurrency control."""
-    async with semaphore:
-        try:
-            score_result = await authenticate_company(
-                user_context=user_context,
-                searched_company=company,
-            )
-            return company.domain, score_result, None
-        except Exception as e:
-            return company.domain, None, f"Error authenticating {company.name} ({company.domain}): {str(e)}"
 
 
 async def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
@@ -41,10 +27,8 @@ async def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
         raise ValueError("user_context is missing from the state.")
 
     if not verified_companies:
-        logger.info("[PHASE 6: COMPANY AUTH LLM] No verified companies to authenticate.")
+        logger.info("[COMPANY AUTH] 0 verified companies to authenticate.")
         return {"company_auth_scores": {}}
-
-    logger.banner(f"[PHASE 6: COMPANY AUTH LLM] Evaluating {len(verified_companies)} companies (concurrency: {COMPANY_AUTH_CONCURRENCY})...")
 
     semaphore = asyncio.Semaphore(COMPANY_AUTH_CONCURRENCY)
     errors = list(state.get("errors", []))
@@ -56,46 +40,34 @@ async def authenticate_companies_node(state: GraphState) -> Dict[str, Any]:
     ]
     results = await asyncio.gather(*tasks)
 
-    company_auth_scores = {}
+    company_auth_scores: Dict[str, Any] = {}
+    auth_errors = 0
     for domain, score_obj, err in results:
         if err:
             errors.append(err)
-            logger.error(f"  [AUTH ERROR] {err}")
+            auth_errors += 1
         if domain and score_obj:
             company_auth_scores[domain] = score_obj
-            logger.info(f"  [AUTH RESULT] {domain} -> Score: {score_obj.score}/100 (Corrected Name: '{score_obj.corrected_name or 'N/A'}')")
-            logger.item(f"- Operating Business: {score_obj.is_real_operating_business}")
-            logger.item(f"- Service Provider / Dev Shop: {score_obj.is_service_provider}")
-            logger.item(f"- Has In-House Tech Team: {score_obj.has_in_house_tech_team}")
-            logger.item(f"- Matched Industry: '{score_obj.matched_industry or 'None'}'")
-            needed_skills = getattr(score_obj, "needed_skills", []) or getattr(score_obj, "user_skills", [])
-            needed_services = getattr(score_obj, "needed_services", [])
-            if needed_skills:
-                logger.item(f"- Needed User Skills: {needed_skills}")
-            if needed_services:
-                logger.item(f"- Needed Services to Pitch: {needed_services}")
-            logger.item(f"- Need Signals: {score_obj.need_signals}")
-            if getattr(score_obj, "need_hypothesis", None):
-                logger.item(f"- Need Hypothesis (Why Company Needs User): '{score_obj.need_hypothesis}'")
-            logger.item(f"- Proposed Pitch: '{score_obj.proposed_solution}'")
-            if score_obj.feedback:
-                logger.item(f"- Low-Score Feedback: '{score_obj.feedback}'")
 
     target_industries = getattr(user_context, "target_industries", None) or []
-    success_count = 0
-    for domain, score_obj in company_auth_scores.items():
-        if score_obj and score_obj.score >= MIN_AUTH_SCORE and score_obj.is_real_operating_business:
-            if not getattr(score_obj, "is_service_provider", False):
-                if getattr(score_obj, "has_in_house_tech_team", "unknown") != "yes":
-                    if not target_industries or getattr(score_obj, "matched_industry", None):
-                        success_count += 1
+    success_count = count_qualified_authenticated_companies(company_auth_scores, target_industries)
 
-    logger.header(f"[PHASE 6: COMPANY AUTH LLM] Scored {len(company_auth_scores)} companies. Qualified: {success_count}.")
+    logger.info(
+        f"[COMPANY AUTH] Scored {len(company_auth_scores)}/{len(verified_companies)} companies: "
+        f"{success_count} qualified (errors: {auth_errors})."
+    )
 
-    # Update DB search progress after company auth
     await update_search_page_progress(state, success_count=success_count)
 
     return {
         "company_auth_scores": company_auth_scores,
         "errors": errors,
     }
+
+
+__all__ = [
+    "COMPANY_AUTH_CONCURRENCY",
+    "MIN_AUTH_SCORE",
+    "auth_single_company",
+    "authenticate_companies_node",
+]

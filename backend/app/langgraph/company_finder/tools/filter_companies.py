@@ -1,40 +1,27 @@
 """LangGraph node for filtering companies based on authentication scores and buyer rules."""
 
-import os
 from typing import Any, Dict, List
 
 from app.core.logging_config import get_node_logger
+from app.langgraph.company_finder.state.state import GraphState
+from app.langgraph.company_finder.tools.helpers.filter_companies_helpers import (
+    apply_auth_signals_to_company,
+    build_iteration_search_feedback,
+    build_reformation_search_feedback,
+    passes_buyer_criteria,
+)
 from app.langgraph.company_finder.tools.store_search_progress import (
-    MIN_SEARCH_ACCEPT_RATE,
     force_reset_search_page_to_zero,
     update_search_page_progress,
 )
-from ..state.state import GraphState
 from app.models.company import Company
+from app.utils.constants.prospecting_constants import (
+    MAX_ACCEPTED_PER_RUN,
+    MIN_AUTH_SCORE,
+    MIN_SEARCH_ACCEPT_RATE,
+)
 
-MIN_AUTH_SCORE = int(os.environ.get("COMPANY_AUTH_MIN_SCORE", "70"))
-MAX_ACCEPTED_PER_RUN = int(os.environ.get("MAX_ACCEPTED_PER_RUN", "10"))
 logger = get_node_logger("filter_companies")
-
-
-def passes_buyer_criteria(auth_info: Any, target_industries: List[str]) -> bool:
-    """Enforce strict buyer criteria: must NOT be a dev shop or have an in-house engineering team."""
-    if not auth_info.is_real_operating_business:
-        return False
-
-    # Disqualify agencies, dev shops, and software service providers
-    if getattr(auth_info, "is_service_provider", False):
-        return False
-
-    # Disqualify companies confirmed to have in-house engineering teams
-    if getattr(auth_info, "has_in_house_tech_team", "unknown") == "yes":
-        return False
-
-    # If target industries are explicitly specified, require industry alignment
-    if target_industries and not getattr(auth_info, "matched_industry", None):
-        return False
-
-    return True
 
 
 async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
@@ -53,8 +40,6 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
     rejected_companies: List[Company] = []
     rejection_feedbacks: List[str] = []
 
-    logger.banner(f"[PHASE 7: BUYER FIT & RANKING] Filtering {len(verified_companies)} companies (min_score: {MIN_AUTH_SCORE}, max_accepted: {MAX_ACCEPTED_PER_RUN})...")
-
     for company in verified_companies:
         if not company.domain:
             continue
@@ -65,79 +50,22 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
             rejection_feedbacks.append(
                 f"{company.name} ({company.domain}): No Reacher-verified reachable email"
             )
-            logger.error(
-                f"  [REJECTED] {company.name} ({company.domain}) -> "
-                f"0 Reacher-verified reachable emails."
-            )
             continue
 
         auth_info = company_auth_scores.get(company.domain)
         if not auth_info:
             continue
 
-        if not isinstance(company.raw_signals, dict):
-            company.raw_signals = {}
-
-        needed_skills = getattr(auth_info, "needed_skills", []) or getattr(auth_info, "user_skills", [])
-        needed_services = getattr(auth_info, "needed_services", [])
-        need_signals = getattr(auth_info, "need_signals", [])
-        need_hypothesis = getattr(auth_info, "need_hypothesis", "")
-        proposed_solution = getattr(auth_info, "proposed_solution", "")
-        services_offered = company.scraped.services_offered if company.scraped else []
-        digital_features = company.scraped.digital_features if company.scraped else []
-        about_text = company.scraped.about_text if company.scraped else ""
-
-        # Set dedicated fields directly on Company model
-        company.about_text = about_text
-        company.need_hypothesis = need_hypothesis
-        company.needed_skills = needed_skills
-        company.needed_services = needed_services
-        company.need_signals = need_signals
-        company.proposed_solution = proposed_solution
-        company.services_offered = services_offered
-        company.digital_features = digital_features
-        company.auth_score = auth_info.score
-        company.auth_feedback = auth_info.feedback
-
-        # Also preserve in raw_signals for full auditability
-        company.raw_signals["auth_score"] = auth_info.score
-        company.raw_signals["auth_feedback"] = auth_info.feedback
-        company.raw_signals["is_service_provider"] = getattr(auth_info, "is_service_provider", False)
-        company.raw_signals["has_in_house_tech_team"] = getattr(auth_info, "has_in_house_tech_team", "unknown")
-        company.raw_signals["need_signals"] = need_signals
-        company.raw_signals["need_hypothesis"] = need_hypothesis
-        company.raw_signals["proposed_solution"] = proposed_solution
-        company.raw_signals["needed_skills"] = needed_skills
-        company.raw_signals["needed_services"] = needed_services
-        company.raw_signals["user_skills"] = needed_skills
-        company.raw_signals["services_offered"] = services_offered
-        company.raw_signals["digital_features"] = digital_features
-        company.raw_signals["target_industries"] = auth_info.target_industries
-        company.raw_signals["verified_email_count"] = len(verified_emails)
-
-        if auth_info.corrected_name:
-            company.name = auth_info.corrected_name
-
+        apply_auth_signals_to_company(company, auth_info, len(verified_emails))
         qualifies_as_buyer = passes_buyer_criteria(auth_info, target_industries)
 
         if qualifies_as_buyer and auth_info.score >= MIN_AUTH_SCORE:
             accepted_companies.append(company)
-            logger.success(f"  [ACCEPTED] {company.name} ({company.domain})")
-            logger.info(f"    Score: {auth_info.score}/100 | Reachable emails: {len(verified_emails)}")
-            logger.info(f"    Needed skills: {needed_skills}")
-            logger.info(f"    Needed services: {needed_services}")
-            logger.info(f"    Need signals: {auth_info.need_signals}")
-            if getattr(auth_info, "need_hypothesis", None):
-                logger.info(f"    Need hypothesis: {auth_info.need_hypothesis}")
-            logger.info(f"    Proposed pitch: {auth_info.proposed_solution}")
         else:
             rejected_companies.append(company)
             reason = auth_info.feedback or "Failed buyer qualification (service provider or has dev workforce)"
             rejection_feedbacks.append(f"{company.name} ({company.domain}): {reason}")
-            logger.error(f"  [REJECTED] {company.name} ({company.domain})")
-            logger.error(f"    Score: {auth_info.score}/100 | Reason: {reason}")
 
-    # Rank accepted companies by (score, email_count) descending
     accepted_companies.sort(
         key=lambda c: (
             company_auth_scores.get(c.domain).score if c.domain in company_auth_scores else 0,
@@ -147,34 +75,16 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
     )
     accepted_companies = accepted_companies[:MAX_ACCEPTED_PER_RUN]
 
-    logger.header(f"\n[PHASE 7: BUYER FIT & RANKING] Summary:")
-    logger.info(f"  Total accepted: {len(accepted_companies)}")
-    logger.info(f"  Total rejected: {len(rejected_companies)}")
+    logger.info(
+        f"[FILTER COMPANIES] Filtered {len(verified_companies)} companies: "
+        f"{len(accepted_companies)} accepted, {len(rejected_companies)} rejected."
+    )
 
-    # Synthesize structured search feedback for the prompt generator
-    feedback_parts: List[str] = []
-    if pipeline_stats:
-        feedback_parts.append(
-            f"Pipeline Stats: Searched {pipeline_stats.get('searched', 0)}, "
-            f"Blocked {pipeline_stats.get('blocked', 0)}, "
-            f"Prefilter Dropped {pipeline_stats.get('prefilter_dropped', 0)}, "
-            f"Discarded No Reachable Email {pipeline_stats.get('discarded_no_email_count', 0)}."
-        )
-
-    if rejection_feedbacks:
-        sample_rejections = rejection_feedbacks[:5]
-        feedback_parts.append("Sample Rejections:\n" + "\n".join(f"- {r}" for r in sample_rejections))
-        feedback_parts.append(
-            "MANDATE FOR NEXT ITERATION: Shift search terms toward non-technical business operators. "
-            "Avoid queries that match agencies, aggregators, or tech consulting firms."
-        )
-
-    search_feedback = "\n\n".join(feedback_parts)
+    search_feedback = build_iteration_search_feedback(pipeline_stats, rejection_feedbacks)
 
     if not pipeline_stats.get("progress_updated_in_db"):
         await update_search_page_progress(state, success_count=len(accepted_companies))
 
-    # Evaluate success rate against minimum threshold
     success_rate = pipeline_stats.get("success_rate", 0.0)
     has_low_rate = (len(accepted_companies) == 0) or (success_rate < MIN_SEARCH_ACCEPT_RATE)
 
@@ -183,61 +93,27 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
 
     if has_low_rate:
         if same_prompt_retries == 0:
-            # First time success rate is below min rate:
-            # Reset page to 0 in DB and search with the SAME prompt again (do not regenerate prompt yet)
             same_prompt_retry_active = True
             same_prompt_retries = 1
             logger.info(
-                f"  [PAGE 0 RETRY] Success rate {success_rate:.1%} < {MIN_SEARCH_ACCEPT_RATE:.0%}. "
-                f"Resetting DB search progress to page 0 to retry with SAME prompt."
+                f"[FILTER COMPANIES] Success rate {success_rate:.1%} < {MIN_SEARCH_ACCEPT_RATE:.0%}: "
+                f"resetting search page to 0 for retry with same prompt."
             )
             await force_reset_search_page_to_zero(state)
             search_feedback = state.get("search_feedback", "")
         else:
-            # Same prompt failed again after page 0 retry:
-            # Go for prompt generation with reformation prompt indicating skill, targeted industry, and that prompt is not providing unique companies now
             same_prompt_retry_active = False
             same_prompt_retries = 0
             logger.info(
-                f"  [REFORMATION PROMPT] Low success rate repeated after page 0 retry. "
-                f"Constructing reformation prompt with skill, industry, and previous queries."
+                f"[FILTER COMPANIES] Success rate {success_rate:.1%} repeated after page 0 retry: "
+                f"triggering prompt reformation."
             )
-
-            skills_names = [s.name if hasattr(s, "name") else str(s) for s in (user_context.skills or [])] if user_context else []
-            skills_str = ", ".join(skills_names) if skills_names else "Technical solutions"
-            industries_str = ", ".join(user_context.target_industries or []) if (user_context and getattr(user_context, "target_industries", None)) else "Not specified"
-
-            search_prompt = state.get("search_prompt")
-            last_prompt_text = ""
-            if search_prompt and getattr(search_prompt, "searxng", None):
-                queries = getattr(search_prompt.searxng, "queries", [])
-                last_prompt_text = "\n".join(f"- Industry: {q.target_industry} | Query: {q.query}" for q in queries)
-            elif search_prompt and hasattr(search_prompt, "model_dump_json"):
-                last_prompt_text = search_prompt.model_dump_json(indent=2)
-            else:
-                last_prompt_text = str(search_prompt or "None")
-
-            reformation_parts = [
-                "=== REFORMATION PROMPT ===",
-                f"Targeted Industry: {industries_str}",
-                f"User Skill(s): {skills_str}",
-                f"Status: The generated prompt is not providing unique companies now for skill(s) '{skills_str}' and targeted industry '{industries_str}'. "
-                f"Low acceptance/success rate ({success_rate:.1%}) repeated even after resetting search progress to page 0.",
-                "",
-                "=== LAST GENERATED PROMPT (PREVIOUS QUERIES) ===",
-                last_prompt_text,
-                "",
-                "=== MANDATE FOR REGENERATION ===",
-                f"Formulate completely new, distinct search queries for {industries_str} and {skills_str}. "
-                f"Pivot to alternative operational business niches, non-technical commercial workflows, or different search phrasing to discover unique, authentic companies without repeating the last queries above.",
-            ]
-            if rejection_feedbacks:
-                reformation_parts.append("\nSample Rejection Reasons:\n" + "\n".join(f"- {r}" for r in rejection_feedbacks[:5]))
-
-            search_feedback = "\n".join(reformation_parts)
-    else:
-        same_prompt_retries = 0
-        same_prompt_retry_active = False
+            search_feedback = build_reformation_search_feedback(
+                user_context=user_context,
+                search_prompt=state.get("search_prompt"),
+                success_rate=success_rate,
+                rejection_feedbacks=rejection_feedbacks,
+            )
 
     return {
         "accepted_companies": accepted_companies,
@@ -246,3 +122,11 @@ async def filter_companies_node(state: GraphState) -> Dict[str, Any]:
         "same_prompt_retries": same_prompt_retries,
         "same_prompt_retry_active": same_prompt_retry_active,
     }
+
+
+__all__ = [
+    "MIN_AUTH_SCORE",
+    "MAX_ACCEPTED_PER_RUN",
+    "passes_buyer_criteria",
+    "filter_companies_node",
+]

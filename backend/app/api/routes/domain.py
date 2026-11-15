@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.api.auth import authorize_org_member_with_email
+from app.api.routes.helpers.domain_route_helpers import fetch_domain_status_payload
 from app.domain.verification.service import (
     DOMAIN_VERIFICATION_TABLE,
     add_domain_to_verify,
@@ -11,7 +12,7 @@ from app.domain.verification.service import (
     get_available_email_providers,
     verify_and_save_email_smtp,
 )
-from app.services.supabase import get_supabase_client
+from app.utils.constants.email_constants import DEFAULT_SMTP_PORT
 
 router = APIRouter()
 
@@ -35,7 +36,7 @@ class EmailSmtpVerifyRequest(BaseModel):
     email_provider: str = Field(..., min_length=1, description="Selected email provider identifier or 'other'")
     custom_email_provider: str | None = None
     smtp_server: str = Field(..., min_length=1, description="SMTP server hostname")
-    smtp_port: int = Field(default=587, ge=1, le=65535, description="SMTP server port")
+    smtp_port: int = Field(default=DEFAULT_SMTP_PORT, ge=1, le=65535, description="SMTP server port")
     smtp_username: str | None = None
     smtp_password: str | None = None
     dkim_selector: str | None = None
@@ -49,6 +50,7 @@ async def get_email_providers():
 
 @router.post("/verify-domain")
 async def verify_domain(body: DomainVerifyRequest):
+    """Store or verify the organization's domain and required main mailbox email."""
     _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
     if not body.domain or not body.domain.strip():
         raise HTTPException(status_code=400, detail="Domain is required")
@@ -72,34 +74,19 @@ async def verify_domain(body: DomainVerifyRequest):
 
 @router.post("/domain-status")
 async def domain_status(body: OrgAuthRequest):
+    """Re-check DNS verification and return the organization's domain status."""
     _, user_email = await authorize_org_member_with_email(body.token, body.org_id)
 
-    # Re-check verification via DNS before returning status
     try:
         await domain_verification(body.org_id)
     except Exception:
         pass
 
-    supabase = await get_supabase_client()
-    response = await (
-        supabase
-        .table(DOMAIN_VERIFICATION_TABLE)
-        .select("*")
-        .eq("org_id", body.org_id)
-        .execute()
+    return await fetch_domain_status_payload(
+        org_id=body.org_id,
+        user_email=user_email,
+        table_name=DOMAIN_VERIFICATION_TABLE,
     )
-    if not response.data:
-        raise HTTPException(status_code=404, detail="No domain verification found")
-    data = dict(response.data[0])
-    dns_records = data.get("dns_records") or {}
-    data["dns_instructions"] = {
-        "title": "Add this DNS record to your domain provider:",
-        "type": dns_records.get("type", "TXT"),
-        "host": dns_records.get("name", "_prospectra"),
-        "value": dns_records.get("value", ""),
-    }
-    data["user_email"] = user_email
-    return data
 
 
 @router.post("/verify-email")
@@ -127,4 +114,3 @@ async def verify_email_endpoint(body: EmailSmtpVerifyRequest):
         return result.to_dict()
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-

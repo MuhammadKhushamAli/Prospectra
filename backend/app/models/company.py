@@ -3,10 +3,14 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from app.utils.constants.db_tables import COMPANY_DB_COLUMNS
+from app.utils.constants.prospecting_constants import PENDING_STATUS
+
 
 @dataclass
 class CompanyEmail:
     """An email associated with a company."""
+
     email: str
     email_of: str  # e.g., 'Generic', 'Sales', 'Support', 'Person'
     is_verified: bool = False
@@ -21,6 +25,7 @@ class CompanyEmail:
 @dataclass
 class ScrapedProfile:
     """Data extracted from a company's website."""
+
     about_text: str = ""
     meta_description: str = ""
     title: str = ""
@@ -39,6 +44,7 @@ class ScrapedProfile:
 @dataclass
 class Company:
     """Information about a target company."""
+
     id: str
     org_id: str
     name: str
@@ -59,7 +65,7 @@ class Company:
     auth_score: Optional[int] = None
     auth_feedback: Optional[str] = None
     raw_signals: Optional[dict] = None
-    status: str = "pending_review"
+    status: str = PENDING_STATUS
 
     # Pipeline-only fields (not Supabase companies table columns)
     search_snippet: str = ""
@@ -68,26 +74,9 @@ class Company:
     emails: List[CompanyEmail] = field(default_factory=list)
 
 
-COMPANY_DB_COLUMNS = {
-    "id",
-    "org_id",
-    "name",
-    "domain",
-    "industry",
-    "size",
-    "source",
-    "website",
-    "linkedin_url",
-    "about_text",
-    "need_hypothesis",
-    "needed_skills",
-    "needed_services",
-    "need_signals",
-    "proposed_solution",
-    "services_offered",
-    "digital_features",
-    "auth_score",
-    "auth_feedback",
-    "raw_signals",
-    "status",
-}
+__all__ = [
+    "COMPANY_DB_COLUMNS",
+    "Company",
+    "CompanyEmail",
+    "ScrapedProfile",
+]

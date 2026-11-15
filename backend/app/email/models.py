@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, List, Optional
-from pydantic import BaseModel, EmailStr, Field
+
+from pydantic import BaseModel, Field
+
+from app.utils.helpers.dataclass_helpers import DictCompatibleDataclass
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +41,25 @@ class DetectedReply:
     snippet: str
     date: datetime
     message_id: str | None = None
+
+
+@dataclass(slots=True)
+class ReplySummaryItem(DictCompatibleDataclass):
+    """Serializable summary of an incoming IMAP reply stored in the emails table."""
+
+    id: str
+    sender: str
+    subject: str
+    snippet: str
+    date: str
+
+
+@dataclass(slots=True)
+class RecipientDispatchFailure(DictCompatibleDataclass):
+    """Structured record of a failed SMTP recipient dispatch attempt."""
+
+    email: str
+    error: str
 
 
 class SendEmailApiRequest(BaseModel):

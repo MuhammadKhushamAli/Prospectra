@@ -1,145 +1,70 @@
 """LangGraph node for storing accepted companies and verified contacts to Supabase."""
 
-from datetime import datetime, timezone
-import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from app.core.logging_config import get_node_logger
-from app.models.company import COMPANY_DB_COLUMNS
+from app.langgraph.company_finder.state.state import GraphState
+from app.langgraph.company_finder.tools.helpers.store_to_db_helpers import (
+    build_company_db_records,
+    build_verified_contact_records,
+    persist_verified_contacts,
+    upsert_companies_and_resolve_ids,
+)
 from app.services.supabase import get_supabase_client
-from ..state.state import GraphState
+from app.utils.constants.db_tables import (
+    COMPANIES_TABLE,
+    COMPANY_DB_COLUMNS,
+    CONTACTS_TABLE,
+)
+from app.utils.helpers.time_helpers import utc_now_iso
 
-COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
-CONTACTS_TABLE = os.environ.get("SUPABASE_CONTACTS_TABLE_NAME", "contacts")
 logger = get_node_logger("store_to_db")
 
 
 async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
     """Node that persists accepted companies and their Reacher-verified emails to Supabase."""
     accepted_companies = [
-        c for c in state.get("accepted_companies", [])
+        c
+        for c in state.get("accepted_companies", [])
         if any(getattr(e, "is_verified", False) for e in (c.emails or []))
     ]
     if not accepted_companies:
-        logger.info("[PHASE 8: STORE TO DB] No accepted companies with Reacher-verified emails to store.")
+        logger.info("[STORE TO DB] 0 accepted companies with verified emails to store.")
         return {}
 
     errors = list(state.get("errors", []))
 
-    logger.banner(f"[PHASE 8: STORE TO DB] Persisting {len(accepted_companies)} accepted companies to Supabase...")
-
     try:
         supabase = await get_supabase_client()
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = utc_now_iso()
 
-        company_records: List[Dict[str, Any]] = []
-        for company in accepted_companies:
-            rec: Dict[str, Any] = {
-                "id": str(company.id),
-                "org_id": str(company.org_id),
-                "name": company.name,
-                "domain": company.domain,
-                "website": company.website or f"https://{company.domain}",
-                "linkedin_url": company.linkedin_url,
-                "industry": company.industry or "",
-                "size": company.size or "",
-                "about_text": company.about_text or (company.scraped.about_text if company.scraped else None),
-                "need_hypothesis": company.need_hypothesis,
-                "needed_skills": company.needed_skills or [],
-                "needed_services": company.needed_services or [],
-                "need_signals": company.need_signals or [],
-                "proposed_solution": company.proposed_solution,
-                "services_offered": company.services_offered or (company.scraped.services_offered if company.scraped else []),
-                "digital_features": company.digital_features or (company.scraped.digital_features if company.scraped else []),
-                "auth_score": company.auth_score,
-                "auth_feedback": company.auth_feedback,
-                "source": ["searxng"],
-                "raw_signals": company.raw_signals or {},
-                "status": "pending_review",
-            }
-            # Restrict strictly to table schema columns
-            clean_rec = {k: v for k, v in rec.items() if k in COMPANY_DB_COLUMNS}
-            company_records.append(clean_rec)
-
+        company_records = build_company_db_records(accepted_companies)
         if company_records:
-            logger.info(f"  [DB COMPANIES] Preparing to store {len(company_records)} company record(s):")
-            for idx, r in enumerate(company_records, 1):
-                logger.item(f"[{idx}] {r['name']} ({r['domain']}) | status: {r['status']} | industry: '{r['industry']}' | score: {r.get('auth_score')}")
-                logger.item(f"    Needed skills: {r.get('needed_skills')}")
-                logger.item(f"    Needed services: {r.get('needed_services')}")
-                logger.item(f"    Need hypothesis: {r.get('need_hypothesis')}")
-                logger.item(f"    Services offered: {r.get('services_offered')}")
-                logger.item(f"    Digital features: {r.get('digital_features')}")
-                logger.item(f"    Raw signals keys: {list(r.get('raw_signals', {}).keys())}")
-
-            # Upsert companies on (org_id, domain)
-            upsert_res = (
-                await supabase.table(COMPANIES_TABLE)
-                .upsert(company_records, on_conflict="org_id,domain")
-                .execute()
+            domain_to_id = await upsert_companies_and_resolve_ids(
+                supabase=supabase,
+                company_records=company_records,
+                accepted_companies=accepted_companies,
             )
-            saved_rows = upsert_res.data or []
-            logger.success(f"  [DB COMPANIES SUCCESS] Upserted {len(company_records)} record(s) into table '{COMPANIES_TABLE}'.")
+            contact_records = build_verified_contact_records(
+                accepted_companies=accepted_companies,
+                domain_to_id=domain_to_id,
+                now_iso=now_iso,
+            )
+            await persist_verified_contacts(supabase, contact_records)
 
-            # Map domain -> company_id from Supabase
-            domain_to_id: Dict[str, str] = {}
-            for row in saved_rows:
-                if row.get("domain") and row.get("id"):
-                    domain_to_id[row["domain"].lower()] = str(row["id"])
-
-            # Fallback to in-memory IDs if select was not returned by execute
-            for company in accepted_companies:
-                dom = company.domain.lower()
-                if dom not in domain_to_id:
-                    domain_to_id[dom] = str(company.id)
-
-            # Insert verified contacts (deduplicated per company/email)
-            contact_records: List[Dict[str, Any]] = []
-            seen_contact_keys: set[tuple[str, str]] = set()
-            for company in accepted_companies:
-                comp_id = domain_to_id.get(company.domain.lower())
-                if not comp_id:
-                    continue
-
-                for email_obj in company.emails:
-                    if not email_obj.is_verified:
-                        continue
-                    clean_email = email_obj.email.lower().strip()
-                    if not clean_email or (comp_id, clean_email) in seen_contact_keys:
-                        continue
-                    seen_contact_keys.add((comp_id, clean_email))
-                    contact_records.append({
-                        "company_id": comp_id,
-                        "name": f"{email_obj.first_name or ''} {email_obj.last_name or ''}".strip() or None,
-                        "role": email_obj.email_of or "Generic",
-                        "email": clean_email,
-                        "source": f"reacher:{email_obj.source}",
-                        "is_reachable": email_obj.is_reachable or "safe",
-                        "is_role_account": email_obj.is_role_account,
-                        "verified_at": now_iso,
-                    })
-
-            if contact_records:
-                try:
-                    await supabase.table(CONTACTS_TABLE).upsert(contact_records).execute()
-                    logger.success(f"  [DB CONTACTS SUCCESS] Upserted {len(contact_records)} verified contact emails into '{CONTACTS_TABLE}'.")
-                    for c in contact_records:
-                        logger.item(f"- {c['email']} ({c['role']}) -> status: {c['is_reachable']}")
-                except Exception as ce:
-                    # Fall back to individual inserts if idx_contacts_company_email conflicts
-                    logger.warning(f"  [DB CONTACTS WARNING] Batch upsert failed ({ce}); storing individually...")
-                    for rec_item in contact_records:
-                        try:
-                            await supabase.table(CONTACTS_TABLE).insert(rec_item).execute()
-                        except Exception:
-                            pass
-
-    except Exception as e:
-        error_msg = f"Failed to store companies to Supabase: {str(e)}"
-        logger.error(f"  [DB ERROR] {error_msg}", exc=e)
+    except Exception as exc:
+        error_msg = f"Failed to store companies to Supabase: {str(exc)}"
+        logger.error(f"[STORE TO DB] {error_msg}", exc=exc)
         if error_msg not in errors:
             errors.append(error_msg)
         return {"errors": errors}
 
-    logger.header(f"[PHASE 8: STORE TO DB] Completed storage successfully.\n")
     return {"errors": errors}
+
+
+__all__ = [
+    "COMPANIES_TABLE",
+    "CONTACTS_TABLE",
+    "COMPANY_DB_COLUMNS",
+    "store_to_db_node",
+]

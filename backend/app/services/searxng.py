@@ -1,15 +1,15 @@
 """Service client for self-hosted SearXNG search engine."""
 
-import os
 from typing import Any, Dict, List, Optional
+
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_random_exponential
 
-
-SEARXNG_BASE_URL = os.environ.get("SEARXNG_BASE_URL", "http://localhost:8888").rstrip("/")
-
-
-SEARXNG_DEFAULT_LANGUAGE = os.environ.get("SEARXNG_DEFAULT_LANGUAGE", "en-US")
+from app.services.helpers.searxng_helpers import build_searxng_search_params
+from app.utils.constants.prospecting_constants import (
+    SEARXNG_BASE_URL,
+    SEARXNG_DEFAULT_LANGUAGE,
+)
 
 
 @retry(
@@ -26,16 +26,12 @@ async def search_searxng(
     time_range: str = "",
 ) -> List[Dict[str, Any]]:
     """Execute a search query against the self-hosted SearXNG instance."""
-    params: Dict[str, Any] = {
-        "q": query,
-        "format": "json",
-        "pageno": page,
-        "categories": "general",
-        "language": language or SEARXNG_DEFAULT_LANGUAGE,
-        "safesearch": 0,
-    }
-    if time_range:
-        params["time_range"] = time_range
+    params = build_searxng_search_params(
+        query=query,
+        page=page,
+        language=language,
+        time_range=time_range,
+    )
 
     response = await client.get(
         f"{SEARXNG_BASE_URL}/search",
@@ -51,3 +47,10 @@ async def search_searxng(
     response.raise_for_status()
     data = response.json()
     return data.get("results", [])
+
+
+__all__ = [
+    "SEARXNG_BASE_URL",
+    "SEARXNG_DEFAULT_LANGUAGE",
+    "search_searxng",
+]

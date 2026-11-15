@@ -1,166 +1,25 @@
 """Node that stores the generated email draft into Supabase public.emails."""
 
-import os
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict
 
 from app.langgraph.email_writer.state.state import EmailGraphState
-from app.langgraph.email_writer.tools.get_existing_email_tool import (
-    ALREADY_SENT_ERROR,
-    is_email_sent,
+from app.langgraph.email_writer.tools.helpers.store_email_helpers import (
+    _is_missing_review_schema_error,
+    _without_review_columns,
+    build_email_record,
+    insert_email_record,
+    lookup_contact_id_by_email,
+    update_email_record,
 )
 from app.services.supabase import get_supabase_client
-
-
-def resolve_user_id(user_context: Any) -> Optional[str]:
-    """Extract user_id safely from user_context."""
-    if not user_context:
-        return None
-    if isinstance(user_context, dict):
-        return user_context.get("user_id")
-    return getattr(user_context, "user_id", None)
-
-
-def resolve_org_id(user_context: Any, target_company: Any) -> Optional[str]:
-    """Extract active org_id safely from user_context or target_company."""
-    if user_context:
-        org_id = user_context.get("org_id") if isinstance(user_context, dict) else getattr(user_context, "org_id", None)
-        if org_id:
-            return org_id
-    if target_company:
-        return target_company.get("org_id") if isinstance(target_company, dict) else getattr(target_company, "org_id", None)
-    return None
-
-
-def resolve_company_id(target_company: Any) -> Optional[str]:
-    """Extract company_id safely from target_company."""
-    if not target_company:
-        return None
-    if isinstance(target_company, dict):
-        return target_company.get("id")
-    return getattr(target_company, "id", None)
-
-
-def build_email_record(
-    company_id: str,
-    user_id: Optional[str],
-    org_id: Optional[str],
-    contact_id: Optional[str],
-    subject: Optional[str],
-    body: str,
-    review_score: Optional[float] = None,
-    review_feedback: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Construct the database payload matching public.emails table schema."""
-    record: Dict[str, Any] = {
-        "company_id": company_id,
-        "body": body,
-        "subject": subject or "Outreach Inquiry",
-        "status": "draft",
-    }
-    if user_id:
-        record["sent_by_user_id"] = user_id
-    if org_id:
-        record["sent_by_org_id"] = org_id
-    if contact_id:
-        record["contact_id"] = contact_id
-    if review_score is not None:
-        record["review_score"] = review_score
-    if review_feedback:
-        record["review_feedback"] = review_feedback
-    return record
-
-
-def _is_missing_review_schema_error(err: Exception) -> bool:
-    """Return True when PostgREST schema cache lacks optional review columns."""
-    msg = str(err).lower()
-    return ("pgrst204" in msg or "schema cache" in msg) and (
-        "review_score" in msg or "review_feedback" in msg
-    )
-
-
-def _without_review_columns(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Strip review metadata columns for fallback writes against pre-reset schemas."""
-    return {
-        k: v
-        for k, v in payload.items()
-        if k not in ("review_score", "review_feedback")
-    }
-
-
-async def insert_email_record(
-    supabase: Any,
-    table_name: str,
-    record: Dict[str, Any],
-) -> Optional[str]:
-    """Insert the record into the emails table and return the new email ID."""
-    try:
-        res = await (
-            supabase.table(table_name)
-            .insert(record)
-            .execute()
-        )
-    except Exception as e:
-        if _is_missing_review_schema_error(e) and (
-            "review_score" in record or "review_feedback" in record
-        ):
-            res = await (
-                supabase.table(table_name)
-                .insert(_without_review_columns(record))
-                .execute()
-            )
-        else:
-            raise
-    if res.data and len(res.data) > 0:
-        return res.data[0].get("id")
-    return None
-
-
-async def update_email_record(
-    supabase: Any,
-    table_name: str,
-    email_id: str,
-    subject: Optional[str],
-    body: str,
-    review_score: Optional[float] = None,
-    review_feedback: Optional[str] = None,
-) -> bool:
-    """Update an existing email record in Supabase with newly generated content and review metadata."""
-    update_payload: Dict[str, Any] = {
-        "subject": subject or "Outreach Inquiry",
-        "body": body,
-        "status": "draft",
-    }
-    if review_score is not None:
-        update_payload["review_score"] = review_score
-    if review_feedback:
-        update_payload["review_feedback"] = review_feedback
-
-    try:
-        try:
-            await (
-                supabase.table(table_name)
-                .update(update_payload)
-                .eq("id", email_id)
-                .neq("status", "sent")
-                .execute()
-            )
-        except Exception as e:
-            if _is_missing_review_schema_error(e) and (
-                "review_score" in update_payload or "review_feedback" in update_payload
-            ):
-                await (
-                    supabase.table(table_name)
-                    .update(_without_review_columns(update_payload))
-                    .eq("id", email_id)
-                    .neq("status", "sent")
-                    .execute()
-                )
-            else:
-                raise
-        return True
-    except Exception as e:
-        print(f"Warning: Failed to update existing email {email_id}: {e}")
-        return False
+from app.utils.constants.db_tables import CONTACTS_TABLE, EMAILS_TABLE
+from app.utils.constants.email_constants import ALREADY_SENT_ERROR
+from app.utils.helpers.db_status_helpers import is_email_sent
+from app.utils.helpers.state_helpers import (
+    resolve_company_id,
+    resolve_org_id,
+    resolve_user_id,
+)
 
 
 async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
@@ -189,14 +48,11 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
 
     try:
         supabase = await get_supabase_client()
-        emails_table = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "emails")
-        contacts_table = os.environ.get("SUPABASE_CONTACTS_TABLE_NAME", "contacts")
 
-        # If an email draft for this company already exists, update it directly
         if existing_email_id:
             updated = await update_email_record(
                 supabase=supabase,
-                table_name=emails_table,
+                table_name=EMAILS_TABLE,
                 email_id=existing_email_id,
                 subject=generated_email.subject,
                 body=generated_email.body,
@@ -208,25 +64,14 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
 
         first_stored_id = None
 
-        # If specific recipients were chosen, store draft for each selected recipient
         if recipient_emails and len(recipient_emails) > 0:
             for rec_email in recipient_emails:
-                clean_email = rec_email.strip()
-                c_id = None
-                try:
-                    c_res = await (
-                        supabase.table(contacts_table)
-                        .select("id")
-                        .eq("company_id", company_id)
-                        .ilike("email", clean_email)
-                        .limit(1)
-                        .execute()
-                    )
-                    if c_res.data and len(c_res.data) > 0:
-                        c_id = c_res.data[0].get("id")
-                except Exception:
-                    pass
-
+                c_id = await lookup_contact_id_by_email(
+                    supabase=supabase,
+                    contacts_table=CONTACTS_TABLE,
+                    company_id=company_id,
+                    email_address=rec_email,
+                )
                 record = build_email_record(
                     company_id=company_id,
                     user_id=user_id,
@@ -237,7 +82,7 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
                     review_score=review_score,
                     review_feedback=review_feedback,
                 )
-                stored_id = await insert_email_record(supabase, emails_table, record)
+                stored_id = await insert_email_record(supabase, EMAILS_TABLE, record)
                 if not first_stored_id:
                     first_stored_id = stored_id
         else:
@@ -251,10 +96,23 @@ async def store_email_node(state: EmailGraphState) -> Dict[str, Any]:
                 review_score=review_score,
                 review_feedback=review_feedback,
             )
-            first_stored_id = await insert_email_record(supabase, emails_table, record)
+            first_stored_id = await insert_email_record(supabase, EMAILS_TABLE, record)
 
         return {"stored_email_id": first_stored_id}
-    except Exception as e:
-        error_msg = f"Failed to store email to Supabase: {str(e)}"
+    except Exception as exc:
+        error_msg = f"Failed to store email to Supabase: {str(exc)}"
         print(f"Warning: {error_msg}")
         return {"errors": state.get("errors", []) + [error_msg]}
+
+
+__all__ = [
+    "resolve_user_id",
+    "resolve_org_id",
+    "resolve_company_id",
+    "build_email_record",
+    "_is_missing_review_schema_error",
+    "_without_review_columns",
+    "insert_email_record",
+    "update_email_record",
+    "store_email_node",
+]

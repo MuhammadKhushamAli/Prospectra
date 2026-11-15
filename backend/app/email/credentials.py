@@ -2,60 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any
 from app.core.logging_config import get_node_logger
+from app.email.helpers.credentials_helpers import (
+    extract_smtp_fields_from_row,
+    fetch_org_sender_name,
+    resolve_default_imap_host,
+)
 from app.email.models import EmailCredentials
 from app.services.supabase import get_supabase_client
+from app.utils.constants.db_tables import DOMAIN_VERIFICATIONS_TABLE, ORGANIZATIONS_TABLE
+from app.utils.constants.email_constants import DEFAULT_IMAP_SERVERS
 
 logger = get_node_logger("email_credentials")
 
-DOMAIN_VERIFICATIONS_TABLE = "domain_verifications"
-ORGANIZATIONS_TABLE = "organizations"
-
-# Standard IMAP configurations mapped from known ESP providers
-DEFAULT_IMAP_SERVERS: dict[str, tuple[str, int]] = {
-    "google_workspace": ("imap.gmail.com", 993),
-    "microsoft_365": ("outlook.office365.com", 993),
-    "zoho": ("imap.zoho.com", 993),
-    "hostinger": ("imap.hostinger.com", 993),
-}
-
-
-def resolve_default_imap_host(
-    esp_provider: str,
-    smtp_server: str,
-    explicit_imap_server: str | None = None,
-    explicit_imap_port: int | None = None,
-) -> tuple[str, int]:
-    """
-    Resolve the IMAP server and port for a given provider or SMTP server.
-    Prefers explicit configurations, then known ESP presets, then intelligent heuristics.
-    """
-    if explicit_imap_server and explicit_imap_server.strip():
-        port = explicit_imap_port if (explicit_imap_port and explicit_imap_port > 0) else 993
-        return explicit_imap_server.strip(), port
-
-    if esp_provider in DEFAULT_IMAP_SERVERS:
-        return DEFAULT_IMAP_SERVERS[esp_provider]
-
-    # Heuristic resolution for custom / private servers:
-    # 1. smtp.example.com -> imap.example.com
-    # 2. mail.example.com -> mail.example.com
-    clean_smtp = (smtp_server or "").strip().lower()
-    if clean_smtp.startswith("smtp."):
-        inferred = "imap." + clean_smtp[5:]
-        return inferred, 993
-    elif clean_smtp.startswith("mail."):
-        return clean_smtp, 993
-
-    return clean_smtp or "imap.gmail.com", 993
-
 
 async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
-    """
-    Fetch and validate the verified email, SMTP, and IMAP credentials for an organization.
-    Raises ValueError if email/SMTP is not verified or credentials are missing.
-    """
+    """Fetch and validate the verified email, SMTP, and IMAP credentials for an organization."""
     if not org_id:
         raise ValueError("Organization ID is required to fetch email credentials.")
 
@@ -73,51 +35,10 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
             "No domain verification record found. Please verify your domain and SMTP credentials first."
         )
 
-    row = res.data[0]
-    dns_records = row.get("dns_records") or {}
-    smtp_config = dns_records.get("smtp_config") or {}
-
-    sender_email = (
-        row.get("sender_email")
-        or smtp_config.get("sender_email")
-        or ""
-    ).strip()
-
-    smtp_server = (
-        row.get("smtp_server")
-        or smtp_config.get("smtp_server")
-        or ""
-    ).strip()
-
-    smtp_port = int(
-        row.get("smtp_port")
-        or smtp_config.get("smtp_port")
-        or 587
-    )
-
-    smtp_used = (
-        row.get("smtp_used")
-        or smtp_config.get("smtp_used")
-        or "STARTTLS"
-    ).strip()
-
-    smtp_username = (
-        row.get("smtp_username")
-        or smtp_config.get("smtp_username")
-        or sender_email
-    ).strip()
-
-    smtp_password = (
-        row.get("smtp_password")
-        or smtp_config.get("smtp_password")
-        or ""
-    ).strip()
-
-    esp_provider = (
-        row.get("esp_provider")
-        or smtp_config.get("esp_provider")
-        or "google_workspace"
-    )
+    fields = extract_smtp_fields_from_row(res.data[0])
+    sender_email = fields["sender_email"]
+    smtp_server = fields["smtp_server"]
+    smtp_password = fields["smtp_password"]
 
     if not sender_email or not smtp_server or not smtp_password:
         raise ValueError(
@@ -125,47 +46,38 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
             "Please configure your email credentials in the Onboarding Email Verification settings."
         )
 
-    # Resolve organization / company display name for the From header ("Company Name <email>")
-    sender_name = (
-        row.get("sender_name")
-        or smtp_config.get("sender_name")
-        or ""
-    ).strip() or None
+    sender_name = fields["sender_name"] or await fetch_org_sender_name(
+        supabase=supabase,
+        org_id=org_id,
+        table_name=ORGANIZATIONS_TABLE,
+    )
 
-    if not sender_name:
-        try:
-            org_res = await (
-                supabase.table(ORGANIZATIONS_TABLE)
-                .select("name")
-                .eq("id", org_id)
-                .limit(1)
-                .execute()
-            )
-            if org_res.data and org_res.data[0].get("name"):
-                sender_name = str(org_res.data[0]["name"]).strip() or None
-        except Exception as exc:
-            logger.warning(f"Could not fetch organization name for org_id={org_id}: {exc}")
-
-    # Resolve IMAP configuration
-    explicit_imap = row.get("imap_server") or smtp_config.get("imap_server")
-    explicit_imap_port = row.get("imap_port") or smtp_config.get("imap_port")
     imap_server, imap_port = resolve_default_imap_host(
-        esp_provider=esp_provider,
+        esp_provider=fields["esp_provider"],
         smtp_server=smtp_server,
-        explicit_imap_server=explicit_imap,
-        explicit_imap_port=explicit_imap_port,
+        explicit_imap_server=fields["explicit_imap"],
+        explicit_imap_port=fields["explicit_imap_port"],
     )
 
     return EmailCredentials(
         org_id=org_id,
         sender_email=sender_email,
         smtp_server=smtp_server,
-        smtp_port=smtp_port,
-        smtp_used=smtp_used,
-        smtp_username=smtp_username,
+        smtp_port=fields["smtp_port"],
+        smtp_used=fields["smtp_used"],
+        smtp_username=fields["smtp_username"],
         smtp_password=smtp_password,
         imap_server=imap_server,
         imap_port=imap_port,
-        esp_provider=esp_provider,
+        esp_provider=fields["esp_provider"],
         sender_name=sender_name,
     )
+
+
+__all__ = [
+    "DEFAULT_IMAP_SERVERS",
+    "DOMAIN_VERIFICATIONS_TABLE",
+    "ORGANIZATIONS_TABLE",
+    "fetch_org_email_credentials",
+    "resolve_default_imap_host",
+]

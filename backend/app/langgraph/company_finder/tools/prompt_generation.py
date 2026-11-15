@@ -4,17 +4,14 @@ from typing import Any, Dict
 
 from app.agents.params_generation.param_gen_agent import generate_params
 from app.core.logging_config import get_node_logger
-from ..state.state import GraphState
+from app.langgraph.company_finder.state.state import GraphState
+from app.utils.helpers.state_helpers import extract_skill_names
 
 logger = get_node_logger("prompt_gen")
 
 
 async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
-    """Node that generates SearXNG search parameters.
-
-    Extracts user context (skills and target industries) from state,
-    invokes param_gen_agent, and increments the search attempt counter.
-    """
+    """Node that generates SearXNG search parameters."""
     user_context = state.get("user_context")
     search_feedback = state.get("search_feedback", None)
     previous_prompt = state.get("search_prompt", None)
@@ -26,16 +23,8 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
     if not getattr(user_context, "target_industries", None):
         raise ValueError("Target Industries are missing from the state.")
 
-    skills_names = [
-        s.name if hasattr(s, "name") else str(s)
-        for s in (user_context.skills or [])
-    ]
-    logger.banner(f"[PHASE 1: PROMPT GENERATION] Attempt #{attempts}")
-    logger.item(f"User: {user_context.full_name} ({user_context.email})")
-    logger.item(f"Skills: {', '.join(skills_names) if skills_names else 'None'}")
-    logger.item(f"Target Industries: {user_context.target_industries or 'Inferred by LLM'}")
-    if search_feedback:
-        logger.item(f"Feedback from previous attempt:\n    {search_feedback[:200]}...")
+    skills_names = extract_skill_names(user_context)
+    industries_count = len(user_context.target_industries or [])
 
     result = await generate_params(
         user_context=user_context,
@@ -43,17 +32,16 @@ async def generate_search_prompt_node(state: GraphState) -> Dict[str, Any]:
         previous_prompt=previous_prompt,
     )
 
-    logger.header(f"[PHASE 1: PROMPT GENERATION] Generated {len(result.searxng.queries)} SearXNG queries:")
-    for idx, q in enumerate(result.searxng.queries, 1):
-        logger.item(f"[{idx}] Industry: {q.target_industry}")
-        logger.item(f"    Query: {q.query}")
+    logger.info(
+        f"[PROMPT GENERATION] Attempt #{attempts}: Generated {len(result.searxng.queries)} query(ies) "
+        f"for {industries_count} industry(ies) and {len(skills_names)} skill(s)."
+    )
 
     return {
         "search_prompt": result,
         "search_attempts": attempts,
         "same_prompt_retries": 0,
         "same_prompt_retry_active": False,
-        # Reset downstream iteration artifacts
         "searched_companies": [],
         "scraped_companies": [],
         "verified_companies": [],

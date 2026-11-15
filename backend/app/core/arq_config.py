@@ -2,52 +2,38 @@
 
 from __future__ import annotations
 
-import json
-import os
-import time
 from typing import Any
 
-import httpx
 from arq.connections import ArqRedis, RedisSettings, create_pool
 from arq.jobs import Job, JobStatus
 
+from app.core.helpers.arq_helpers import (
+    build_redis_settings_from_env,
+    deserialize_job_status_record,
+    post_webhook_payload,
+    serialize_job_status_record,
+)
 from app.core.logging_config import get_node_logger
+from app.models.job_models import JobWebhookPayload
+from app.utils.constants.arq_constants import (
+    ARQ_JOB_TIMEOUT_SECONDS,
+    ARQ_KEEP_RESULT_SECONDS,
+    ARQ_MAX_JOBS,
+    ARQ_QUEUE_NAME,
+    BACKEND_INTERNAL_URL,
+    JOB_STATUS_PREFIX,
+    WEBHOOK_JOB_STATUS_PATH,
+)
+from app.utils.helpers.time_helpers import unix_now
 
 logger = get_node_logger("arq_worker")
-
-ARQ_QUEUE_NAME: str = os.getenv("ARQ_QUEUE_NAME", "prospectra:arq:queue")
-ARQ_JOB_TIMEOUT_SECONDS: int = int(os.getenv("ARQ_JOB_TIMEOUT_SECONDS", "1800"))  # 30m timeout for multi-pass search
-ARQ_KEEP_RESULT_SECONDS: int = int(os.getenv("ARQ_KEEP_RESULT_SECONDS", "86400"))  # 24h TTL in Redis
-ARQ_MAX_JOBS: int = int(os.getenv("ARQ_MAX_JOBS", "10"))
-
-BACKEND_INTERNAL_URL: str = os.getenv("BACKEND_INTERNAL_URL", "http://127.0.0.1:8000")
-WEBHOOK_JOB_STATUS_PATH: str = "/api/v1/webhooks/job-status"
-
-JOB_STATUS_PREFIX = "prospectra:job:status:"
 
 _arq_pool: ArqRedis | None = None
 
 
 def get_redis_settings() -> RedisSettings:
-    """Build ARQ RedisSettings from environment variables (matching docker-compose redis service)."""
-    redis_url = os.getenv("REDIS_URL")
-    if redis_url:
-        return RedisSettings.from_dsn(redis_url)
-
-    host = os.getenv("REDIS_HOST", "127.0.0.1")
-    port = int(os.getenv("REDIS_PORT", "6379"))
-    database = int(os.getenv("REDIS_DB", "0"))
-    password = os.getenv("REDIS_PASSWORD") or None
-
-    return RedisSettings(
-        host=host,
-        port=port,
-        database=database,
-        password=password,
-        conn_timeout=10,
-        conn_retries=5,
-        conn_retry_delay=1,
-    )
+    """Build ARQ RedisSettings from environment variables."""
+    return build_redis_settings_from_env()
 
 
 async def get_arq_pool() -> ArqRedis | None:
@@ -91,26 +77,15 @@ async def update_job_status(
     error: str | None = None,
     redis_conn: Any | None = None,
 ) -> None:
-    """
-    Mark a job's status in Redis ('queued', 'in_progress', 'done', 'not_done', 'failed').
-    Does NOT store domain/email/company payloads in Redis — data updates go directly to the DB.
-    """
+    """Mark a job's status in Redis ('queued', 'in_progress', 'done', 'not_done', 'failed')."""
     pool = redis_conn or await get_arq_pool()
     if pool is None:
         return
     try:
-        record: dict[str, Any] = {
-            "job_id": job_id,
-            "task_name": task_name,
-            "status": status,
-            "updated_at": time.time(),
-        }
-        if error:
-            record["error"] = error
         await pool.setex(
             f"{JOB_STATUS_PREFIX}{job_id}",
             ARQ_KEEP_RESULT_SECONDS,
-            json.dumps(record),
+            serialize_job_status_record(job_id, task_name, status, error),
         )
     except Exception as exc:
         logger.error(f"[ARQ] Failed to update job status for {job_id}: {exc}")
@@ -132,33 +107,28 @@ async def trigger_job_webhook(
     replies: list[dict[str, Any]] | None = None,
     error: str | None = None,
 ) -> None:
-    """
-    Send a job lifecycle webhook event ('started', 'done', 'failed') to the backend webhook
-    endpoint so the frontend is notified immediately without polling.
-    """
-    payload: dict[str, Any] = {
-        "job_id": job_id,
-        "task_name": task_name,
-        "org_id": org_id,
-        "company_id": company_id,
-        "email_id": email_id,
-        "reply_count": reply_count,
-        "reply_from": reply_from,
-        "reply_subject": reply_subject,
-        "reply_snippet": reply_snippet,
-        "replied_at": replied_at,
-        "replies": replies,
-        "status": status,
-        "message": message,
-        "error": error,
-        "timestamp": time.time(),
-    }
-    url = f"{BACKEND_INTERNAL_URL.rstrip('/')}{WEBHOOK_JOB_STATUS_PATH}"
+    """Send a job lifecycle webhook event ('started', 'done', 'failed') to the backend webhook endpoint."""
+    webhook = JobWebhookPayload(
+        job_id=job_id,
+        task_name=task_name,
+        org_id=org_id,
+        company_id=company_id,
+        email_id=email_id,
+        reply_count=reply_count,
+        reply_from=reply_from,
+        reply_subject=reply_subject,
+        reply_snippet=reply_snippet,
+        replied_at=replied_at,
+        replies=replies,
+        status=status,
+        message=message,
+        error=error,
+        timestamp=unix_now(),
+    )
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(url, json=payload)
+        await post_webhook_payload(webhook.to_dict())
     except Exception as exc:
-        logger.error(f"[ARQ WEBHOOK] Could not POST webhook to {url} for job {job_id}: {exc}")
+        logger.error(f"[ARQ WEBHOOK] Could not POST webhook for job {job_id}: {exc}")
 
 
 async def get_job_status(job_id: str) -> dict[str, Any]:
@@ -173,8 +143,7 @@ async def get_job_status(job_id: str) -> dict[str, Any]:
     try:
         raw_status = await pool.get(f"{JOB_STATUS_PREFIX}{job_id}")
         if raw_status:
-            data = json.loads(raw_status.decode("utf-8") if isinstance(raw_status, bytes) else raw_status)
-            return data
+            return deserialize_job_status_record(raw_status)
     except Exception:
         pass
 
@@ -200,10 +169,7 @@ async def enqueue_arq_job(
     job_id: str | None = None,
     **kwargs: Any,
 ) -> str | None:
-    """
-    Enqueue a task onto the ARQ Redis queue and mark its status as 'queued' in Redis.
-    Returns `job_id` if queued in Redis, or `None` if Redis is unreachable.
-    """
+    """Enqueue a task onto the ARQ Redis queue and mark its status as 'queued' in Redis."""
     pool = await get_arq_pool()
     if pool is None:
         return None
@@ -230,3 +196,21 @@ async def enqueue_arq_job(
     except Exception as exc:
         logger.error(f"[ARQ] Enqueue error for {function_name}: {exc}")
         return None
+
+
+__all__ = [
+    "ARQ_JOB_TIMEOUT_SECONDS",
+    "ARQ_KEEP_RESULT_SECONDS",
+    "ARQ_MAX_JOBS",
+    "ARQ_QUEUE_NAME",
+    "BACKEND_INTERNAL_URL",
+    "JOB_STATUS_PREFIX",
+    "WEBHOOK_JOB_STATUS_PATH",
+    "close_arq_pool",
+    "enqueue_arq_job",
+    "get_arq_pool",
+    "get_job_status",
+    "get_redis_settings",
+    "trigger_job_webhook",
+    "update_job_status",
+]

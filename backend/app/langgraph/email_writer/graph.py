@@ -1,39 +1,22 @@
 """LangGraph definition for the Email Writer workflow."""
 
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
 
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 
+from app.langgraph.email_writer.helpers.router_helpers import route_after_existing_email
 from app.langgraph.email_writer.state.state import EmailGraphState
-from app.langgraph.email_writer.tools.email_writer_tool import email_writer_node
-from app.langgraph.email_writer.tools.email_review_tool import email_review_node
-from app.langgraph.email_writer.tools.store_email import store_email_node
 from app.langgraph.email_writer.tools.check_email_logic import check_email_logic
+from app.langgraph.email_writer.tools.email_review_tool import email_review_node
+from app.langgraph.email_writer.tools.email_writer_tool import email_writer_node
 from app.langgraph.email_writer.tools.get_company_tool import get_company_node
 from app.langgraph.email_writer.tools.get_existing_email_tool import (
     get_existing_email_node,
     is_email_already_generated,
     is_email_sent,
 )
+from app.langgraph.email_writer.tools.store_email import store_email_node
 from app.langgraph.tools.load_user_context import load_user_context_node
-
-
-def route_after_existing_email(state: EmailGraphState) -> str:
-    """Stop workflow immediately when company is rejected or an email has already been generated."""
-    company = state.get("target_company")
-    company_status = (
-        getattr(company, "status", None)
-        if company and not isinstance(company, dict)
-        else (company or {}).get("status")
-    )
-    if str(company_status or "").strip().lower() == "rejected":
-        return END
-
-    if is_email_already_generated(state.get("existing_email")):
-        return END
-
-    return "email_writer"
-
 
 workflow = StateGraph(EmailGraphState)
 
@@ -68,7 +51,7 @@ email_writer_graph = workflow.compile()
 
 async def run_email_writer_workflow(
     user_id: str,
-    org_id: str, 
+    org_id: str,
     target_company_id: str,
     recipient_emails: Optional[List[str]] = None,
     org_domain: Optional[str] = None,
@@ -82,8 +65,17 @@ async def run_email_writer_workflow(
         "recipient_emails": recipient_emails or [],
         "org_domain": org_domain,
         "user_feedback": user_feedback,
-        "errors": []
+        "errors": [],
     }
 
     result = await email_writer_graph.ainvoke(initial_state)
     return result
+
+
+__all__ = [
+    "route_after_existing_email",
+    "is_email_already_generated",
+    "is_email_sent",
+    "email_writer_graph",
+    "run_email_writer_workflow",
+]
