@@ -78,6 +78,7 @@ async def mark_email_and_company_sent(
     message_ids: list[str],
     custom_subject: str | None = None,
     custom_body: str | None = None,
+    sender_email: str | None = None,
     emails_table: str = EMAILS_TABLE,
     companies_table: str = COMPANIES_TABLE,
 ) -> None:
@@ -93,6 +94,8 @@ async def mark_email_and_company_sent(
         "recipient_emails": successful_recipients,
         "message_id": primary_msg_id,
     }
+    if sender_email:
+        update_payload["sender_email"] = sender_email
     if custom_subject:
         update_payload["subject"] = custom_subject
     if custom_body:

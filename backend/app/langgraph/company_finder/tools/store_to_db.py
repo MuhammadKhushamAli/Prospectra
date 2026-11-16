@@ -38,7 +38,10 @@ async def store_to_db_node(state: GraphState) -> Dict[str, Any]:
         supabase = await get_supabase_client()
         now_iso = utc_now_iso()
 
-        company_records = build_company_db_records(accepted_companies)
+        company_records = build_company_db_records(
+            accepted_companies=accepted_companies,
+            discovered_by_user_id=state.get("user_id"),
+        )
         if company_records:
             domain_to_id = await upsert_companies_and_resolve_ids(
                 supabase=supabase,

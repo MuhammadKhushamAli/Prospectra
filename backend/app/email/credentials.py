@@ -6,6 +6,7 @@ from app.core.logging_config import get_node_logger
 from app.email.helpers.credentials_helpers import (
     extract_smtp_fields_from_row,
     fetch_org_sender_name,
+    fetch_user_profile_email,
     resolve_default_imap_host,
 )
 from app.email.models import EmailCredentials
@@ -16,8 +17,11 @@ from app.utils.constants.email_constants import DEFAULT_IMAP_SERVERS
 logger = get_node_logger("email_credentials")
 
 
-async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
-    """Fetch and validate the verified email, SMTP, and IMAP credentials for an organization."""
+async def fetch_sender_credentials(
+    org_id: str,
+    user_id: str | None = None,
+) -> EmailCredentials:
+    """Fetch verified SMTP credentials for an org, resolving sender email from user profile."""
     if not org_id:
         raise ValueError("Organization ID is required to fetch email credentials.")
 
@@ -36,21 +40,35 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
         )
 
     fields = extract_smtp_fields_from_row(res.data[0])
-    sender_email = fields["sender_email"]
     smtp_server = fields["smtp_server"]
     smtp_password = fields["smtp_password"]
+    smtp_username = fields["smtp_username"]
 
-    if not sender_email or not smtp_server or not smtp_password:
+    if not smtp_server or not smtp_password:
         raise ValueError(
-            "Sender email or SMTP password not found in your verified domain configuration. "
-            "Please configure your email credentials in the Onboarding Email Verification settings."
+            "SMTP server or password not found in your verified domain configuration. "
+            "Please configure your email credentials in Domain & Email Verification settings."
         )
 
-    sender_name = fields["sender_name"] or await fetch_org_sender_name(
+    # 1. Resolve sender email: profile email if user_id is provided, otherwise fallback
+    sender_email = None
+    if user_id:
+        sender_email = await fetch_user_profile_email(supabase, org_id, user_id)
+
+    if not sender_email:
+        sender_email = fields.get("sender_email") or smtp_username
+
+    if not sender_email:
+        raise ValueError(
+            "Could not determine sender email. Please ensure your profile email is complete."
+        )
+
+    # 2. Resolve sender name (defaults to company name for From: "<Company Name>" <email>)
+    sender_name = await fetch_org_sender_name(
         supabase=supabase,
         org_id=org_id,
         table_name=ORGANIZATIONS_TABLE,
-    )
+    ) or fields["sender_name"]
 
     imap_server, imap_port = resolve_default_imap_host(
         esp_provider=fields["esp_provider"],
@@ -65,7 +83,7 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
         smtp_server=smtp_server,
         smtp_port=fields["smtp_port"],
         smtp_used=fields["smtp_used"],
-        smtp_username=fields["smtp_username"],
+        smtp_username=smtp_username,
         smtp_password=smtp_password,
         imap_server=imap_server,
         imap_port=imap_port,
@@ -74,10 +92,19 @@ async def fetch_org_email_credentials(org_id: str) -> EmailCredentials:
     )
 
 
+async def fetch_org_email_credentials(
+    org_id: str,
+    user_id: str | None = None,
+) -> EmailCredentials:
+    """Fetch and validate the verified email, SMTP, and IMAP credentials."""
+    return await fetch_sender_credentials(org_id, user_id)
+
+
 __all__ = [
     "DEFAULT_IMAP_SERVERS",
     "DOMAIN_VERIFICATIONS_TABLE",
     "ORGANIZATIONS_TABLE",
     "fetch_org_email_credentials",
+    "fetch_sender_credentials",
     "resolve_default_imap_host",
 ]

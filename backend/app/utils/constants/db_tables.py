@@ -3,6 +3,10 @@
 import os
 
 ORGANIZATIONS_TABLE = os.environ.get("SUPABASE_ORGANIZATIONS_TABLE_NAME", "organizations")
+ORGANIZATION_MEMBERS_TABLE = os.environ.get("SUPABASE_ORGANIZATION_MEMBERS_TABLE_NAME", "organization_members")
+ORGANIZATION_INVITES_TABLE = os.environ.get("SUPABASE_ORGANIZATION_INVITES_TABLE_NAME", "organization_invites")
+ORG_APPROVALS_TABLE = os.environ.get("SUPABASE_ORG_APPROVALS_TABLE_NAME", "org_approvals")
+ORG_ACTIVITY_EVENTS_TABLE = os.environ.get("SUPABASE_ORG_ACTIVITY_EVENTS_TABLE_NAME", "org_activity_events")
 COMPANIES_TABLE = os.environ.get("SUPABASE_COMPANIES_TABLE_NAME", "companies")
 CONTACTS_TABLE = os.environ.get("SUPABASE_CONTACTS_TABLE_NAME", "contacts")
 EMAILS_TABLE = os.environ.get("SUPABASE_EMAIL_TABLE_NAME", "emails")
@@ -55,4 +59,5 @@ COMPANY_DB_COLUMNS = {
     "auth_feedback",
     "raw_signals",
     "status",
+    "discovered_by_user_id",
 }

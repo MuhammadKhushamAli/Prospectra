@@ -104,6 +104,30 @@ def extract_smtp_fields_from_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+async def fetch_user_profile_email(
+    supabase: Any,
+    org_id: str,
+    user_id: str,
+) -> str | None:
+    """Fetch sender email address from the user's profile."""
+    from app.utils.constants.db_tables import USER_PROFILES_TABLE
+
+    try:
+        res = await (
+            supabase.table(USER_PROFILES_TABLE)
+            .select("email")
+            .eq("org_id", org_id)
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+        )
+        if res.data and res.data[0].get("email"):
+            return str(res.data[0]["email"]).strip()
+    except Exception as exc:
+        logger.warning(f"Could not fetch profile email for user_id={user_id} in org={org_id}: {exc}")
+    return None
+
+
 async def fetch_org_sender_name(
     supabase: Any,
     org_id: str,

@@ -229,9 +229,14 @@ class CompanyDatabaseRecord(DictCompatibleDataclass):
     source: List[str] = field(default_factory=lambda: ["searxng"])
     raw_signals: Dict[str, Any] = field(default_factory=dict)
     status: str = PENDING_STATUS
+    discovered_by_user_id: Optional[str] = None
 
     @classmethod
-    def from_company(cls, company: Company) -> CompanyDatabaseRecord:
+    def from_company(
+        cls,
+        company: Company,
+        discovered_by_user_id: Optional[str] = None,
+    ) -> CompanyDatabaseRecord:
         """Construct a CompanyDatabaseRecord from an accepted Company model."""
         return cls(
             id=str(company.id),
@@ -259,6 +264,7 @@ class CompanyDatabaseRecord(DictCompatibleDataclass):
             source=["searxng"],
             raw_signals=dict(company.raw_signals or {}),
             status=PENDING_STATUS,
+            discovered_by_user_id=discovered_by_user_id,
         )
 
     def to_db_payload(self) -> Dict[str, Any]:

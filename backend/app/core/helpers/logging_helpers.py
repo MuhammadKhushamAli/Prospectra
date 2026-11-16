@@ -133,3 +133,39 @@ class ColoredLoggingFormatter(logging.Formatter):
     def formatException(self, ei: Any) -> str:
         tb_lines = super().formatException(ei)
         return f"{BOLD_RED}{tb_lines}{RESET}"
+
+
+class RequestLogFilter(logging.Filter):
+    """Filter that suppresses verbose HTTP request logs, connection logs, and access logs."""
+
+    SILENCED_LOGGERS = (
+        "httpx",
+        "httpcore",
+        "uvicorn.access",
+        "urllib3",
+        "requests",
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING:
+            return True
+        name = record.name or ""
+        for silenced in self.SILENCED_LOGGERS:
+            if name == silenced or name.startswith(f"{silenced}."):
+                return False
+        msg = record.getMessage()
+        if "HTTP Request:" in msg or 'HTTP/1.1"' in msg or 'HTTP/2"' in msg:
+            return False
+        return True
+
+
+__all__ = [
+    "ColoredLoggingFormatter",
+    "NodeLogger",
+    "RequestLogFilter",
+    "color_text",
+    "green",
+    "red",
+    "yellow",
+]
+

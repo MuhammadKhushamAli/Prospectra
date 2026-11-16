@@ -9,6 +9,7 @@ from .arq_helpers import (
 from .logging_helpers import (
     ColoredLoggingFormatter,
     NodeLogger,
+    RequestLogFilter,
     color_text,
     green,
     red,
@@ -18,6 +19,7 @@ from .logging_helpers import (
 __all__ = [
     "ColoredLoggingFormatter",
     "NodeLogger",
+    "RequestLogFilter",
     "build_redis_settings_from_env",
     "color_text",
     "deserialize_job_status_record",

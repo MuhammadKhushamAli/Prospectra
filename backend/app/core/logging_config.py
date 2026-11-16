@@ -17,6 +17,7 @@ except ImportError:
 from app.core.helpers.logging_helpers import (
     ColoredLoggingFormatter,
     NodeLogger,
+    RequestLogFilter,
     color_text,
     green,
     red,
@@ -64,9 +65,14 @@ def get_node_logger(node_name: str, phase_name: str = "") -> NodeLogger:
 
 
 def setup_colored_logging(default_level: int = logging.INFO) -> None:
-    """Configure Python's root logger and standard exception hook with colored formatting."""
+    """Configure Python's root logger and standard exception hook with colored formatting,
+
+    while suppressing noisy HTTP request logs to keep terminal output clean.
+    """
     root = logging.getLogger()
     root.setLevel(default_level)
+
+    request_filter = RequestLogFilter()
 
     has_colored_handler = any(
         isinstance(getattr(h, "formatter", None), ColoredLoggingFormatter)
@@ -75,7 +81,36 @@ def setup_colored_logging(default_level: int = logging.INFO) -> None:
     if not has_colored_handler:
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(ColoredLoggingFormatter())
+        handler.addFilter(request_filter)
         root.handlers = [handler]
+    else:
+        for h in root.handlers:
+            if not any(isinstance(f, RequestLogFilter) for f in h.filters):
+                h.addFilter(request_filter)
+
+    # Silence noisy HTTP client and server request loggers so console only displays milestone summaries
+    noisy_loggers = [
+        "httpx",
+        "httpcore",
+        "httpcore.http11",
+        "httpcore.connection",
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "urllib3",
+        "urllib3.connectionpool",
+        "requests",
+        "openai",
+        "_client",
+        "google",
+        "google.auth",
+        "google.api_core",
+        "postgrest",
+    ]
+    for logger_name in noisy_loggers:
+        lg = logging.getLogger(logger_name)
+        lg.setLevel(logging.WARNING)
+        lg.addFilter(request_filter)
 
     def _colored_excepthook(
         exc_type: type[BaseException],
@@ -117,6 +152,7 @@ __all__ = [
     "PURPLE",
     "RED",
     "RESET",
+    "RequestLogFilter",
     "TEAL",
     "WHITE",
     "YELLOW",

@@ -15,10 +15,13 @@ from app.utils.constants.db_tables import (
 logger = get_node_logger("store_to_db")
 
 
-def build_company_db_records(accepted_companies: List[Company]) -> List[Dict[str, Any]]:
+def build_company_db_records(
+    accepted_companies: List[Company],
+    discovered_by_user_id: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """Convert accepted Company instances into Supabase companies table row dicts via CompanyDatabaseRecord."""
     return [
-        CompanyDatabaseRecord.from_company(company).to_db_payload()
+        CompanyDatabaseRecord.from_company(company, discovered_by_user_id=discovered_by_user_id).to_db_payload()
         for company in accepted_companies
     ]
 

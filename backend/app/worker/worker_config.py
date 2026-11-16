@@ -315,6 +315,18 @@ async def check_email_replies_arq_task(
         )
 
 
+async def send_org_invite_email_task(
+    ctx: dict[str, Any],
+    invite_id: str,
+    inviter_user_id: str | None = None,
+) -> str:
+    """ARQ job: dispatch organization invitation email via verified org SMTP."""
+    from app.worker.helpers.invite_task_helpers import execute_send_org_invite_email
+
+    logger.info(f"[ARQ WORKER] Picked up send_org_invite_email_task for invite {invite_id}")
+    return await execute_send_org_invite_email(invite_id, inviter_user_id)
+
+
 async def on_worker_startup(ctx: dict[str, Any]) -> None:
     """Lifecycle hook executed when the ARQ worker starts."""
     logger.info(f"[ARQ WORKER] Started listening on queue '{ARQ_QUEUE_NAME}'.")
@@ -333,6 +345,7 @@ class WorkerSettings:
         write_email_arq_task,
         send_email_arq_task,
         check_email_replies_arq_task,
+        send_org_invite_email_task,
     ]
     cron_jobs = [
         cron(

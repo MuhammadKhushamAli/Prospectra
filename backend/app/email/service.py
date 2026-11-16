@@ -25,6 +25,7 @@ async def send_company_outreach_email(
     *,
     org_id: str,
     email_id: str,
+    user_id: Optional[str] = None,
     company_id: Optional[str] = None,
     recipient_emails: Optional[List[str]] = None,
     custom_subject: Optional[str] = None,
@@ -42,7 +43,8 @@ async def send_company_outreach_email(
     if email_row.get("status") == "sent":
         raise ValueError("This outreach email has already been sent.")
 
-    credentials = await fetch_org_email_credentials(org_id)
+    effective_user_id = user_id or email_row.get("sent_by_user_id")
+    credentials = await fetch_org_email_credentials(org_id, effective_user_id)
 
     effective_recipients: list[str] = []
     if recipient_emails and len(recipient_emails) > 0:
@@ -87,6 +89,7 @@ async def send_company_outreach_email(
         message_ids=message_ids,
         custom_subject=custom_subject,
         custom_body=custom_body,
+        sender_email=credentials.sender_email,
         emails_table=EMAILS_TABLE,
         companies_table=COMPANIES_TABLE,
     )
