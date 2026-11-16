@@ -19,7 +19,8 @@
         "foregroundImage": "./assets/app_icons/prospectra-foreground.png",
         "monochromeImage": "./assets/app_icons/prospectra-mono.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.khusham_ali.prospectra"
     },
     "web": {
       "output": "static",

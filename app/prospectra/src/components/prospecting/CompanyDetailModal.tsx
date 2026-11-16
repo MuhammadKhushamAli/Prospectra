@@ -42,56 +42,12 @@ import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
 import type { CompanyDetailModalProps, CompanyProspect } from "../../types/prospecting";
 
-export interface SelectableCompanyEmail {
-  email: string;
-  name?: string;
-  role?: string;
-  isVerified?: boolean;
-}
+import {
+  extractSelectableEmails,
+  type SelectableCompanyEmail,
+} from "../../helpers/prospecting/companyModalHelpers";
 
-export function extractSelectableEmails(company: CompanyProspect | null): SelectableCompanyEmail[] {
-  if (!company) return [];
-
-  const list: SelectableCompanyEmail[] = [];
-  const seen = new Set<string>();
-
-  // 1. From company.emails
-  if (company.emails && Array.isArray(company.emails)) {
-    for (const em of company.emails) {
-      const clean = em.email?.trim()?.toLowerCase();
-      if (clean && !seen.has(clean)) {
-        seen.add(clean);
-        const nameParts = [em.first_name, em.last_name].filter(Boolean).join(" ").trim();
-        list.push({
-          email: em.email.trim(),
-          name: nameParts || undefined,
-          role: em.email_of || "Contact",
-          isVerified: em.is_verified,
-        });
-      }
-    }
-  }
-
-  // 2. Fallback to raw_signals contacts / emails if list is still empty
-  if (list.length === 0 && company.raw_signals) {
-    const rawEmails = company.raw_signals.emails || company.raw_signals.contacts || [];
-    if (Array.isArray(rawEmails)) {
-      for (const item of rawEmails) {
-        const rawStr = typeof item === "string" ? item : item?.email;
-        const clean = rawStr?.trim()?.toLowerCase();
-        if (clean && !seen.has(clean)) {
-          seen.add(clean);
-          list.push({
-            email: clean,
-            role: typeof item === "object" ? item?.role || item?.email_of : "Discovered Contact",
-          });
-        }
-      }
-    }
-  }
-
-  return list;
-}
+export { extractSelectableEmails, type SelectableCompanyEmail };
 
 export default function CompanyDetailModal({
   company,
@@ -118,7 +74,7 @@ export default function CompanyDetailModal({
   // Automatically select all available emails whenever the company changes or modal opens
   useEffect(() => {
     if (availableEmails.length > 0) {
-      setSelectedEmails(new Set(availableEmails.map((e) => e.email)));
+      setSelectedEmails(new Set(availableEmails.map((e: SelectableCompanyEmail) => e.email)));
     } else {
       setSelectedEmails(new Set());
     }
@@ -131,7 +87,7 @@ export default function CompanyDetailModal({
     if (isAllSelected) {
       setSelectedEmails(new Set());
     } else {
-      setSelectedEmails(new Set(availableEmails.map((e) => e.email)));
+      setSelectedEmails(new Set(availableEmails.map((e: SelectableCompanyEmail) => e.email)));
     }
   };
 
@@ -544,7 +500,7 @@ export default function CompanyDetailModal({
                     {/* Email Checkbox Options List */}
                     {availableEmails.length > 0 ? (
                       <View style={styles.recipientList}>
-                        {availableEmails.map((item) => {
+                        {availableEmails.map((item: SelectableCompanyEmail) => {
                           const isSelected = selectedEmails.has(item.email);
                           return (
                             <Pressable

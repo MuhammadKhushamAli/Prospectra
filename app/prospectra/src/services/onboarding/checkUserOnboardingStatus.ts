@@ -1,9 +1,12 @@
 import { getSupabaseClient } from "../../config/supabaseClient";
+import { TABLES } from "../../constants/tables";
+import { DB_KEYS } from "../../constants/dbKeys";
 import type { UserOnboardingStatus } from "../../types/onboarding";
 import { createDefaultUnauthenticatedStatus } from "./createDefaultUnauthenticatedStatus";
 import { resolveUserOrgMembership } from "./resolveUserOrgMembership";
 import { fetchUserHeadline } from "./fetchUserHeadline";
 import { getVerificationCompletionStatus } from "./isDomainVerified";
+import { adminService } from "../adminService";
 
 /**
  * Evaluates the full onboarding checklist for an authenticated user,
@@ -22,12 +25,32 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     const userId = userData.user.id;
 
     // 1. Resolve Organization Membership and Company Name
-    const { orgId, orgName, isMember } = await resolveUserOrgMembership(
+    let { orgId, orgName, isMember } = await resolveUserOrgMembership(
       supabase,
       userId,
     );
 
-    // If no organization registered yet -> route to organization registration
+    // If no organization registered yet -> check if user has a pending invitation to claim!
+    if (!orgId) {
+      try {
+        const claimResult = await adminService.claimInviteOnSignup();
+        if (claimResult && claimResult.claimed && claimResult.org_id) {
+          orgId = claimResult.org_id;
+          isMember = true;
+          const { data: org } = await supabase
+            .from(TABLES.ORGANIZATIONS)
+            .select(DB_KEYS.NAME)
+            .eq(DB_KEYS.ID, orgId)
+            .limit(1)
+            .maybeSingle();
+          orgName = org?.name ?? null;
+        }
+      } catch {
+        // No invite or already claimed
+      }
+    }
+
+    // If still no organization -> route to organization registration
     if (!orgId) {
       return {
         targetRoute: "/organization-registration",
@@ -41,10 +64,11 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
     // 2. Fetch user's professional headline
     const headline = await fetchUserHeadline(supabase, userId);
 
-    // Invited member bypasses domain verification
+    // Invited member bypasses organization registration, domain verification, and email verification.
+    // They only need to fill in remaining profile details (name, headline) in profile-setup.
     if (isMember) {
       return {
-        targetRoute: "/home",
+        targetRoute: headline ? "/home" : "/profile-setup",
         headline,
         orgName,
         isDomainVerified: true,
@@ -52,7 +76,7 @@ export async function checkUserOnboardingStatus(): Promise<UserOnboardingStatus>
       };
     }
 
-    // 3. Domain & Email verification checks
+    // 3. Domain & Email verification checks for founder / owner
     const { domainVerified, emailVerified } =
       await getVerificationCompletionStatus(supabase, orgId);
 

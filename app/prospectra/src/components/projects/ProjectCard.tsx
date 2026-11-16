@@ -203,6 +203,7 @@ const styles = StyleSheet.create({
   },
   titleWrap: {
     flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
@@ -213,6 +214,7 @@ const styles = StyleSheet.create({
     fontSize: tokens.fontSize.md,
     lineHeight: 22,
     letterSpacing: -0.2,
+    flexShrink: 1,
   },
   githubPill: {
     flexDirection: "row",
@@ -222,6 +224,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
+    flexShrink: 0,
   },
   githubPillText: {
     fontFamily: "DMSansMedium",
@@ -232,6 +235,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.xs + 2,
+    flexShrink: 0,
   },
   iconButton: {
     width: 30,
