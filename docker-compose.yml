@@ -75,6 +75,56 @@ services:
     logging: *default-logging
     restart: unless-stopped
 
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prospectra-api
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - SEARXNG_BASE_URL=http://searxng:8080
+      - REACHER_BASE_URL=http://reacher:8080
+    env_file:
+      - path: ./backend/.env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+      searxng:
+        condition: service_healthy
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    restart: unless-stopped
+
+  backend-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: prospectra-worker
+    command: ["python", "worker.py"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - SEARXNG_BASE_URL=http://searxng:8080
+      - REACHER_BASE_URL=http://reacher:8080
+    env_file:
+      - path: ./backend/.env
+        required: false
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    restart: unless-stopped
+
 networks:
   backend:
     driver: bridge

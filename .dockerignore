@@ -1,0 +1,35 @@
+# Root .dockerignore for Prospectra
+
+# Git and OS metadata
+.git/
+.gitignore
+.gitattributes
+.DS_Store
+Thumbs.db
+*.log
+
+# Frontend Mobile App (Expo / React Native)
+app/
+node_modules/
+
+# Supabase Local Infrastructure
+supabase/
+searxng/
+
+# Secrets and Local Configurations
+.env
+.env.*
+!.env.example
+
+# Python Caches & Virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+tests/
