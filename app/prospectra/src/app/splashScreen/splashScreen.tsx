@@ -2,13 +2,13 @@ import { useEffect } from "react";
 import { Image, StyleSheet, useColorScheme, useWindowDimensions, View } from "react-native";
 import Animated, {
   Easing,
-  runOnJS,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withDelay,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { theme, tokens } from "@/constants/theme";
 
@@ -84,7 +84,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
       fadeDelay,
       withTiming(0, { duration: FADE_DURATION }, (finished) => {
         if (finished) {
-          runOnJS(onFinish)();
+          scheduleOnRN(onFinish);
         }
       }),
     );

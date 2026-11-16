@@ -13,7 +13,6 @@ import Animated, {
   Easing,
   Extrapolation,
   interpolate,
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -22,6 +21,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 
 import { tokens } from "../../constants/theme";
 import { useTheme } from "../../hooks/useTheme";
@@ -226,7 +226,7 @@ export default function HomeScreen() {
         });
         cardOpacity.value = withTiming(0, { duration: 250 }, (finished) => {
           if (finished) {
-            runOnJS(navigateFromCard)();
+            scheduleOnRN(navigateFromCard);
           }
         });
       } else {
@@ -236,7 +236,7 @@ export default function HomeScreen() {
           mass: 0.9,
         });
         cardOpacity.value = withSpring(1);
-        runOnJS(startIdleLeftSwipeAnimation)();
+        scheduleOnRN(startIdleLeftSwipeAnimation);
       }
     });
 
