@@ -36,11 +36,24 @@
             "backgroundColor": "#0B0F14"
           }
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": false
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "c2395ea7-ea8a-480d-a791-774aa7605e00"
+      }
     }
   }
 }
