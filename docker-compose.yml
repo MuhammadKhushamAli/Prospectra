@@ -10,8 +10,6 @@ services:
   searxng:
     image: searxng/searxng:${SEARXNG_VERSION:-latest}
     container_name: searxng
-    ports:
-      - "8888:8080"
     volumes:
       - ./searxng:/etc/searxng
     depends_on:
@@ -39,8 +37,6 @@ services:
   reacher:
     image: reacherhq/backend:${REACHER_VERSION:-latest}
     container_name: reacher
-    ports:
-      - "8080:8080"
     environment:
       RCH_HELLO_NAME: ${RCH_HELLO_NAME:-qavren.dev}
       RCH_FROM_EMAIL: ${RCH_FROM_EMAIL:-hello@qavren.dev}

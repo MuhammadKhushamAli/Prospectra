@@ -111,6 +111,15 @@ async def verify_email_and_smtp(
     resolved_smtp_server = (smtp_server or preset.smtp_server).strip().lower()
     resolved_smtp_port = int(smtp_port if smtp_port is not None else preset.smtp_port)
 
+    logger.info(
+        "[EMAIL VERIFIER] Starting verification for %s on domain %s (provider=%s, server=%s:%s)",
+        clean_email,
+        normalized_domain,
+        provider_display,
+        resolved_smtp_server,
+        resolved_smtp_port,
+    )
+
     errors = validate_smtp_input_parameters(
         resolved_smtp_server=resolved_smtp_server,
         resolved_smtp_port=resolved_smtp_port,
@@ -194,6 +203,19 @@ async def verify_email_and_smtp(
         not errors
         and smtp_reachable
         and smtp_authenticated is not False
+    )
+
+    logger.info(
+        "[EMAIL VERIFIER] Completed verification for %s: verified=%s, status=%s, smtp_used=%s, mx=%s, spf=%s, dkim=%s, dmarc=%s, errors=%s",
+        clean_email,
+        is_verified,
+        "verified" if is_verified else "failed",
+        resolved_smtp_used,
+        mx_valid,
+        spf_valid,
+        dkim_valid,
+        dmarc_valid,
+        errors or [],
     )
 
     return EmailSmtpVerificationResult(

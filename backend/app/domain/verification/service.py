@@ -45,6 +45,13 @@ async def add_domain_to_verify(
     smtp_username: str | None = None,
 ) -> dict[str, Any]:
     """Store or retrieve domain verification and return its DNS token."""
+    logger.info(
+        "[DOMAIN] add_domain_to_verify: org_id=%s, domain=%s, user_email=%s, smtp_username=%s",
+        org_id,
+        domain,
+        user_email,
+        smtp_username,
+    )
     clean_smtp_username = validate_main_mailbox_email(smtp_username) if smtp_username is not None else None
 
     if user_email:
@@ -52,6 +59,7 @@ async def add_domain_to_verify(
     else:
         normalized_domain = normalize_domain(domain)
         if is_free_email_domain(normalized_domain):
+            logger.warning("[DOMAIN] Blocked free email domain verification attempt: %s", normalized_domain)
             raise ValueError(f"Free email provider domains ({normalized_domain}) cannot be verified.")
 
     supabase_client = await get_supabase_client()
@@ -68,9 +76,11 @@ async def add_domain_to_verify(
 
     if not verified and has_existing_token:
         try:
+            logger.info("[DOMAIN] Checking DNS TXT token for domain %s (token=%s)...", normalized_domain, token)
             if await is_verified(normalized_domain, token):
                 current_status = "verified"
                 verified = True
+                logger.info("[DOMAIN] Domain %s verified via DNS TXT record for org_id=%s", normalized_domain, org_id)
                 await supabase_client.table(DOMAIN_VERIFICATION_TABLE).update(
                     {
                         "verification_status": "verified",
@@ -78,10 +88,11 @@ async def add_domain_to_verify(
                         "domain": normalized_domain,
                     }
                 ).eq("org_id", org_id).execute()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("[DOMAIN] DNS check error during add_domain_to_verify for %s: %s", normalized_domain, exc)
 
     if not existing_record or not has_existing_token:
+        logger.info("[DOMAIN] Upserting initial domain verification: org_id=%s, domain=%s, token=%s", org_id, normalized_domain, token)
         await upsert_initial_domain_verification(
             supabase_client=supabase_client,
             org_id=org_id,
@@ -93,6 +104,7 @@ async def add_domain_to_verify(
             table_name=DOMAIN_VERIFICATION_TABLE,
         )
     else:
+        logger.info("[DOMAIN] Updating existing domain verification record: org_id=%s, domain=%s, status=%s", org_id, normalized_domain, current_status)
         await update_existing_domain_verification(
             supabase_client=supabase_client,
             org_id=org_id,
@@ -113,11 +125,13 @@ async def add_domain_to_verify(
         dns_instructions=build_dns_instructions(token=token, host=host),
         smtp_username=stored_smtp_username,
     )
+    logger.info("[DOMAIN] add_domain_to_verify returning: domain=%s, status=%s, verified=%s", normalized_domain, current_status, verified)
     return result_payload.to_dict(exclude_none=True)
 
 
 async def domain_verification(org_id: str) -> bool:
     """Verify the organization's stored domain token through DNS."""
+    logger.info("[DOMAIN] Running domain_verification for org_id=%s", org_id)
     supabase_client = await get_supabase_client()
     response = await (
         supabase_client
@@ -129,14 +143,22 @@ async def domain_verification(org_id: str) -> bool:
     )
     record = response.data
     if not record or not record.get("domain") or not record.get("dns_records"):
+        logger.warning("[DOMAIN] No domain verification record found for org_id=%s", org_id)
         return False
 
     dns_records = parse_dns_records_dict(record["dns_records"])
     dns_val = dns_records.get("value")
     if not dns_val:
+        logger.warning("[DOMAIN] No DNS token in record for org_id=%s, domain=%s", org_id, record.get("domain"))
         return False
 
+    logger.info("[DOMAIN] Probing DNS TXT record for %s (token=%s)", record["domain"], dns_val)
     verification_status = await is_verified(record["domain"], dns_val)
+    logger.info(
+        "[DOMAIN] DNS verification outcome for %s: %s",
+        record["domain"],
+        "VERIFIED" if verification_status else "FAILED",
+    )
     update_data = (
         {"verification_status": "verified", "verified_at": utc_now_iso()}
         if verification_status
@@ -150,6 +172,7 @@ async def domain_verification(org_id: str) -> bool:
         .eq("domain", record["domain"])
         .execute()
     )
+    logger.info("[DOMAIN] Updated domain %s verification_status to '%s' in DB (org_id=%s)", record["domain"], update_data["verification_status"], org_id)
     return verification_status
 
 
@@ -196,7 +219,21 @@ async def verify_and_save_email_smtp(
     if not effective_email:
         raise ValueError("Sender email address is required.")
 
+    logger.info(
+        "[EMAIL] verify_and_save_email_smtp initiated: org_id=%s, sender=%s, provider=%s, smtp_server=%s:%s",
+        org_id,
+        effective_email,
+        email_provider,
+        smtp_server,
+        smtp_port,
+    )
+
     if user_email and effective_email != user_email.strip().lower():
+        logger.warning(
+            "[EMAIL] Mismatch between verify email (%s) and sign-in email (%s)",
+            effective_email,
+            user_email,
+        )
         raise ValueError(
             f"The email to verify ('{effective_email}') must match your signed-in account email ('{user_email.strip().lower()}')."
         )
@@ -211,11 +248,14 @@ async def verify_and_save_email_smtp(
         .execute()
     )
     if not response.data:
+        logger.warning("[EMAIL] No domain verification record found for org_id=%s", org_id)
         raise ValueError("No domain verification record found. Please verify your domain first.")
 
     record = response.data[0]
     if record.get("verification_status") != "verified":
+        logger.info("[EMAIL] Domain verification status is '%s', checking DNS for org_id=%s...", record.get("verification_status"), org_id)
         if not await domain_verification(org_id):
+            logger.warning("[EMAIL] Domain verification prerequisite failed for org_id=%s", org_id)
             raise ValueError(
                 "Your domain ownership must be 'verified' before email & SMTP verification can run."
             )
@@ -235,6 +275,7 @@ async def verify_and_save_email_smtp(
     clean_smtp_username = validate_main_mailbox_email(raw_smtp_username)
     clean_smtp_password = smtp_password.strip()
 
+    logger.info("[EMAIL] Running verify_email_and_smtp for %s on domain %s...", effective_email, record.get("domain", ""))
     result = await verify_email_and_smtp(
         sender_email=effective_email,
         expected_domain=record.get("domain", ""),
@@ -246,6 +287,13 @@ async def verify_and_save_email_smtp(
         smtp_password=clean_smtp_password,
         dkim_selector=dkim_selector,
     )
+    logger.info(
+        "[EMAIL] Result for %s: verified=%s, status=%s, smtp_used=%s",
+        effective_email,
+        result.verified,
+        result.verification_status,
+        result.smtp_used,
+    )
 
     updated_dns_records, full_update_payload = build_email_verification_db_payloads(
         result=result,
@@ -253,6 +301,7 @@ async def verify_and_save_email_smtp(
         clean_smtp_username=clean_smtp_username,
         clean_smtp_password=clean_smtp_password,
     )
+    logger.info("[EMAIL] Persisting email verification results into database for org_id=%s...", org_id)
     await persist_email_verification_payload(
         supabase_client=supabase_client,
         org_id=org_id,
@@ -260,6 +309,7 @@ async def verify_and_save_email_smtp(
         full_update_payload=full_update_payload,
         table_name=DOMAIN_VERIFICATION_TABLE,
     )
+    logger.info("[EMAIL] Successfully persisted email verification payload for org_id=%s", org_id)
     await register_custom_esp_provider(
         supabase_client=supabase_client,
         result=result,

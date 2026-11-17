@@ -73,4 +73,11 @@ NODE_COLORS: Dict[str, str] = {
     # Email Writer Nodes
     "email_writer": BOLD_MAGENTA,
     "email_review": BOLD_YELLOW,
+    # Domain & Email Verification
+    "domain_verification": BOLD_CYAN,
+    "email_verification": BOLD_GREEN,
+    "app.domain.verification.service": BOLD_CYAN,
+    "app.domain.verification.email_verifier": BOLD_GREEN,
+    "app.domain.verification.dns": BOLD_CYAN,
+    "app.api.routes.domain": BOLD_CYAN,
 }

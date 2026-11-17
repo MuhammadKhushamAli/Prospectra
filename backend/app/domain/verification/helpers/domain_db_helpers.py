@@ -246,7 +246,6 @@ def build_email_verification_db_payloads(
 
     full_update_payload: dict[str, Any] = {
         "esp_provider": enum_esp_provider,
-        "sender_email": result.sender_email,
         "email_provider": stored_provider_value,
         "smtp_used": result.smtp_used,
         "smtp_server": result.smtp_server,
@@ -278,7 +277,9 @@ async def persist_email_verification_payload(
             .eq("org_id", org_id)
             .execute()
         )
-    except Exception:
+        logger.info("[DB] Persisted full email verification payload for org_id=%s in %s", org_id, table_name)
+    except Exception as exc:
+        logger.warning("[DB] Failed saving full payload, falling back to dns_records for org_id=%s: %s", org_id, exc)
         await (
             supabase_client
             .table(table_name)
@@ -286,6 +287,7 @@ async def persist_email_verification_payload(
             .eq("org_id", org_id)
             .execute()
         )
+        logger.info("[DB] Persisted fallback dns_records for org_id=%s in %s", org_id, table_name)
 
 
 async def register_custom_esp_provider(
@@ -312,5 +314,6 @@ async def register_custom_esp_provider(
             .upsert(config.to_dict(), on_conflict="id")
             .execute()
         )
-    except Exception:
-        pass
+        logger.info("[DB] Registered custom ESP provider '%s' in table %s", result.email_provider, esp_table)
+    except Exception as exc:
+        logger.warning("[DB] Failed to register custom ESP provider '%s' in %s: %s", result.email_provider, esp_table, exc)
